@@ -1,0 +1,79 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AccountStatus {
+  ONBOARDING
+  ACTIVE
+  SUSPENDED
+}
+
+model Permission {
+  id          String  @id @default(uuid(7))
+  resource    String // e.g., "user", "role"
+  action      String // e.g., "create", "read", "update", "delete"
+  description String?
+
+  roles Role[]
+
+  @@unique([resource, action])
+  @@map("permissions")
+}
+
+model Role {
+  id   String @id @default(uuid(7))
+  name String @unique
+
+  permissions Permission[]
+  users       User[]
+
+  @@map("roles")
+}
+
+model User {
+  id          String        @id @default(uuid(7))
+  name        String
+  email       String?       @unique
+  phoneNumber String?       @unique
+  password    String
+  status      AccountStatus @default(ONBOARDING)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  auditLogs AuditLog[]
+  role      Role     @relation(fields: [roleId], references: [id])
+  roleId    String
+
+  @@map("users")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid(7))
+  createdAt DateTime @default(now())
+
+  userId   String
+  user     User   @relation(fields: [userId], references: [id])
+  userName String
+  userRole String
+
+  action    String
+  ipAddress String?
+  userAgent String?
+  status    String  @default("SUCCESS")
+
+  resource   String
+  resourceId String
+
+  changes Json?   @db.JsonB
+  summary String?
+
+  @@index([userId])
+  @@index([resourceId])
+  @@index([resource])
+  @@map("audit_logs")
+}
