@@ -16,16 +16,13 @@ const cookieOptions = {
 
 export const signUp = async(req: Request,res: Response, next: NextFunction) => {
     try {
-        const {fullName, email, phone, password} = req.body
+        const {fullName, phone, password} = req.body
 
         if (!fullName?.trim() || !password) {
             return res.status(400).json({message: "fullname or password missing"})
         }
-        if (phone && (phone.length !== 10 || isNaN(Number(phone)))) {
+        if (!phone || phone.length !== 10 || isNaN(Number(phone))) {
             return res.status(400).json({ message: "Invalid phone number. It must be exactly 10 digits." });
-        }
-        if (!email && !phone) {
-            return res.status(400).json({ message: "email or phone number is required" });
         }
 
         const hashedPassword = await bcrypt.hash(password,10)
@@ -42,8 +39,7 @@ export const signUp = async(req: Request,res: Response, next: NextFunction) => {
             const user = await tx.user.create({
                 data: {
                     name: fullName.trim(),
-                    email: email?.trim() || null,
-                    phoneNumber: phone || null,
+                    phoneNumber: phone,
                     password: hashedPassword,
                     status: 'ACTIVE',
                     role: { 
@@ -89,7 +85,7 @@ export const signUp = async(req: Request,res: Response, next: NextFunction) => {
 
     } catch (error) {
         if ((error as any).code === 'P2002') {
-            return res.status(409).json({ message: "Account with this email or phoneNumber already exists" });
+            return res.status(409).json({ message: "Account with this phoneNumber already exists" });
         }
         next(error)
     }
@@ -97,18 +93,13 @@ export const signUp = async(req: Request,res: Response, next: NextFunction) => {
 
 export const login = async(req: Request, res: Response, next: NextFunction) => {
     try {
-        const {email, phone, password} = req.body
+        const {phone, password} = req.body
 
-        if ((!email && !phone) || !password) {
-             return res.status(400).json({ message: "email or phone number and password are required" });
+        if (!phone || !password) {
+             return res.status(400).json({ message: "phone number and password are required" });
         }
-        const user = await prisma.user.findFirst({
-            where: {
-                OR: [
-                    { email: email || undefined },
-                    { phoneNumber: phone || undefined },
-                ],
-            },
+        const user = await prisma.user.findUnique({
+            where: { phoneNumber: phone },
             include:{
                 role: true
             },
@@ -118,7 +109,7 @@ export const login = async(req: Request, res: Response, next: NextFunction) => {
         if(!user){
             res
             .status(404)
-            .json({message:`Invalid email, phone number or password.`})
+            .json({message:`Invalid phone number or password.`})
             return
         }
 
@@ -126,7 +117,7 @@ export const login = async(req: Request, res: Response, next: NextFunction) => {
         if(!isMatch){
             res
             .status(404)
-            .json({message: `Invalid email, phone number or password.`})
+            .json({message: `Invalid phone number or password.`})
             return
         }
         const sessionId = uuidv4();

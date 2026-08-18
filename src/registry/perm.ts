@@ -16,6 +16,18 @@ export const PERMISSION_REGISTRY = [
   {
     resource: 'auditLog',
     actions: ['read']
+  },
+  {
+    resource: 'driver',
+    actions: ['create', 'read', 'update']
+  },
+  {
+    resource: 'employee',
+    actions: ['create', 'read', 'update']
+  },
+  {
+    resource: 'vehicle',
+    actions: ['create', 'read', 'update']
   }
 ] as const; // <--- 'as const' is CRITICAL for type safety
 

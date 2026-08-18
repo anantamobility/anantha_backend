@@ -39,17 +39,39 @@ model User {
   id          String        @id @default(uuid(7))
   name        String
   email       String?       @unique
-  phoneNumber String?       @unique
+  phoneNumber String       @unique
   password    String
   status      AccountStatus @default(ONBOARDING)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
-  auditLogs AuditLog[]
   role      Role     @relation(fields: [roleId], references: [id])
   roleId    String
 
+  employeeProfiles Employee[]
+  driverProfiles Driver[]
+  auditLogs AuditLog[]
+
   @@map("users")
+}
+
+model Driver{
+  id  String  @id @default(uuid(7))
+  name String @unique
+
+  user User @relation(fields: [userId], references: [id])
+  userId String
+
+  @@map("drivers")
+}
+
+model Employee{
+  id  String  @id @default(uuid(7))
+  name String @unique
+
+  user User @relation(fields: [userId], references: [id])
+  userId String
+  @@map("employees")
 }
 
 model AuditLog {
@@ -77,3 +99,19 @@ model AuditLog {
   @@index([resource])
   @@map("audit_logs")
 }
+
+model hub {
+  id  String  @id @default(uuid(7))
+
+  @@map("hubs")
+}
+
+model vehicle {
+  id  String  @id @default(uuid(7))
+
+  registrationNumber String @unique @db.VarChar(10)
+  //permit?
+  // insurance
+  @@map("vehicles")
+}
+
