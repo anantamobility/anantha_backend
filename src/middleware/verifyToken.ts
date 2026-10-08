@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import jwt from 'jsonwebtoken'
 import envConfig from "../config/env.js";
 import prisma from "../database/prismaClient.js";
-import redisClient from "../config/redis.js";
+import { redisGet } from "../config/redis.js";
 
 export const verifyToken = async(req: Request, res: Response, next: NextFunction) => {
     try {
@@ -16,9 +16,14 @@ export const verifyToken = async(req: Request, res: Response, next: NextFunction
 
         const decoded = jwt.verify(accessToken, envConfig.jwtSecret) as any;
 
-        const activeSessionId = await redisClient.get(`session:${decoded.userId}`);
-        if (!activeSessionId || activeSessionId !== decoded.sessionId) {
-            return res.status(401).json({ message: "Session invalid OR multiple logins detected." });
+        const sessionResult = await redisGet(`session:${decoded.userId}`);
+
+        if (!sessionResult.ok) {
+            console.warn("Redis unavailable, skipping session check");
+        } else if (!sessionResult.value || sessionResult.value !== decoded.sessionId) {
+            return res.status(401).json({
+                message: "Session expired or invalid"
+            });
         }
 
         const userWithRole = await prisma.user.findUnique({

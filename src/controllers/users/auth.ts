@@ -4,7 +4,7 @@ import prisma from "../../database/prismaClient.js"
 import jwt from 'jsonwebtoken'
 import envConfig from "../../config/env.js"
 import { v4 as uuidv4 } from "uuid";
-import redisClient from "../../config/redis.js"
+import { redisGet, redisSet, redisDel } from "../../config/redis.js";
 
 const isProd = envConfig.nodeEnv === "prod";
 const cookieOptions = {
@@ -54,9 +54,15 @@ export const signUp = async(req: Request,res: Response, next: NextFunction) => {
         console.log('Created user:', newUser)
 
         const sessionId = uuidv4();
-        await redisClient.set(`session:${newUser.id}`, sessionId, {
-            EX: 604800 
-        });
+        const sessionSaved = await redisSet(
+            `session:${newUser.id}`,
+            sessionId,
+            604800
+        );
+
+        if (!sessionSaved) {
+            console.warn("Redis unavailable: signup session was not persisted");
+        }
         
         const accessToken = jwt.sign(
             { userId: String(newUser?.id), role: String(newUser?.role.name), sessionId }, 
@@ -121,9 +127,15 @@ export const login = async(req: Request, res: Response, next: NextFunction) => {
             return
         }
         const sessionId = uuidv4();
-        await redisClient.set(`session:${user.id}`,sessionId,{
-            EX:604800
-        })
+        const sessionSaved = await redisSet(
+            `session:${user.id}`,
+            sessionId,
+            604800
+        );
+
+        if (!sessionSaved) {
+            console.warn("Redis unavailable: login session was not persisted");
+        }
         const accessToken = jwt.sign(
             { userId: String(user?.id), role: String(user?.role.name), sessionId: sessionId }, 
             envConfig.jwtSecret,
@@ -161,11 +173,19 @@ export const refresh = async(req: Request, res: Response, next: NextFunction) =>
     try {
         const decoded = jwt.verify(refreshToken, envConfig.jwtRefreshSecret) as { userId: string, sessionId: string };
 
-        const activeSessionId = await redisClient.get(`session:${decoded.userId}`);
-        if (!activeSessionId || activeSessionId !== decoded.sessionId) {
-            // If session is invalid, clear the cookie so the user is forced to login
-            res.clearCookie('refresh_token', cookieOptions); 
-            return res.status(403).json({ message: "Session expired or logged in elsewhere." });
+        const sessionResult = await redisGet(`session:${decoded.userId}`);
+
+        if (!sessionResult.ok) {
+            console.warn("Redis unavailable: skipping session check during refresh");
+        } else if (
+            !sessionResult.value ||
+            sessionResult.value !== decoded.sessionId
+        ) {
+            res.clearCookie("refresh_token", cookieOptions);
+
+            return res.status(403).json({
+                message: "Session expired or logged in elsewhere."
+            });
         }
         const foundUser = await prisma.user.findUnique({
             where: { id: decoded.userId },
@@ -206,7 +226,11 @@ export const logout = async(req: Request, res: Response)=>{
 
     try {
         const decoded = jwt.verify(refreshToken, envConfig.jwtRefreshSecret) as { userId: string }
-        await redisClient.del(`session:${decoded.userId}`)
+        const deleted = await redisDel(`session:${decoded.userId}`);
+
+        if (!deleted) {
+            console.warn("Redis unavailable: logout session could not be invalidated");
+        }
     } catch {
         // token expired/invalid — nothing to invalidate
     }
@@ -240,7 +264,11 @@ export const changePass = async(req: Request, res: Response,next: NextFunction) 
                 }
             })
 
-            await redisClient.del(`session:${userId}`)
+            const deleted = await redisDel(`session:${userId}`);
+
+            if (!deleted) {
+                console.warn("Redis unavailable: password-change session could not be invalidated");
+            }
 
             res.status(200).json({message: "password updated"})
         }else{

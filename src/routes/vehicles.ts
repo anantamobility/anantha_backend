@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { verifyToken } from "../middleware/verifyToken.js";
 import { authorize } from "../middleware/pbac.js";
-import { createVehicle, getVehicles, getVehicleById, updateVehicle } from "../controllers/vehicles.js";
+import { createVehicle, getVehicles, getVehicleById, updateVehicle } from "../controllers/vehicle/vehicles.js";
 
 const r = Router()
 

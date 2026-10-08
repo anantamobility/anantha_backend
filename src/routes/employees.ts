@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { verifyToken } from "../middleware/verifyToken.js";
 import { authorize } from "../middleware/pbac.js";
-import { createEmployee, getEmployees, getEmployeeById, updateEmployee } from "../controllers/employees.js";
+import { createEmployee, getEmployees, getEmployeeById, updateEmployee } from "../controllers/employee/employees.js"
 
 const r = Router()
 

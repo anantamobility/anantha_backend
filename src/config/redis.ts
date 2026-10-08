@@ -10,7 +10,7 @@ const redisClient = createClient({
         keepAliveInitialDelay: 30000,
         reconnectStrategy: (retries) => {
             if (retries > 10) return new Error('Redis max retries reached');
-            return Math.min(retries * 100, 3000); // Exponential backoff
+            return Math.min(100 * 2 ** retries, 3000);
         }
     }
 });
@@ -26,5 +26,45 @@ redisClient.on('ready', () => console.log('Redis Client Ready'));
         console.error('Could not connect to Redis:', err);
     }
 })();
+
+export type RedisGetResult =
+    | { ok: true; value: string | null }
+    | { ok: false };
+
+export async function redisGet(key: string): Promise<RedisGetResult> {
+    try {
+        const value = await redisClient.get(key);
+        return { ok: true, value };
+    } catch (error) {
+        console.error(`Redis GET failed for key "${key}":`, error);
+        return { ok: false };
+    }
+}
+
+export async function redisSet(
+    key: string,
+    value: string,
+    ttlSeconds: number
+): Promise<boolean> {
+    try {
+        await redisClient.set(key, value, {
+            EX: ttlSeconds
+        });
+        return true;
+    } catch (error) {
+        console.error(`Redis SET failed for key "${key}":`, error);
+        return false;
+    }
+}
+
+export async function redisDel(key: string): Promise<boolean> {
+    try {
+        await redisClient.del(key);
+        return true;
+    } catch (error) {
+        console.error(`Redis DEL failed for key "${key}":`, error);
+        return false;
+    }
+}
 
 export default redisClient;
