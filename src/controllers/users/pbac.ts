@@ -1,6 +1,8 @@
 import type { Request, Response, NextFunction } from "express";
 import prisma from "../../database/prismaClient.js";
 import { logAudit } from "../../utils/log.js";
+import { success, error } from "../../utils/http.js";
+import { ErrorCode } from "../../utils/errors.js";
 
 export const getRolesAndPerms = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -33,13 +35,10 @@ export const getRolesAndPerms = async (req: Request, res: Response, next: NextFu
             return acc;
         }, [] as { name: string, actions: { name: string, id: string }[] }[]);
 
-        res.status(200).json({ 
-            roles, 
-            entities 
-        });
+        return success(res, { roles, entities });
         
-    } catch (error) {
-        next(error);
+    } catch (err) {
+        next(err);
     }
 }
 
@@ -47,11 +46,11 @@ export const updatePermsOnRole = async(req: Request, res: Response, next: NextFu
     try {
         const { permissions: newPerms } = req.body
         const { id }  = req.params
-        if (!id) return res.status(400).json({ message: "Role id missing" })
+        if (!id) return error(res, 400, ErrorCode.VALIDATION_ERROR, "Role id missing")
 
         // Validate payload shape: must be an array of permission id strings (empty array is valid = clear all)
         if (!Array.isArray(newPerms) || !newPerms.every((p) => typeof p === "string")) {
-            return res.status(400).json({ message: "Invalid payload: 'permissions' must be an array of permission id strings." });
+            return error(res, 400, ErrorCode.VALIDATION_ERROR, "Invalid payload: 'permissions' must be an array of permission id strings.");
         }
 
         // Verify the role exists (and capture current perms for the audit diff)
@@ -60,7 +59,7 @@ export const updatePermsOnRole = async(req: Request, res: Response, next: NextFu
             include: { permissions: true }
         });
         if (!role) {
-            return res.status(404).json({ message: "Role not found" });
+            return error(res, 404, ErrorCode.NOT_FOUND, "Role not found");
         }
 
         // Verify every permission id exists before `set` (otherwise Prisma throws P2025/P2003 -> generic 500)
@@ -71,7 +70,7 @@ export const updatePermsOnRole = async(req: Request, res: Response, next: NextFu
         const foundIds = new Set(found.map((p) => p.id));
         const missing = newPerms.filter((pid: string) => !foundIds.has(pid));
         if (missing.length > 0) {
-            return res.status(400).json({ message: `Some permission ids do not exist: ${missing.join(", ")}` });
+            return error(res, 400, ErrorCode.VALIDATION_ERROR, `Some permission ids do not exist: ${missing.join(", ")}`);
         }
 
         const formattedPermIds = newPerms.map((permId: string)=>({
@@ -101,13 +100,9 @@ export const updatePermsOnRole = async(req: Request, res: Response, next: NextFu
             summary: `${req.user?.name} updated permissions on role ${role.name}.`
         })
 
-        res.json({message: "updated permissions."})
-    } catch (error: any) {
-        // Safety net: race between the existence check and `set`
-        if (error.code === 'P2025' || error.code === 'P2003') {
-            return res.status(400).json({ message: "One or more permission ids are invalid." });
-        }
-        next(error)
+        return success(res, { message: "updated permissions." });
+    } catch (err) {
+        next(err)
     }
 }
 
@@ -119,10 +114,8 @@ export const addRole = async(req: Request, res: Response, next: NextFunction) =>
                 name: newRoleName
             }
         })
-        res.status(201).json({
-            newRole
-        })
-    } catch (error) {
-        next(error)
+        return success(res, { newRole }, 201);
+    } catch (err) {
+        next(err)
     }
 }

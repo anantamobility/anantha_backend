@@ -1,16 +1,18 @@
 import type { Request, Response, NextFunction } from "express";
 import prisma from "../../database/prismaClient.js";
 import { logAudit } from "../../utils/log.js";
+import { error , success } from "../../utils/http.js";
+import { ErrorCode } from "../../utils/errors.js";
 
 export const createVehicle = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { registrationNumber } = req.body;
 
         if (!registrationNumber?.trim()) {
-            return res.status(400).json({ message: "registrationNumber is required" });
+            return error(res, 400, ErrorCode.VALIDATION_ERROR, "registrationNumber is required");
         }
         if (registrationNumber.trim().length > 10) {
-            return res.status(400).json({ message: "registrationNumber must be at most 10 characters" });
+            return error(res, 400, ErrorCode.VALIDATION_ERROR, "registrationNumber must be at most 10 characters");
         }
 
         const vehicle = await prisma.vehicle.create({
@@ -29,21 +31,21 @@ export const createVehicle = async (req: Request, res: Response, next: NextFunct
             summary: `${req.user?.name} created vehicle ${vehicle.registrationNumber}.`
         });
 
-        res.status(201).json({ vehicle });
-    } catch (error: any) {
-        if (error.code === 'P2002') {
-            return res.status(409).json({ message: "A vehicle with this registration number already exists" });
+        return success(res, { vehicle } , 201);
+    } catch (err: any) {
+        if (err.code === 'P2002') {
+            return error(res, 409, ErrorCode.CONFLICT, "A vehicle with this registration number already exists");
         }
-        next(error);
+        next(err);
     }
 }
 
 export const getVehicles = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const vehicles = await prisma.vehicle.findMany();
-        res.json({ vehicles });
-    } catch (error) {
-        next(error);
+        return success(res, { vehicles });
+    } catch (err) {
+        next(err);
     }
 }
 
@@ -52,11 +54,11 @@ export const getVehicleById = async (req: Request, res: Response, next: NextFunc
         const id = req.params.id as string;
         const vehicle = await prisma.vehicle.findUnique({ where: { id } });
         if (!vehicle) {
-            return res.status(404).json({ message: "Vehicle not found" });
+            return error(res, 404, ErrorCode.NOT_FOUND, "Vehicle not found")
         }
-        res.json({ vehicle });
-    } catch (error) {
-        next(error);
+        return success(res, { vehicle });
+    } catch (err) {
+        next(err);
     }
 }
 
@@ -67,11 +69,11 @@ export const updateVehicle = async (req: Request, res: Response, next: NextFunct
 
         const oldVehicle = await prisma.vehicle.findUnique({ where: { id } });
         if (!oldVehicle) {
-            return res.status(404).json({ message: "Vehicle not found" });
+            return error(res, 404, ErrorCode.NOT_FOUND, "Vehicle not found");
         }
 
         if (registrationNumber && registrationNumber.trim().length > 10) {
-            return res.status(400).json({ message: "registrationNumber must be at most 10 characters" });
+            return error(res, 400, ErrorCode.VALIDATION_ERROR, "registrationNumber must be at most 10 characters");
         }
 
         const vehicle = await prisma.vehicle.update({
@@ -92,11 +94,11 @@ export const updateVehicle = async (req: Request, res: Response, next: NextFunct
             summary: `${req.user?.name} updated vehicle ${vehicle.registrationNumber}.`
         });
 
-        res.json({ vehicle });
-    } catch (error: any) {
-        if (error.code === 'P2002') {
-            return res.status(409).json({ message: "A vehicle with this registration number already exists" });
+        return success(res, { vehicle });
+    } catch (err: any) {
+        if (err.code === 'P2002') {
+            return error(res, 409, ErrorCode.CONFLICT, "A vehicle with this registration number already exists");
         }
-        next(error);
+        next(err);
     }
 }

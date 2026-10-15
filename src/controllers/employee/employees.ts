@@ -1,6 +1,8 @@
 import type { Request, Response, NextFunction } from "express";
 import prisma from "../../database/prismaClient.js";
 import { logAudit } from "../../utils/log.js";
+import { success, error } from "../../utils/http.js";
+import { ErrorCode } from "../../utils/errors.js";
 
 const userSelect = {
     id: true,
@@ -14,12 +16,12 @@ export const createEmployee = async (req: Request, res: Response, next: NextFunc
         const { name, userId } = req.body;
 
         if (!name?.trim() || !userId) {
-            return res.status(400).json({ message: "name and userId are required" });
+            return error(res, 400, ErrorCode.VALIDATION_ERROR, "name and userId are required");
         }
 
         const user = await prisma.user.findUnique({ where: { id: userId } });
         if (!user) {
-            return res.status(404).json({ message: "User not found" });
+            return error(res, 404, ErrorCode.NOT_FOUND, "User not found");
         }
 
         const employee = await prisma.employee.create({
@@ -39,12 +41,12 @@ export const createEmployee = async (req: Request, res: Response, next: NextFunc
             summary: `${req.user?.name} created an employee record for ${employee.name}.`
         });
 
-        res.status(201).json({ employee });
-    } catch (error: any) {
-        if (error.code === 'P2002') {
-            return res.status(409).json({ message: "An employee with this name already exists" });
+        return success(res, { employee }, 201);
+    } catch (err: any) {
+        if (err.code === 'P2002') {
+            return error(res, 409, ErrorCode.CONFLICT, "An employee with this name already exists");
         }
-        next(error);
+        next(err);
     }
 }
 
@@ -53,9 +55,9 @@ export const getEmployees = async (req: Request, res: Response, next: NextFuncti
         const employees = await prisma.employee.findMany({
             include: { user: { select: userSelect } }
         });
-        res.json({ employees });
-    } catch (error) {
-        next(error);
+        return success(res, { employees });
+    } catch (err) {
+        next(err);
     }
 }
 
@@ -67,11 +69,11 @@ export const getEmployeeById = async (req: Request, res: Response, next: NextFun
             include: { user: { select: userSelect } }
         });
         if (!employee) {
-            return res.status(404).json({ message: "Employee not found" });
+            return error(res, 404, ErrorCode.NOT_FOUND, "Employee not found");
         }
-        res.json({ employee });
-    } catch (error) {
-        next(error);
+        return success(res, { employee });
+    } catch (err) {
+        next(err);
     }
 }
 
@@ -82,13 +84,13 @@ export const updateEmployee = async (req: Request, res: Response, next: NextFunc
 
         const oldEmployee = await prisma.employee.findUnique({ where: { id } });
         if (!oldEmployee) {
-            return res.status(404).json({ message: "Employee not found" });
+            return error(res, 404, ErrorCode.NOT_FOUND, "Employee not found");
         }
 
         if (userId && userId !== oldEmployee.userId) {
             const user = await prisma.user.findUnique({ where: { id: userId } });
             if (!user) {
-                return res.status(404).json({ message: "User not found" });
+                return error(res, 404, ErrorCode.NOT_FOUND, "User not found");
             }
         }
 
@@ -114,11 +116,11 @@ export const updateEmployee = async (req: Request, res: Response, next: NextFunc
             summary: `${req.user?.name} updated employee ${employee.name}.`
         });
 
-        res.json({ employee });
-    } catch (error: any) {
-        if (error.code === 'P2002') {
-            return res.status(409).json({ message: "An employee with this name already exists" });
+        return success(res, { employee });
+    } catch (err: any) {
+        if (err.code === 'P2002') {
+            return error(res, 409, ErrorCode.CONFLICT, "An employee with this name already exists");
         }
-        next(error);
+        next(err);
     }
 }
