@@ -7,111 +7,1243 @@ datasource db {
   provider = "postgresql"
 }
 
+// ============================================================
+// ENUMS
+// ============================================================
 enum AccountStatus {
   ONBOARDING
   ACTIVE
   SUSPENDED
 }
 
+enum ClientType {
+  INDIVIDUAL
+  CORPORATE
+}
+
+enum RentalType {
+  B2C
+  B2B
+}
+
+enum B2CMode {
+  AML_RIDER
+  INDIVIDUAL_RIDER
+}
+
+enum B2BRiderMgmt {
+  CLIENT_MANAGED
+  AML_MANAGED
+}
+
+enum BillingFrequency {
+  WEEKLY
+  FORTNIGHTLY
+  MONTHLY
+}
+
+enum RentalStatus {
+  DRAFT
+  PENDING_APPROVAL
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  TERMINATED
+  CANCELLED
+}
+
+enum AssignmentStatus {
+  ACTIVE
+  COMPLETED
+  TRANSFERRED
+  CANCELLED
+}
+
+enum VehicleStatus {
+  IDLE
+  DEPLOYED
+  IN_SERVICE
+  UNDER_REPAIR
+  OUT_OF_SERVICE
+  RETIRED
+}
+
+enum RiderStatus {
+  ONBOARDING
+  ACTIVE
+  SUSPENDED
+  INACTIVE
+  TERMINATED
+}
+
+enum StaffStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum DepositPayerType {
+  CLIENT
+  RIDER
+}
+
+enum DepositStatus {
+  REQUIRED
+  PENDING_RECEIPT
+  PARTIALLY_RECEIVED
+  RECEIVED
+  PARTIALLY_REFUNDED
+  REFUNDED
+  FORFEITED
+  CLOSED
+}
+
+enum DepositTransactionType {
+  RECEIPT
+  REFUND
+  DEDUCTION
+  FORFEIT
+  ADJUSTMENT
+  REVERSAL
+}
+
+enum InvoiceKind {
+  CONSOLIDATED
+  RENTAL
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  CANCELLED
+  VOID
+}
+
+enum ChargeType {
+  RENTAL
+  SERVICE
+  REPAIR
+  REPLACEMENT
+  PARTS
+  DOWNTIME
+  ADJUSTMENT
+  CREDIT
+  OTHER
+}
+
+enum CollectionPayerType {
+  CLIENT
+  RIDER
+}
+
+enum CollectionStatus {
+  PENDING
+  CLEARED
+  FAILED
+  REFUNDED
+  REVERSED
+}
+
+enum PaymentMethod {
+  CASH
+  UPI
+  CARD
+  BANK_TRANSFER
+  CHEQUE
+  OTHER
+}
+
+enum PayoutRecipientType {
+  RIDER
+  STAFF
+  VENDOR
+  CLIENT
+}
+
+enum PayoutStatus {
+  PENDING
+  APPROVED
+  PROCESSING
+  PAID
+  FAILED
+  CANCELLED
+}
+
+enum SettlementStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  PAID
+  FAILED
+  RECONCILED
+  REVERSED
+}
+
+enum SettlementLineType {
+  DELIVERY_EARNING
+  RENT_DEDUCTION
+  DEPOSIT_DEDUCTION
+  ADJUSTMENT
+  OTHER_DEDUCTION
+  PAYOUT_REVERSAL
+}
+
+enum LedgerEntryType {
+  DELIVERY_EARNING
+  RENT_DEDUCTION
+  DEPOSIT_DEDUCTION
+  ADJUSTMENT
+  PAYOUT
+  REVERSAL
+  OTHER
+}
+
+enum LedgerDirection {
+  CREDIT
+  DEBIT
+}
+
+enum ServiceType {
+  TECHNICAL
+  PREVENTIVE
+  ACCIDENT
+  RIDER_DAMAGE
+  OTHER
+}
+
+enum ServiceStatus {
+  REPORTED
+  APPROVED
+  IN_PROGRESS
+  AWAITING_PARTS
+  COMPLETED
+  CANCELLED
+}
+
+enum ResponsibleParty {
+  AML
+  RIDER
+  CLIENT
+  THIRD_PARTY
+  INSURANCE
+  UNKNOWN
+}
+
+enum ServiceChargeType {
+  LABOR
+  SPARE_PARTS
+  OTHER_COST
+  DOWNTIME_RENT
+  REPLACEMENT_RENT
+}
+
+enum ServiceChargeStatus {
+  PENDING
+  BILLED
+  WAIVED
+  COLLECTED
+}
+
+enum InventoryMovementType {
+  PURCHASE
+  RETURN
+  ADJUSTMENT
+  ISSUE_TO_SERVICE
+  TRANSFER
+  WRITE_OFF
+}
+
+enum DocumentType {
+  ID_PROOF
+  ADDRESS_PROOF
+  DRIVING_LICENSE
+  VEHICLE_PERMIT
+  INSURANCE
+  REGISTRATION
+  CONTRACT
+  PVC
+  BGV
+  OTHER
+}
+
+enum DocumentStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  EXPIRED
+}
+
+enum VerificationType {
+  PVC
+  BGV
+}
+
+enum VerificationStatus {
+  PENDING
+  SUBMITTED
+  VERIFIED
+  REJECTED
+  EXPIRED
+}
+
+// ============================================================
+// RBAC
+// ============================================================
 model Permission {
   id          String  @id @default(uuid(7))
-  resource    String // e.g., "user", "role"
-  action      String // e.g., "create", "read", "update", "delete"
+  resource    String
+  action      String
   description String?
-
-  roles Role[]
+  roles       Role[]
 
   @@unique([resource, action])
   @@map("permissions")
 }
 
 model Role {
-  id   String @id @default(uuid(7))
-  name String @unique
-
+  id          String       @id @default(uuid(7))
+  name        String       @unique
   permissions Permission[]
   users       User[]
 
   @@map("roles")
 }
 
+// ============================================================
+// IDENTITY
+// ============================================================
 model User {
-  id          String        @id @default(uuid(7))
-  name        String
-  email       String?       @unique
-  phoneNumber String       @unique
-  password    String
-  status      AccountStatus @default(ONBOARDING)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id           String        @id @default(uuid(7))
+  name         String
+  email        String?       @unique
+  phoneNumber  String        @unique
+  passwordHash String        @map("password")
+  status       AccountStatus @default(ONBOARDING)
+  lastLoginAt  DateTime?     @db.Timestamptz(3)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  deletedAt    DateTime?
+  roleId       String
+  role         Role          @relation(fields: [roleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
-  role      Role     @relation(fields: [roleId], references: [id])
-  roleId    String
+  staffProfile Staff?
+  riderProfile Rider?
+  clientUsers  ClientUser[]
+  auditLogs    AuditLog[]
 
-  employeeProfiles Employee[]
-  driverProfiles Driver[]
-  auditLogs AuditLog[]
+  documentsOwned    Document[] @relation("DocumentOwner")
+  documentsUploaded Document[] @relation("DocumentUploadedBy")
+  documentsVerified Document[] @relation("DocumentVerifiedBy")
+  verificationsVerified RiderVerification[] @relation("VerificationVerifiedBy")
 
+  invoicesApproved      Invoice[]            @relation("InvoiceApprovedBy")
+  invoicesVoided        Invoice[]            @relation("InvoiceVoidedBy")
+  collectionsReceived   Collection[]         @relation("CollectionReceivedBy")
+  collectionsReconciled Collection[]         @relation("CollectionReconciledBy")
+  payoutsApproved       Payout[]             @relation("PayoutApprovedBy")
+  depositsAuthorized    DepositTransaction[] @relation("DepositAuthorizedBy")
+  ledgerCreated         EarningsLedger[]     @relation("LedgerCreatedBy")
+  settlementsApproved   RiderSettlement[]    @relation("SettlementApprovedBy")
+
+  assignmentsCreated   VehicleAssignment[]   @relation("AssignmentCreatedBy")
+  vehicleStatusChanges VehicleStatusHistory[] @relation("VehicleStatusChangedBy")
+  riderStatusChanges   RiderStatusHistory[]   @relation("RiderStatusChangedBy")
+  serviceStatusChanges ServiceStatusHistory[] @relation("ServiceStatusChangedBy")
+  vehicleHubChanges    VehicleHubHistory[]    @relation("VehicleHubChangedBy")
+  servicesReported     Service[]              @relation("ServiceReportedBy")
+  servicesApproved     Service[]              @relation("ServiceApprovedBy")
+  inventoryMoved       InventoryMovement[]    @relation("InventoryMovedBy")
+
+  @@index([roleId])
+  @@index([status])
   @@map("users")
 }
 
-model Driver{
-  id  String  @id @default(uuid(7))
-  name String @unique
+model Staff {
+  id           String      @id @default(uuid(7))
+  userId       String?     @unique
+  user         User?       @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  employeeCode String?     @unique
+  fullName     String
+  phoneNumber  String?
+  hubId        String?
+  hub          Hub?        @relation(fields: [hubId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  jobTitle     String?
+  status       StaffStatus @default(ACTIVE)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  deletedAt    DateTime?
 
-  user User @relation(fields: [userId], references: [id])
-  userId String
+  payouts   Payout[]
+  documents Document[]
 
-  @@map("drivers")
+  @@index([hubId])
+  @@map("staff")
 }
 
-model Employee{
-  id  String  @id @default(uuid(7))
-  name String @unique
+model Rider {
+  id          String      @id @default(uuid(7))
+  userId      String?     @unique
+  user        User?       @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  riderCode   String      @unique
+  fullName    String
+  phoneNumber String?
+  hubId       String?
+  hub         Hub?        @relation(fields: [hubId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  status      RiderStatus @default(ONBOARDING)
+  onboardedAt DateTime?   @db.Timestamptz(3)
+  version     Int         @default(0)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  deletedAt   DateTime?
 
-  user User @relation(fields: [userId], references: [id])
-  userId String
-  @@map("employees")
+  rentals      Rental[]
+  assignments  VehicleAssignment[]
+  statusHistory RiderStatusHistory[]
+  deposits     Deposit[]
+  collections  Collection[]
+  settlements  RiderSettlement[]
+  ledgerEntries EarningsLedger[]
+  payouts      Payout[]
+  verifications RiderVerification[]
+  documents    Document[]
+
+  @@index([hubId])
+  @@index([status])
+  @@map("riders")
 }
 
-model AuditLog {
+// ============================================================
+// OPERATIONS
+// ============================================================
+model Hub {
+  id           String   @id @default(uuid(7))
+  name         String   @unique
+  code         String   @unique
+  address      Json?    @db.JsonB
+  contactPhone String?
+  contactEmail String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  vehicles          Vehicle[]
+  staff             Staff[]
+  riders            Rider[]
+  rentals           Rental[]
+  assignments       VehicleAssignment[]
+  vehicleHubHistory VehicleHubHistory[]
+  inventoryBalances InventoryBalance[]
+  movementsFrom     InventoryMovement[] @relation("MovementFromHub")
+  movementsTo       InventoryMovement[] @relation("MovementToHub")
+
+  @@map("hubs")
+}
+
+model Vehicle {
+  id                 String        @id @default(uuid(7))
+  registrationNumber String        @unique @db.VarChar(15)
+  hubId              String?
+  hub                Hub?          @relation(fields: [hubId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  make               String?
+  model              String?
+  year               Int?
+  color              String?
+  vin                String?       @unique
+  status             VehicleStatus @default(IDLE)
+  acquiredAt         DateTime?     @db.Timestamptz(3)
+  retiredAt          DateTime?     @db.Timestamptz(3)
+  isActive           Boolean       @default(true)
+  version            Int           @default(0)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  deletedAt          DateTime?
+
+  assignments           VehicleAssignment[]
+  statusHistory         VehicleStatusHistory[]
+  hubHistory            VehicleHubHistory[]
+  services              Service[]
+  replacementForServices Service[]           @relation("ReplacementVehicle")
+  inventoryMovements    InventoryMovement[]
+  documents             Document[]
+
+  @@index([hubId])
+  @@index([status])
+  @@map("vehicles")
+}
+
+model VehicleHubHistory {
+  id          String   @id @default(uuid(7))
+  vehicleId   String
+  vehicle     Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  hubId       String
+  hub         Hub      @relation(fields: [hubId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  fromDate    DateTime @db.Timestamptz(3)
+  toDate      DateTime? @db.Timestamptz(3)
+  changedById String?
+  changedBy   User?    @relation("VehicleHubChangedBy", fields: [changedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  reason      String?
+  createdAt   DateTime @default(now())
+
+  @@index([vehicleId, fromDate])
+  @@index([hubId])
+  @@map("vehicle_hub_history")
+}
+
+// ============================================================
+// CUSTOMERS
+// ============================================================
+model Client {
+  id               String     @id @default(uuid(7))
+  type             ClientType
+  name             String
+  companyName      String?
+  contactPerson    String?
+  email            String?
+  phoneNumber      String?
+  taxId            String?
+  billingAddress   Json?      @db.JsonB
+  paymentTermsDays Int?
+  isActive         Boolean    @default(true)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  deletedAt        DateTime?
+
+  rentals     Rental[]
+  invoices    Invoice[]
+  deposits    Deposit[]
+  collections Collection[]
+  rateCards   RateCard[]
+  documents   Document[]
+  clientUsers ClientUser[]
+  payouts     Payout[]
+
+  @@index([type])
+  @@index([phoneNumber])
+  @@index([email])
+  @@map("clients")
+}
+
+model ClientUser {
   id        String   @id @default(uuid(7))
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  role      String?
   createdAt DateTime @default(now())
 
-  userId   String
-  user     User   @relation(fields: [userId], references: [id])
-  userName String
-  userRole String
+  @@unique([clientId, userId])
+  @@index([userId])
+  @@map("client_users")
+}
 
-  action    String
-  ipAddress String?
-  userAgent String?
-  status    String  @default("SUCCESS")
+model RateCard {
+  id               String           @id @default(uuid(7))
+  name             String
+  clientId         String?
+  client           Client?          @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  rentalType       RentalType?
+  billingFrequency BillingFrequency?
+  dailyRate        Decimal          @db.Decimal(14, 4)
+  weeklyRate       Decimal?         @db.Decimal(14, 4)
+  fortnightlyRate  Decimal?         @db.Decimal(14, 4)
+  monthlyRate      Decimal?         @db.Decimal(14, 4)
+  currency         String           @default("INR") @db.Char(3)
+  effectiveFrom    DateTime         @db.Timestamptz(3)
+  effectiveTo      DateTime?        @db.Timestamptz(3)
+  isActive         Boolean          @default(true)
+  terms            Json?            @db.JsonB
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
+  rentals Rental[]
+
+  @@index([clientId, effectiveFrom])
+  @@index([rentalType, billingFrequency])
+  @@map("rate_cards")
+}
+
+// ============================================================
+// RENTAL + AUTHORITATIVE VEHICLE ALLOCATION
+// ============================================================
+model Rental {
+  id                      String           @id @default(uuid(7))
+  rentalType              RentalType
+  b2cMode                 B2CMode?
+  b2bRiderMgmt            B2BRiderMgmt?
+  clientId                String
+  client                  Client           @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  riderId                 String?
+  rider                   Rider?           @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  hubId                   String?
+  hub                     Hub?             @relation(fields: [hubId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  rateCardId              String?
+  rateCard                RateCard?        @relation(fields: [rateCardId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  startDate               DateTime         @db.Timestamptz(3)
+  endDate                 DateTime?        @db.Timestamptz(3)
+  expectedEndDate         DateTime?        @db.Timestamptz(3)
+  status                  RentalStatus     @default(DRAFT)
+  agreementRef            String?
+  billingFrequency        BillingFrequency?
+  currency                String           @default("INR") @db.Char(3)
+  dailyRate               Decimal?         @db.Decimal(14, 4)
+  weeklyRate              Decimal?         @db.Decimal(14, 4)
+  fortnightlyRate         Decimal?         @db.Decimal(14, 4)
+  monthlyRate             Decimal?         @db.Decimal(14, 4)
+  securityDepositRequired Decimal?         @db.Decimal(14, 2)
+  rateSnapshot            Json?            @db.JsonB
+  version                 Int              @default(0)
+  notes                   String?
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
+
+  assignments     VehicleAssignment[]
+  deposits        Deposit[]
+  invoices        Invoice[]
+  invoiceLines    InvoiceLine[]
+  services        Service[]
+  settlementLines RiderSettlementLine[]
+  ledgerEntries   EarningsLedger[]
+
+  @@index([clientId, status])
+  @@index([riderId, status])
+  @@index([hubId])
+  @@index([startDate, endDate])
+  @@map("rentals")
+}
+
+model VehicleAssignment {
+  id             String           @id @default(uuid(7))
+  vehicleId      String
+  vehicle        Vehicle          @relation(fields: [vehicleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  riderId        String?
+  rider          Rider?           @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  rentalId       String?
+  rental         Rental?          @relation(fields: [rentalId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  hubId          String?
+  hub            Hub?             @relation(fields: [hubId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  assignedById   String?
+  assignedBy     User?            @relation("AssignmentCreatedBy", fields: [assignedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  startDate      DateTime         @db.Timestamptz(3)
+  endDate        DateTime?        @db.Timestamptz(3)
+  status         AssignmentStatus @default(ACTIVE)
+  reason         String?
+  replacementForId String?
+  replacementFor   VehicleAssignment?  @relation("AssignmentReplacement", fields: [replacementForId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  replacements     VehicleAssignment[] @relation("AssignmentReplacement")
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([vehicleId, status])
+  @@index([riderId, status])
+  @@index([rentalId, status])
+  @@index([hubId])
+  @@map("vehicle_assignments")
+}
+
+// ============================================================
+// STATUS HISTORY
+// ============================================================
+model VehicleStatusHistory {
+  id          String        @id @default(uuid(7))
+  vehicleId   String
+  vehicle     Vehicle       @relation(fields: [vehicleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  status      VehicleStatus
+  changedById String?
+  changedBy   User?         @relation("VehicleStatusChangedBy", fields: [changedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  reason      String?
+  notes       String?
+  changedAt   DateTime      @default(now()) @db.Timestamptz(3)
+
+  @@index([vehicleId, changedAt])
+  @@map("vehicle_status_history")
+}
+
+model RiderStatusHistory {
+  id          String      @id @default(uuid(7))
+  riderId     String
+  rider       Rider       @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  status      RiderStatus
+  changedById String?
+  changedBy   User?       @relation("RiderStatusChangedBy", fields: [changedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  reason      String?
+  notes       String?
+  changedAt   DateTime    @default(now()) @db.Timestamptz(3)
+
+  @@index([riderId, changedAt])
+  @@map("rider_status_history")
+}
+
+// ============================================================
+// DEPOSITS (transaction-authoritative)
+// ============================================================
+model Deposit {
+  id             String           @id @default(uuid(7))
+  payerType      DepositPayerType
+  clientId       String?
+  client         Client?          @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  riderId        String?
+  rider          Rider?           @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  rentalId       String?
+  rental         Rental?          @relation(fields: [rentalId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  amountRequired Decimal          @db.Decimal(14, 2)
+  currency       String           @default("INR") @db.Char(3)
+  status         DepositStatus    @default(REQUIRED)
+  dueDate        DateTime?        @db.Timestamptz(3)
+  version        Int              @default(0)
+  notes          String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  transactions DepositTransaction[]
+
+  @@index([clientId])
+  @@index([riderId])
+  @@index([rentalId])
+  @@index([status])
+  @@map("deposits")
+}
+
+model DepositTransaction {
+  id                    String                 @id @default(uuid(7))
+  depositId             String
+  deposit               Deposit                @relation(fields: [depositId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  type                  DepositTransactionType
+  direction             LedgerDirection
+  amount                Decimal                @db.Decimal(14, 2)
+  currency              String                 @default("INR") @db.Char(3)
+  reference             String?
+  reason                String?
+  authorizedById        String?
+  authorizedBy          User?                  @relation("DepositAuthorizedBy", fields: [authorizedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  collectionId          String?
+  collection            Collection?            @relation(fields: [collectionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  reversesTransactionId String?                @unique
+  reversesTransaction   DepositTransaction?    @relation("DepositReversal", fields: [reversesTransactionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  reversedBy            DepositTransaction?    @relation("DepositReversal")
+  idempotencyKey        String?                @unique
+  createdAt             DateTime               @default(now()) @db.Timestamptz(3)
+
+  @@index([depositId, createdAt])
+  @@index([collectionId])
+  @@map("deposit_transactions")
+}
+
+// ============================================================
+// INVOICING (canonical receivable)
+// ============================================================
+model Invoice {
+  id                 String          @id @default(uuid(7))
+  invoiceNumber      String          @unique
+  kind               InvoiceKind     @default(CONSOLIDATED)
+  clientId           String
+  client             Client          @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  rentalId           String?
+  rental             Rental?         @relation(fields: [rentalId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  billingPeriodStart DateTime        @db.Timestamptz(3)
+  billingPeriodEnd   DateTime        @db.Timestamptz(3)
+  billingFrequency   BillingFrequency
+  issueDate          DateTime        @default(now()) @db.Timestamptz(3)
+  issuedAt           DateTime?       @db.Timestamptz(3)
+  dueDate            DateTime        @db.Timestamptz(3)
+  status             InvoiceStatus   @default(DRAFT)
+  currency           String          @default("INR") @db.Char(3)
+  subtotal           Decimal         @default(0) @db.Decimal(14, 2)
+  discountAmount     Decimal         @default(0) @db.Decimal(14, 2)
+  taxAmount          Decimal         @default(0) @db.Decimal(14, 2)
+  totalAmount        Decimal         @default(0) @db.Decimal(14, 2)
+  version            Int             @default(0)
+  notes              String?
+  approvedById       String?
+  approvedBy         User?           @relation("InvoiceApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  approvedAt         DateTime?       @db.Timestamptz(3)
+  voidedById         String?
+  voidedBy           User?           @relation("InvoiceVoidedBy", fields: [voidedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  voidedAt           DateTime?       @db.Timestamptz(3)
+  voidReason         String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  lines       InvoiceLine[]
+  allocations PaymentAllocation[]
+
+  @@index([clientId, status, dueDate])
+  @@index([rentalId])
+  @@index([issueDate])
+  @@map("invoices")
+}
+
+model InvoiceLine {
+  id              String      @id @default(uuid(7))
+  invoiceId       String
+  invoice         Invoice     @relation(fields: [invoiceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  rentalId        String?
+  rental          Rental?     @relation(fields: [rentalId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  serviceChargeId String?     @unique
+  serviceCharge   ServiceCharge? @relation(fields: [serviceChargeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  chargeType      ChargeType
+  description     String
+  quantity        Decimal?    @db.Decimal(14, 3)
+  unitPrice       Decimal?    @db.Decimal(14, 4)
+  lineAmount      Decimal     @db.Decimal(14, 2)
+  periodStart     DateTime?   @db.Timestamptz(3)
+  periodEnd       DateTime?   @db.Timestamptz(3)
+  pricingSnapshot Json?       @db.JsonB
+  createdAt       DateTime    @default(now())
+
+  @@index([invoiceId])
+  @@index([rentalId])
+  @@map("invoice_lines")
+}
+
+// ============================================================
+// COLLECTIONS + ALLOCATION
+// ============================================================
+model Collection {
+  id              String             @id @default(uuid(7))
+  payerType       CollectionPayerType
+  clientId        String?
+  client          Client?            @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  riderId         String?
+  rider           Rider?             @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  amount          Decimal            @db.Decimal(14, 2)
+  currency        String             @default("INR") @db.Char(3)
+  paymentMethod   PaymentMethod
+  referenceNumber String?
+  receivedAt      DateTime           @default(now()) @db.Timestamptz(3)
+  status          CollectionStatus   @default(PENDING)
+  receivedById    String?
+  receivedBy      User?              @relation("CollectionReceivedBy", fields: [receivedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  reconciledAt    DateTime?          @db.Timestamptz(3)
+  reconciledById  String?
+  reconciledBy    User?              @relation("CollectionReconciledBy", fields: [reconciledById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  idempotencyKey  String             @unique
+  notes           String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  allocations         PaymentAllocation[]
+  depositTransactions DepositTransaction[]
+
+  @@index([clientId, receivedAt])
+  @@index([riderId, receivedAt])
+  @@index([status])
+  @@map("collections")
+}
+
+model PaymentAllocation {
+  id           String     @id @default(uuid(7))
+  collectionId String
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  invoiceId    String
+  invoice      Invoice    @relation(fields: [invoiceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  amount       Decimal    @db.Decimal(14, 2)
+  createdAt    DateTime   @default(now())
+
+  @@unique([collectionId, invoiceId])
+  @@index([invoiceId])
+  @@map("payment_allocations")
+}
+
+// ============================================================
+// RIDER SETTLEMENT + EARNINGS LEDGER
+// ============================================================
+model RiderSettlement {
+  id                  String           @id @default(uuid(7))
+  settlementNumber    String           @unique
+  riderId             String
+  rider               Rider            @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  periodStart         DateTime         @db.Timestamptz(3)
+  periodEnd           DateTime         @db.Timestamptz(3)
+  status              SettlementStatus @default(DRAFT)
+  currency            String           @default("INR") @db.Char(3)
+  grossEarnings       Decimal          @default(0) @db.Decimal(14, 2)
+  totalDeductions     Decimal          @default(0) @db.Decimal(14, 2)
+  netPayable          Decimal          @default(0) @db.Decimal(14, 2)
+  calculationSnapshot Json?            @db.JsonB
+  version             Int              @default(0)
+  approvedById        String?
+  approvedBy          User?            @relation("SettlementApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  approvedAt          DateTime?        @db.Timestamptz(3)
+  paidAt              DateTime?        @db.Timestamptz(3)
+  failureReason       String?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  lines         RiderSettlementLine[]
+  payouts       Payout[]
+  ledgerEntries EarningsLedger[]
+
+  @@index([riderId, periodStart, periodEnd])
+  @@index([status])
+  @@map("rider_settlements")
+}
+
+model RiderSettlementLine {
+  id            String          @id @default(uuid(7))
+  settlementId  String
+  settlement    RiderSettlement @relation(fields: [settlementId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  lineType      SettlementLineType
+  direction     LedgerDirection
+  amount        Decimal         @db.Decimal(14, 2)
+  description   String
+  rentalId      String?
+  rental        Rental?         @relation(fields: [rentalId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  ledgerEntryId String?         @unique
+  ledgerEntry   EarningsLedger? @relation(fields: [ledgerEntryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  referenceType String?
+  referenceId   String?
+  snapshot      Json?           @db.JsonB
+  createdAt     DateTime        @default(now())
+
+  @@index([settlementId])
+  @@index([rentalId])
+  @@index([ledgerEntryId])
+  @@map("rider_settlement_lines")
+}
+
+model EarningsLedger {
+  id                  String         @id @default(uuid(7))
+  riderId             String
+  rider               Rider          @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  entryType           LedgerEntryType
+  direction           LedgerDirection
+  amount              Decimal        @db.Decimal(14, 2)
+  currency            String         @default("INR") @db.Char(3)
+  occurredAt          DateTime       @db.Timestamptz(3)
+  description         String
+  sourceType          String?
+  sourceId            String?
+  settlementId        String?
+  settlement          RiderSettlement? @relation(fields: [settlementId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  rentalId            String?
+  rental              Rental?        @relation(fields: [rentalId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  reversesEntryId     String?        @unique
+  reversesEntry       EarningsLedger? @relation("LedgerReversal", fields: [reversesEntryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  reversedBy          EarningsLedger? @relation("LedgerReversal")
+  createdById         String?
+  createdBy           User?          @relation("LedgerCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  idempotencyKey      String         @unique
+  metadata            Json?          @db.JsonB
+  createdAt           DateTime       @default(now()) @db.Timestamptz(3)
+
+  settlementLines RiderSettlementLine[]
+
+  @@index([riderId, occurredAt])
+  @@index([settlementId])
+  @@index([rentalId])
+  @@map("earnings_ledger")
+}
+
+// ============================================================
+// PAYOUTS (all recipient types)
+// ============================================================
+model Payout {
+  id              String             @id @default(uuid(7))
+  recipientType   PayoutRecipientType
+  riderId         String?
+  rider           Rider?             @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  staffId         String?
+  staff           Staff?             @relation(fields: [staffId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  vendorId        String?
+  vendor          Vendor?            @relation(fields: [vendorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  clientId        String?
+  client          Client?            @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  settlementId    String?
+  settlement      RiderSettlement?   @relation(fields: [settlementId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  amount          Decimal            @db.Decimal(14, 2)
+  currency        String             @default("INR") @db.Char(3)
+  status          PayoutStatus       @default(PENDING)
+  approvedById    String?
+  approvedBy      User?              @relation("PayoutApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  approvedAt      DateTime?          @db.Timestamptz(3)
+  paidAt          DateTime?          @db.Timestamptz(3)
+  paymentMethod   PaymentMethod?
+  referenceNumber String?
+  idempotencyKey  String             @unique
+  notes           String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([riderId, status])
+  @@index([staffId])
+  @@index([vendorId])
+  @@index([clientId])
+  @@map("payouts")
+}
+
+model Vendor {
+  id            String   @id @default(uuid(7))
+  name          String   @unique
+  contactPerson String?
+  phoneNumber   String?
+  email         String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  payouts Payout[]
+
+  @@map("vendors")
+}
+
+// ============================================================
+// SERVICE + MAINTENANCE
+// ============================================================
+model Service {
+  id                   String        @id @default(uuid(7))
+  vehicleId            String
+  vehicle              Vehicle       @relation(fields: [vehicleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  rentalId             String?
+  rental               Rental?       @relation(fields: [rentalId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  serviceType          ServiceType
+  status               ServiceStatus @default(REPORTED)
+  responsibleParty     ResponsibleParty @default(UNKNOWN)
+  reportedById         String?
+  reportedBy           User?         @relation("ServiceReportedBy", fields: [reportedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  approvedById         String?
+  approvedBy           User?         @relation("ServiceApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  reportedAt           DateTime      @default(now()) @db.Timestamptz(3)
+  startedAt            DateTime?     @db.Timestamptz(3)
+  completedAt          DateTime?     @db.Timestamptz(3)
+  downtimeStart        DateTime?     @db.Timestamptz(3)
+  downtimeEnd          DateTime?     @db.Timestamptz(3)
+  description          String?
+  resolutionNotes      String?
+  replacementVehicleId String?
+  replacementVehicle   Vehicle?      @relation("ReplacementVehicle", fields: [replacementVehicleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  version              Int           @default(0)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  charges            ServiceCharge[]
+  spares             ServiceSpare[]
+  inventoryMovements InventoryMovement[]
+  statusHistory      ServiceStatusHistory[]
+
+  @@index([vehicleId, status])
+  @@index([rentalId])
+  @@index([reportedAt])
+  @@index([replacementVehicleId])
+  @@map("services")
+}
+
+model ServiceCharge {
+  id              String              @id @default(uuid(7))
+  serviceId       String
+  service         Service             @relation(fields: [serviceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  chargeType      ServiceChargeType
+  costAmount      Decimal             @db.Decimal(14, 2)
+  billableAmount  Decimal             @default(0) @db.Decimal(14, 2)
+  recoverableFrom ResponsibleParty    @default(AML)
+  status          ServiceChargeStatus @default(PENDING)
+  description     String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  invoiceLine InvoiceLine?
+
+  @@index([serviceId])
+  @@map("service_charges")
+}
+
+model ServiceStatusHistory {
+  id          String        @id @default(uuid(7))
+  serviceId   String
+  service     Service       @relation(fields: [serviceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  status      ServiceStatus
+  changedById String?
+  changedBy   User?         @relation("ServiceStatusChangedBy", fields: [changedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  reason      String?
+  changedAt   DateTime      @default(now()) @db.Timestamptz(3)
+
+  @@index([serviceId, changedAt])
+  @@map("service_status_history")
+}
+
+model ServiceSpare {
+  id                  String            @id @default(uuid(7))
+  serviceId           String
+  service             Service           @relation(fields: [serviceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  spareId             String
+  spare               Spare             @relation(fields: [spareId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  quantity            Int
+  unitCost            Decimal           @db.Decimal(14, 4)
+  lineCost            Decimal           @db.Decimal(14, 2)
+  inventoryMovementId String?           @unique
+  inventoryMovement   InventoryMovement? @relation(fields: [inventoryMovementId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdAt           DateTime          @default(now())
+
+  @@index([serviceId])
+  @@index([spareId])
+  @@map("service_spares")
+}
+
+// ============================================================
+// INVENTORY
+// ============================================================
+model Spare {
+  id          String   @id @default(uuid(7))
+  partNumber  String   @unique
+  name        String
+  description String?
+  unitCost    Decimal  @db.Decimal(14, 4)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  balances      InventoryBalance[]
+  movements     InventoryMovement[]
+  serviceSpares ServiceSpare[]
+
+  @@map("spares")
+}
+
+model InventoryBalance {
+  id        String   @id @default(uuid(7))
+  spareId   String
+  spare     Spare    @relation(fields: [spareId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  hubId     String
+  hub       Hub      @relation(fields: [hubId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  onHand    Int      @default(0)
+  reserved  Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@unique([spareId, hubId])
+  @@index([hubId])
+  @@map("inventory_balances")
+}
+
+model InventoryMovement {
+  id            String                @id @default(uuid(7))
+  spareId       String
+  spare         Spare                 @relation(fields: [spareId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  movementType  InventoryMovementType
+  quantity      Int
+  unitCost      Decimal?              @db.Decimal(14, 4)
+  fromHubId     String?
+  fromHub       Hub?                  @relation("MovementFromHub", fields: [fromHubId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  toHubId       String?
+  toHub         Hub?                  @relation("MovementToHub", fields: [toHubId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  serviceId     String?
+  service       Service?              @relation(fields: [serviceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  vehicleId     String?
+  vehicle       Vehicle?              @relation(fields: [vehicleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  movedById     String?
+  movedBy       User?                 @relation("InventoryMovedBy", fields: [movedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  referenceType String?
+  referenceId   String?
+  notes         String?
+  movedAt       DateTime              @default(now()) @db.Timestamptz(3)
+
+  serviceSpare ServiceSpare?
+
+  @@index([spareId, movedAt])
+  @@index([fromHubId])
+  @@index([toHubId])
+  @@index([serviceId])
+  @@index([vehicleId])
+  @@map("inventory_movements")
+}
+
+// ============================================================
+// DOCUMENTS + VERIFICATION
+// ============================================================
+model Document {
+  id            String         @id @default(uuid(7))
+  documentType  DocumentType
+  status        DocumentStatus @default(PENDING)
+  title         String
+  fileName      String?
+  mimeType      String?
+  fileSize      Int?
+  storageKey    String
+  storageBucket String?
+  issueDate     DateTime?      @db.Timestamptz(3)
+  expiryDate    DateTime?      @db.Timestamptz(3)
+
+  riderId  String?
+  rider    Rider?   @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  staffId  String?
+  staff    Staff?   @relation(fields: [staffId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  vehicleId String?
+  vehicle  Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  clientId String?
+  client   Client?  @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  userId   String?
+  user     User?    @relation("DocumentOwner", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  verifiedById String?
+  verifiedBy   User?   @relation("DocumentVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  verifiedAt   DateTime? @db.Timestamptz(3)
+  uploadedById String?
+  uploadedBy   User?   @relation("DocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  notes         String?
+  metadata      Json?          @db.JsonB
+  verifications RiderVerification[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([riderId])
+  @@index([staffId])
+  @@index([vehicleId])
+  @@index([clientId])
+  @@index([userId])
+  @@index([documentType])
+  @@index([status])
+  @@index([expiryDate])
+  @@map("documents")
+}
+
+model RiderVerification {
+  id              String             @id @default(uuid(7))
+  riderId         String
+  rider           Rider              @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  type            VerificationType
+  status          VerificationStatus @default(PENDING)
+  submittedAt     DateTime?          @db.Timestamptz(3)
+  completedAt     DateTime?          @db.Timestamptz(3)
+  expiresAt       DateTime?          @db.Timestamptz(3)
+  verifiedById    String?
+  verifiedBy      User?              @relation("VerificationVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  rejectionReason String?
+  documentId      String?
+  document        Document?          @relation(fields: [documentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([riderId, type, status])
+  @@index([expiresAt])
+  @@index([documentId])
+  @@map("rider_verifications")
+}
+
+// ============================================================
+// AUDIT
+// ============================================================
+model AuditLog {
+  id         String   @id @default(uuid(7))
+  createdAt  DateTime @default(now())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  userName   String
+  userRole   String
+  action     String
+  ipAddress  String?
+  userAgent  String?
+  status     String   @default("SUCCESS")
   resource   String
   resourceId String
-
-  changes Json?   @db.JsonB
-  summary String?
+  changes    Json?    @db.JsonB
+  summary    String?
 
   @@index([userId])
   @@index([resourceId])
   @@index([resource])
   @@map("audit_logs")
 }
-
-model hub {
-  id  String  @id @default(uuid(7))
-
-  @@map("hubs")
-}
-
-model vehicle {
-  id  String  @id @default(uuid(7))
-
-  registrationNumber String @unique @db.VarChar(10)
-  //permit?
-  // insurance
-  @@map("vehicles")
-}
-

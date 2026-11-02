@@ -24,7 +24,7 @@ vi.mock("../src/database/prismaClient.js", () => {
   });
   const prisma: any = {
     user: delegate(), role: delegate(), permission: delegate(),
-    driver: delegate(), employee: delegate(), vehicle: delegate(),
+    rider: delegate(), staff: delegate(), vehicle: delegate(),
     auditLog: delegate(), hub: delegate(),
     $disconnect: vi.fn(),
   };

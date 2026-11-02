@@ -18,11 +18,11 @@ export const PERMISSION_REGISTRY = [
     actions: ['read']
   },
   {
-    resource: 'driver',
+    resource: 'rider',
     actions: ['create', 'read', 'update']
   },
   {
-    resource: 'employee',
+    resource: 'staff',
     actions: ['create', 'read', 'update']
   },
   {

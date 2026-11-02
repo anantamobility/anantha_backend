@@ -143,7 +143,7 @@ async function main() {
       name: 'IT-ADMIN',
       phoneNumber: adminPhone,
       email: adminEmail,
-      password: hashedPassword,
+      passwordHash: hashedPassword,
       status: 'ACTIVE',
       role: {
         connect: { id: adminRoleRef.id },

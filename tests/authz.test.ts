@@ -31,7 +31,7 @@ describe("GET /vehicles authorization", () => {
 
   it("returns 403 FORBIDDEN when the database role lacks vehicle:read", async () => {
     prismaMock.user.findUnique.mockResolvedValue(
-      dbUser([{ resource: "driver", action: "read" }])
+      dbUser([{ resource: "rider", action: "read" }])
     );
 
     const res = await request(app)

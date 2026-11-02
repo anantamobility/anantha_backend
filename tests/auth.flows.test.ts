@@ -25,7 +25,7 @@ function existingUser() {
     name: "Tester",
     email: "tester@example.com",
     phoneNumber: "1234567890",
-    password: passwordHash,
+    passwordHash: passwordHash,
     status: "ACTIVE",
     role: { name: "SUPERVISOR" },
   };

@@ -40,7 +40,7 @@ export const signUp = async(req: Request,res: Response, next: NextFunction) => {
                 data: {
                     name: fullName.trim(),
                     phoneNumber: phone,
-                    password: hashedPassword,
+                    passwordHash: hashedPassword,
                     status: 'ACTIVE',
                     role: { 
                         connect: { id: supervisorRole.id } 
@@ -119,7 +119,7 @@ export const login = async(req: Request, res: Response, next: NextFunction) => {
             return
         }
 
-        const isMatch = await bcrypt.compare(password,String(user?.password))
+        const isMatch = await bcrypt.compare(password,String(user?.passwordHash))
         if(!isMatch){
             res
             .status(404)
@@ -251,7 +251,7 @@ export const changePass = async(req: Request, res: Response,next: NextFunction) 
         
         const foundUser = await prisma.user.findUnique({ where: { id: userId }})
         if (!foundUser) return res.status(401).json({message: "user not found. Unauthorized."})
-        const isMatch = await bcrypt.compare(oldpassword, foundUser?.password)
+        const isMatch = await bcrypt.compare(oldpassword, foundUser?.passwordHash)
 
         if(isMatch){
             const hashedNewPassword = await bcrypt.hash(newPassword,10)
@@ -260,7 +260,7 @@ export const changePass = async(req: Request, res: Response,next: NextFunction) 
                     id: userId
                 },
                 data:{
-                    password: hashedNewPassword
+                    passwordHash: hashedNewPassword
                 }
             })
 

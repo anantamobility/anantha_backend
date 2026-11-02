@@ -10,8 +10,8 @@ export const MODEL_REGISTRY = {
   user: prisma.user,
   role: prisma.role,
   auditLog: prisma.auditLog,
-  driver: prisma.driver,
-  employee: prisma.employee,
+  rider: prisma.rider,
+  staff: prisma.staff,
   vehicle: prisma.vehicle,
 } as const satisfies Record<AppResource, unknown>;
 

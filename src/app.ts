@@ -7,8 +7,8 @@ import './config/redis.js';
 
 import authRouter from './routes/auth.js'
 import pbacRouter from './routes/pbac.js'
-import driversRouter from './routes/drivers.js'
-import employeesRouter from './routes/employees.js'
+import ridersRouter from './routes/riders.js'
+import staffRouter from './routes/staff.js'
 import vehiclesRouter from './routes/vehicles.js'
 
 const app = express()
@@ -26,8 +26,8 @@ app.use(cors(options))
 
 app.use("/auth", authRouter)
 app.use("/pbac", pbacRouter)
-app.use("/drivers", driversRouter)
-app.use("/employees", employeesRouter)
+app.use("/riders", ridersRouter)
+app.use("/staff", staffRouter)
 app.use("/vehicles", vehiclesRouter)
 
 app.use(globalErrorHandler)
