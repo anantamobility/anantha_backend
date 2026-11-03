@@ -27,7 +27,7 @@ export const PERMISSION_REGISTRY = [
   },
   {
     resource: 'vehicle',
-    actions: ['create', 'read', 'update']
+    actions: ['create', 'read', 'update', 'delete', 'status:update', 'history:read']
   },
   {
     resource: 'hub',
@@ -42,6 +42,8 @@ export const ACTION_DEFINITIONS = {
   update: "Modify an existing record of the resource.",
   delete: "Remove an existing record of the resource.",
   assign_perm: "Attach or detach permissions on a role (the 'set' operation).",
+  "status:update": "Change the operational status of a vehicle.",
+  "history:read": "Read the status change history of a vehicle.",
 } as const;
 
 // This creates a union type: "user" | "role" | "auditLog"

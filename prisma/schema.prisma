@@ -649,15 +649,16 @@ model VehicleAssignment {
 // STATUS HISTORY
 // ============================================================
 model VehicleStatusHistory {
-  id          String        @id @default(uuid(7))
-  vehicleId   String
-  vehicle     Vehicle       @relation(fields: [vehicleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  status      VehicleStatus
-  changedById String?
-  changedBy   User?         @relation("VehicleStatusChangedBy", fields: [changedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  reason      String?
-  notes       String?
-  changedAt   DateTime      @default(now()) @db.Timestamptz(3)
+  id             String        @id @default(uuid(7))
+  vehicleId      String
+  vehicle        Vehicle       @relation(fields: [vehicleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  previousStatus VehicleStatus?
+  status         VehicleStatus
+  changedById    String?
+  changedBy      User?         @relation("VehicleStatusChangedBy", fields: [changedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  reason         String?
+  notes          String?
+  changedAt      DateTime      @default(now()) @db.Timestamptz(3)
 
   @@index([vehicleId, changedAt])
   @@map("vehicle_status_history")

@@ -19,6 +19,7 @@ describe("HTTP response envelope", () => {
   beforeEach(() => {
     prismaMock.user.findUnique.mockReset();
     prismaMock.vehicle.findMany.mockReset();
+    prismaMock.vehicle.count.mockReset();
     prismaMock.vehicle.create.mockReset();
     prismaMock.auditLog.create.mockReset();
   });
@@ -28,6 +29,7 @@ describe("HTTP response envelope", () => {
       dbUser([{ resource: "vehicle", action: "read" }])
     );
     prismaMock.vehicle.findMany.mockResolvedValue([]);
+    prismaMock.vehicle.count.mockResolvedValue(0);
 
     const res = await request(app)
       .get("/vehicles")
@@ -36,7 +38,10 @@ describe("HTTP response envelope", () => {
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ success: true });
     expect(res.body).toHaveProperty("data");
-    expect(res.body.data).toEqual({ vehicles: [] });
+    expect(res.body.data).toEqual({
+      vehicles: [],
+      pagination: { page: 1, limit: 20, total: 0, totalPages: 0 },
+    });
   });
 
   it("POST /vehicles with {} returns 400 with the VALIDATION_ERROR envelope", async () => {

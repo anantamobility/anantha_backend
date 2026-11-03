@@ -24,6 +24,7 @@ vi.mock("../src/database/prismaClient.js", () => {
     findMany: vi.fn(async () => []),
     create: vi.fn(),
     update: vi.fn(),
+    updateMany: vi.fn(async () => ({ count: 1 })),
     upsert: vi.fn(),
     delete: vi.fn(),
     count: vi.fn(async () => 0),
@@ -31,6 +32,8 @@ vi.mock("../src/database/prismaClient.js", () => {
   const prisma: any = {
     user: delegate(), role: delegate(), permission: delegate(),
     rider: delegate(), staff: delegate(), vehicle: delegate(),
+    vehicleStatusHistory: delegate(), vehicleAssignment: delegate(),
+    service: delegate(),
     auditLog: delegate(), hub: delegate(),
     $disconnect: vi.fn(),
   };

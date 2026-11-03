@@ -19,6 +19,7 @@ describe("GET /vehicles authorization", () => {
   beforeEach(() => {
     prismaMock.user.findUnique.mockReset();
     prismaMock.vehicle.findMany.mockReset();
+    prismaMock.vehicle.count.mockReset();
   });
 
   it("returns 401 UNAUTHORIZED without an Authorization header", async () => {
@@ -50,6 +51,7 @@ describe("GET /vehicles authorization", () => {
     prismaMock.vehicle.findMany.mockResolvedValue([
       { id: "v1", registrationNumber: "KA01AB1234" },
     ]);
+    prismaMock.vehicle.count.mockResolvedValue(1);
 
     const res = await request(app)
       .get("/vehicles")
@@ -59,6 +61,7 @@ describe("GET /vehicles authorization", () => {
     expect(res.body.success).toBe(true);
     expect(res.body.data).toEqual({
       vehicles: [{ id: "v1", registrationNumber: "KA01AB1234" }],
+      pagination: { page: 1, limit: 20, total: 1, totalPages: 1 },
     });
     expect(prismaMock.vehicle.findMany).toHaveBeenCalledTimes(1);
   });
