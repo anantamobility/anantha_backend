@@ -10,6 +10,7 @@ import pbacRouter from './routes/pbac.js'
 import ridersRouter from './routes/riders.js'
 import staffRouter from './routes/staff.js'
 import vehiclesRouter from './routes/vehicles.js'
+import hubsRouter from './routes/hubs.js'
 
 const app = express()
 app.use(express.json({limit: '1mb'}))
@@ -29,6 +30,7 @@ app.use("/pbac", pbacRouter)
 app.use("/riders", ridersRouter)
 app.use("/staff", staffRouter)
 app.use("/vehicles", vehiclesRouter)
+app.use("/hubs", hubsRouter)
 
 app.use(globalErrorHandler)
 

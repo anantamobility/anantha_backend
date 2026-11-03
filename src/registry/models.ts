@@ -13,6 +13,7 @@ export const MODEL_REGISTRY = {
   rider: prisma.rider,
   staff: prisma.staff,
   vehicle: prisma.vehicle,
+  hub: prisma.hub,
 } as const satisfies Record<AppResource, unknown>;
 
 /**

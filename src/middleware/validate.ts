@@ -14,6 +14,18 @@ export const validate = (schema: ZodType, source: Source = "body") =>
         .join("; ");
       return next(new AppError(message, 400, ErrorCode.VALIDATION_ERROR));
     }
-    (req as any)[source] = result.data;
+
+    // Express 5 exposes req.query as a getter-only property, so shadow it with
+    // an own writable property after successful validation.
+    if (source === "query") {
+      Object.defineProperty(req, "query", {
+        value: result.data,
+        writable: true,
+        configurable: true,
+        enumerable: true,
+      });
+    } else {
+      (req as any)[source] = result.data;
+    }
     next();
   };

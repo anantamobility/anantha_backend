@@ -1,5 +1,31 @@
 import prisma from "../database/prismaClient.js";
 import type { Request } from "express";
+import type { Prisma } from "../generated/prisma/client.js";
+import { AppError, ErrorCode } from "./errors.js";
+
+export interface AuditActor {
+  req: Request;
+  userId: string;
+  userName: string;
+  userRole: string;
+}
+
+/**
+ * Builds the audit actor from the authenticated request. Routes using audit
+ * logging must run verifyToken first.
+ */
+export function getAuditActor(req: Request): AuditActor {
+  const user = req.user;
+  if (!user) {
+    throw new AppError("Unauthenticated audit actor", 401, ErrorCode.UNAUTHORIZED);
+  }
+  return {
+    req,
+    userId: user.id,
+    userName: user.name,
+    userRole: user.role,
+  };
+}
 
 interface AuditParams {
   req: Request;          // Pass full request to extract IP/UserAgent
@@ -12,7 +38,9 @@ interface AuditParams {
   oldData?: any;         // State BEFORE change (pass null for Create)
   newData?: any;         // State AFTER change (pass null for Delete)
   status?: 'SUCCESS' | 'FAILURE';
-  summary: string
+  summary: string;
+  db?: Prisma.TransactionClient; // Transaction client, so audit commits with the change
+  throwOnError?: boolean;        // When true, audit failures roll back the transaction
 }
 
 export const logAudit = async({
@@ -26,7 +54,9 @@ export const logAudit = async({
     oldData,
     newData,
     status = 'SUCCESS',
-    summary
+    summary,
+    db = prisma,
+    throwOnError = false
 }: AuditParams) =>{
     try {
         let changes: any = {}
@@ -53,7 +83,7 @@ export const logAudit = async({
 
         const ipAddress = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '';
         const userAgent = req.get('User-Agent') || 'Unknown';
-        await prisma.auditLog.create({
+        await db.auditLog.create({
             data: {
               userId,
               userName,
@@ -71,5 +101,6 @@ export const logAudit = async({
 
     } catch (error) {
         console.error("FAILED TO LOG AUDIT:", error);
+        if (throwOnError) throw error;
     }
 }

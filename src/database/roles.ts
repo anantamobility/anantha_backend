@@ -45,7 +45,7 @@ export function getRolePermissionBuckets(
 
       // OPERATOR receives read-only operational permissions.
       if (
-        ['rider', 'staff', 'vehicle'].includes(group.resource) &&
+        ['rider', 'staff', 'vehicle', 'hub'].includes(group.resource) &&
         action === 'read'
       ) {
         buckets.OPERATOR.push(key);

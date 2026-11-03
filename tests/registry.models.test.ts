@@ -13,7 +13,7 @@ describe("MODEL_REGISTRY", () => {
   it("has exactly the same keys as the permission registry resources", () => {
     const registryKeys = Object.keys(MODEL_REGISTRY).sort();
     expect(registryKeys).toEqual(approvedResources);
-    expect(registryKeys).toHaveLength(6);
+    expect(registryKeys).toHaveLength(7);
   });
 
   it("maps every approved resource to its Prisma delegate", () => {
@@ -24,8 +24,8 @@ describe("MODEL_REGISTRY", () => {
 });
 
 describe("getModelDelegate", () => {
-  it("returns null for an approved resource absent from the registry (hub)", () => {
-    expect(getModelDelegate("hub")).toBeNull();
+  it("maps the hub resource to its Prisma delegate", () => {
+    expect(getModelDelegate("hub")).toBe(prismaMock.hub);
   });
 
   it("returns null for prototype-pollution keys (__proto__)", () => {

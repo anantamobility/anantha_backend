@@ -11,6 +11,7 @@ describe("getRolePermissionBuckets", () => {
 
   it("grants OPERATOR exactly the read-only operational permissions", () => {
     expect([...buckets.OPERATOR].sort()).toEqual([
+      "hub:read",
       "rider:read",
       "staff:read",
       "vehicle:read",

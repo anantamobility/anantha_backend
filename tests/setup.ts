@@ -1,6 +1,10 @@
 // tests/setup.ts
 import { vi } from "vitest";
 
+declare const process: {
+  env: Record<string, string | undefined>;
+};
+
 process.env.NODE_ENV ??= "test";
 process.env.JWT_SECRET ??= "test-access-secret";
 process.env.JWT_REFRESH_SECRET ??= "test-refresh-secret";
@@ -21,6 +25,8 @@ vi.mock("../src/database/prismaClient.js", () => {
     create: vi.fn(),
     update: vi.fn(),
     upsert: vi.fn(),
+    delete: vi.fn(),
+    count: vi.fn(async () => 0),
   });
   const prisma: any = {
     user: delegate(), role: delegate(), permission: delegate(),

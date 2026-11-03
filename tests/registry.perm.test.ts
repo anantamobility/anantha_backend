@@ -22,6 +22,20 @@ describe("PERMISSION_REGISTRY", () => {
       }
     }
   });
+
+  it("registers full hub CRUD and staff deletion", () => {
+    const byResource = new Map(
+      PERMISSION_REGISTRY.map((group) => [group.resource, group.actions])
+    );
+
+    expect(byResource.get("hub")).toEqual([
+      "create",
+      "read",
+      "update",
+      "delete",
+    ]);
+    expect(byResource.get("staff")).toContain("delete");
+  });
 });
 
 describe("ACTION_DEFINITIONS", () => {

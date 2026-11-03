@@ -42,6 +42,27 @@ export function mapPrismaError(err: any): MappedError | null {
   }
 }
 
+/**
+ * Converts the common write-time Prisma constraint failures into AppErrors with
+ * resource-specific messages, then rethrows anything else unchanged.
+ */
+export function rethrowPrismaError(err: unknown, duplicateMessage: string): never {
+  if (err && typeof err === "object" && "code" in err) {
+    const code = (err as { code?: unknown }).code;
+    if (code === "P2002") {
+      throw new AppError(duplicateMessage, 409, ErrorCode.CONFLICT);
+    }
+    if (code === "P2003") {
+      throw new AppError(
+        "Related resource constraint violated",
+        409,
+        ErrorCode.CONFLICT
+      );
+    }
+  }
+  throw err;
+}
+
 export function toHttpError(err: any): { status: number; code: string; message: string; server: boolean } {
   if (err instanceof AppError) {
     return { status: err.statusCode, code: err.code, message: err.message, server: err.statusCode >= 500 };
