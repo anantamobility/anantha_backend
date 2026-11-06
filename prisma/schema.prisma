@@ -21,6 +21,13 @@ enum ClientType {
   CORPORATE
 }
 
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
 enum RentalType {
   B2C
   B2B
@@ -287,6 +294,8 @@ enum VerificationStatus {
   VERIFIED
   REJECTED
   EXPIRED
+  NOT_SUBMITTED
+  UNDER_REVIEW
 }
 
 // ============================================================
@@ -338,6 +347,10 @@ model User {
   documentsUploaded Document[] @relation("DocumentUploadedBy")
   documentsVerified Document[] @relation("DocumentVerifiedBy")
   verificationsVerified RiderVerification[] @relation("VerificationVerifiedBy")
+  verificationHistoryReviewed RiderVerificationHistory[] @relation("VerificationHistoryReviewedBy")
+
+  ridersCreated Rider[] @relation("RiderCreatedBy")
+  ridersUpdated Rider[] @relation("RiderUpdatedBy")
 
   invoicesApproved      Invoice[]            @relation("InvoiceApprovedBy")
   invoicesVoided        Invoice[]            @relation("InvoiceVoidedBy")
@@ -385,34 +398,62 @@ model Staff {
 }
 
 model Rider {
-  id          String      @id @default(uuid(7))
-  userId      String?     @unique
-  user        User?       @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  riderCode   String      @unique
-  fullName    String
-  phoneNumber String?
-  hubId       String?
-  hub         Hub?        @relation(fields: [hubId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  status      RiderStatus @default(ONBOARDING)
-  onboardedAt DateTime?   @db.Timestamptz(3)
-  version     Int         @default(0)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  deletedAt   DateTime?
+  id                 String      @id @default(uuid(7))
+  userId             String?     @unique
+  user               User?       @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  riderCode          String      @unique
+  fullName           String
+  phoneNumber        String?
+  email              String?
+  dateOfBirth        DateTime?   @db.Date
+  gender             Gender?
+  address            Json?       @db.JsonB
+  emergencyContactName  String?
+  emergencyContactPhone String?
 
-  rentals      Rental[]
-  assignments  VehicleAssignment[]
+  // Business classification is independent of operational and verification status.
+  rentalType         RentalType?
+  b2cMode            B2CMode?
+  b2bRiderMgmt       B2BRiderMgmt?
+
+  clientId           String?
+  client             Client?     @relation(fields: [clientId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  hubId              String?
+  hub                Hub?        @relation(fields: [hubId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  status             RiderStatus @default(ONBOARDING)
+  onboardedAt        DateTime?   @db.Timestamptz(3)
+  version            Int         @default(0)
+
+  createdById        String?
+  createdBy          User?       @relation("RiderCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  updatedById        String?
+  updatedBy          User?       @relation("RiderUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  deletedAt          DateTime?
+
+  rentals       Rental[]
+  assignments   VehicleAssignment[]
   statusHistory RiderStatusHistory[]
-  deposits     Deposit[]
-  collections  Collection[]
-  settlements  RiderSettlement[]
+  deposits      Deposit[]
+  collections   Collection[]
+  settlements   RiderSettlement[]
   ledgerEntries EarningsLedger[]
-  payouts      Payout[]
+  payouts       Payout[]
   verifications RiderVerification[]
-  documents    Document[]
+  verificationHistory RiderVerificationHistory[]
+  documents     Document[]
 
   @@index([hubId])
+  @@index([clientId])
   @@index([status])
+  @@index([rentalType])
+  @@index([b2cMode])
+  @@index([b2bRiderMgmt])
+  @@index([phoneNumber])
+  @@index([email])
   @@map("riders")
 }
 
@@ -520,6 +561,7 @@ model Client {
   documents   Document[]
   clientUsers ClientUser[]
   payouts     Payout[]
+  riders      Rider[]
 
   @@index([type])
   @@index([phoneNumber])
@@ -665,15 +707,16 @@ model VehicleStatusHistory {
 }
 
 model RiderStatusHistory {
-  id          String      @id @default(uuid(7))
-  riderId     String
-  rider       Rider       @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  status      RiderStatus
-  changedById String?
-  changedBy   User?       @relation("RiderStatusChangedBy", fields: [changedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  reason      String?
-  notes       String?
-  changedAt   DateTime    @default(now()) @db.Timestamptz(3)
+  id             String       @id @default(uuid(7))
+  riderId        String
+  rider          Rider        @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  previousStatus RiderStatus?
+  status         RiderStatus
+  changedById    String?
+  changedBy      User?        @relation("RiderStatusChangedBy", fields: [changedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  reason         String?
+  notes          String?
+  changedAt      DateTime     @default(now()) @db.Timestamptz(3)
 
   @@index([riderId, changedAt])
   @@map("rider_status_history")
@@ -1169,6 +1212,8 @@ model Document {
 
   riderId  String?
   rider    Rider?   @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  verificationId String?
+  verification RiderVerification? @relation("VerificationDocuments", fields: [verificationId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   staffId  String?
   staff    Staff?   @relation(fields: [staffId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   vehicleId String?
@@ -1187,10 +1232,12 @@ model Document {
   notes         String?
   metadata      Json?          @db.JsonB
   verifications RiderVerification[]
+  deletedAt     DateTime?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
   @@index([riderId])
+  @@index([verificationId])
   @@index([staffId])
   @@index([vehicleId])
   @@index([clientId])
@@ -1198,6 +1245,7 @@ model Document {
   @@index([documentType])
   @@index([status])
   @@index([expiryDate])
+  @@index([deletedAt])
   @@map("documents")
 }
 
@@ -1206,7 +1254,7 @@ model RiderVerification {
   riderId         String
   rider           Rider              @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   type            VerificationType
-  status          VerificationStatus @default(PENDING)
+  status          VerificationStatus @default(NOT_SUBMITTED)
   submittedAt     DateTime?          @db.Timestamptz(3)
   completedAt     DateTime?          @db.Timestamptz(3)
   expiresAt       DateTime?          @db.Timestamptz(3)
@@ -1215,13 +1263,40 @@ model RiderVerification {
   rejectionReason String?
   documentId      String?
   document        Document?          @relation(fields: [documentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  version         Int                @default(0)
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
+  documents Document[] @relation("VerificationDocuments")
+  history   RiderVerificationHistory[]
+
+  @@unique([riderId, type])
   @@index([riderId, type, status])
+  @@index([status])
   @@index([expiresAt])
   @@index([documentId])
   @@map("rider_verifications")
+}
+
+model RiderVerificationHistory {
+  id              String             @id @default(uuid(7))
+  verificationId  String
+  verification    RiderVerification  @relation(fields: [verificationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  riderId         String
+  rider           Rider              @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  type            VerificationType
+  previousStatus  VerificationStatus?
+  status          VerificationStatus
+  submittedAt     DateTime?          @db.Timestamptz(3)
+  reviewedById    String?
+  reviewedBy      User?              @relation("VerificationHistoryReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  rejectionReason String?
+  notes           String?
+  changedAt       DateTime           @default(now()) @db.Timestamptz(3)
+
+  @@index([verificationId, changedAt])
+  @@index([riderId, type, changedAt])
+  @@map("rider_verification_history")
 }
 
 // ============================================================

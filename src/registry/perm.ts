@@ -19,7 +19,19 @@ export const PERMISSION_REGISTRY = [
   },
   {
     resource: 'rider',
-    actions: ['create', 'read', 'update']
+    actions: [
+      'create',
+      'read',
+      'update',
+      'status:update',
+      'history:read',
+      'document:upload',
+      'document:read',
+      'document:delete',
+      'verification:read',
+      'verification:submit',
+      'verification:review',
+    ]
   },
   {
     resource: 'staff',
@@ -42,8 +54,14 @@ export const ACTION_DEFINITIONS = {
   update: "Modify an existing record of the resource.",
   delete: "Remove an existing record of the resource.",
   assign_perm: "Attach or detach permissions on a role (the 'set' operation).",
-  "status:update": "Change the operational status of a vehicle.",
-  "history:read": "Read the status change history of a vehicle.",
+  "status:update": "Change the operational status of a resource.",
+  "history:read": "Read the status change history of a resource.",
+  "document:upload": "Upload a document and its metadata.",
+  "document:read": "Read document metadata or securely download a document.",
+  "document:delete": "Soft-delete a document and remove its stored file.",
+  "verification:read": "Read verification status and verification history.",
+  "verification:submit": "Submit a PVC or BGV verification for review.",
+  "verification:review": "Approve or reject a PVC or BGV verification.",
 } as const;
 
 // This creates a union type: "user" | "role" | "auditLog"
