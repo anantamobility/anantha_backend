@@ -3,6 +3,7 @@ import {
   addMonthsUtc,
   buildDuePeriods,
   calculateDueAmount,
+  calculateDueAmountWithPauses,
   deriveDueStatus,
   toDecimal,
 } from "../src/services/rental-schedule.js";
@@ -104,6 +105,74 @@ describe("calculateDueAmount", () => {
         rates: { dailyRate: null, weeklyRate: null },
       })
     ).toThrow(/no daily rate/i);
+  });
+});
+
+
+describe("calculateDueAmountWithPauses", () => {
+  const rates = {
+    dailyRate: "100.00",
+    weeklyRate: "600.00",
+    fortnightlyRate: "1200.00",
+    monthlyRate: "2000.00",
+  };
+
+  it("prorates a weekly period by the paused share of the period", () => {
+    const amount = calculateDueAmountWithPauses({
+      period: "WEEKLY",
+      periodStart: new Date("2026-01-01T00:00:00.000Z"),
+      periodEnd: new Date("2026-01-08T00:00:00.000Z"),
+      rates,
+      pauses: [
+        {
+          pausedAt: new Date("2026-01-02T00:00:00.000Z"),
+          resumedAt: new Date("2026-01-04T00:00:00.000Z"),
+          status: "RESUMED",
+        },
+      ],
+      asOf: new Date("2026-01-08T00:00:00.000Z"),
+    });
+    expect(amount.toString()).toBe("428.57");
+  });
+
+  it("returns zero when the whole period was paused", () => {
+    const amount = calculateDueAmountWithPauses({
+      period: "WEEKLY",
+      periodStart: new Date("2026-01-01T00:00:00.000Z"),
+      periodEnd: new Date("2026-01-08T00:00:00.000Z"),
+      rates,
+      pauses: [
+        {
+          pausedAt: new Date("2026-01-01T00:00:00.000Z"),
+          resumedAt: new Date("2026-01-08T00:00:00.000Z"),
+          status: "RESUMED",
+        },
+      ],
+    });
+    expect(amount.toString()).toBe("0");
+  });
+
+  it("ignores cancelled pauses and pauses outside the period", () => {
+    const amount = calculateDueAmountWithPauses({
+      period: "WEEKLY",
+      periodStart: new Date("2026-01-08T00:00:00.000Z"),
+      periodEnd: new Date("2026-01-15T00:00:00.000Z"),
+      rates,
+      pauses: [
+        {
+          pausedAt: new Date("2026-01-01T00:00:00.000Z"),
+          resumedAt: new Date("2026-01-03T00:00:00.000Z"),
+          status: "RESUMED",
+        },
+        {
+          pausedAt: new Date("2026-01-09T00:00:00.000Z"),
+          resumedAt: null,
+          status: "CANCELLED",
+        },
+      ],
+      asOf: new Date("2026-01-12T00:00:00.000Z"),
+    });
+    expect(amount.toString()).toBe("600");
   });
 });
 

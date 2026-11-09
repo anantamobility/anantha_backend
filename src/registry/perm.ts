@@ -88,6 +88,40 @@ export const PERMISSION_REGISTRY = [
   {
     resource: 'payout',
     actions: ['create', 'read']
+  },
+  {
+    resource: 'service',
+    actions: [
+      'create',
+      'read',
+      'update',
+      'start',
+      'await-parts',
+      'resume',
+      'complete',
+      'close',
+      'cancel',
+      'approve-responsibility',
+      'assign-replacement',
+      'return-replacement',
+      'charge:manage',
+    ]
+  },
+  {
+    resource: 'spare',
+    actions: ['create', 'read', 'update', 'status:update']
+  },
+  {
+    resource: 'inventory',
+    actions: [
+      'read',
+      'opening-stock',
+      'stock-in',
+      'adjust',
+      'consume',
+      'return',
+      'damage',
+    ]
   }
 ] as const; // <--- 'as const' is CRITICAL for type safety
 
@@ -120,6 +154,20 @@ export const ACTION_DEFINITIONS = {
   "client:read": "Read consolidated B2B client financials.",
   "client:due:generate": "Generate collection dues across all rentals of a B2B client.",
   "client:pay": "Record and allocate a consolidated B2B client payment.",
+  start: "Start work on a service order and begin vehicle downtime.",
+  complete: "Complete service work and restore the vehicle.",
+  cancel: "Cancel a service order and release any downtime it holds.",
+  "await-parts": "Place an in-progress service order into the awaiting-parts state.",
+  resume: "Resume service work after awaiting parts.",
+  "approve-responsibility": "Investigate and approve damage responsibility for a service order.",
+  "assign-replacement": "Assign a replacement vehicle while the original is in service.",
+  "return-replacement": "Return a replacement vehicle and finalize replacement billing.",
+  "charge:manage": "Record or update service charges and cost components.",
+  "opening-stock": "Record opening stock for a spare at a hub.",
+  "stock-in": "Record purchased or inward stock for a spare.",
+  consume: "Consume spare parts against a service order.",
+  return: "Return unused spare parts from a service order to stock.",
+  damage: "Write off damaged spare stock.",
 } as const;
 
 // This creates a union type: "user" | "role" | "auditLog"

@@ -65,6 +65,12 @@ export function getRolePermissionBuckets(
 
       // OPERATOR receives read-only operational permissions. Ratecard pricing
       // and financial mutations remain restricted to ADMIN and SUPERVISOR.
+      // SUPERVISOR owns the full operational service, spares and inventory
+      // workflow, including damage responsibility approval.
+      if (['service', 'spare', 'inventory'].includes(group.resource)) {
+        buckets.SUPERVISOR.push(key);
+      }
+
       if (
         [
           'rider',
@@ -75,6 +81,9 @@ export function getRolePermissionBuckets(
           'rental',
           'deposit',
           'collection',
+          'service',
+          'spare',
+          'inventory',
         ].includes(group.resource) &&
         action === 'read'
       ) {

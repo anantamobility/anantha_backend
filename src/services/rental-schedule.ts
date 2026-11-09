@@ -150,3 +150,69 @@ export function deriveDueStatus(input: {
   if (input.amountCollected.gt(0)) return "PARTIALLY_PAID";
   return "PENDING";
 }
+
+export type RentalPauseWindow = {
+  pausedAt: Date;
+  resumedAt: Date | null;
+  status?: string;
+};
+
+/**
+ * Calculates a due amount while excluding the portion of the billing period
+ * that the rental was paused for service downtime.
+ *
+ * Historical dues must never be recalculated with this helper; it is only used
+ * when creating new dues. Paused time is prorated across the period using the
+ * period amount itself so weekly/monthly rates remain authoritative.
+ */
+export function calculateDueAmountWithPauses(input: {
+  period: CollectionPeriod;
+  periodStart: Date;
+  periodEnd: Date;
+  rates: RentalRateFields;
+  pauses: RentalPauseWindow[];
+  asOf?: Date;
+}): Prisma.Decimal {
+  const base = calculateDueAmount(input);
+  if (input.pauses.length === 0) return base;
+
+  const periodStartMs = input.periodStart.getTime();
+  const periodEndMs = input.periodEnd.getTime();
+  const periodMs = periodEndMs - periodStartMs;
+  if (periodMs <= 0) return base;
+
+  const asOf = input.asOf ?? new Date();
+  const intervals: Array<{ start: number; end: number }> = [];
+
+  for (const pause of input.pauses) {
+    if (pause.status === "CANCELLED") continue;
+
+    const pauseEnd = pause.resumedAt ?? asOf;
+    const start = Math.max(periodStartMs, pause.pausedAt.getTime());
+    const end = Math.min(periodEndMs, pauseEnd.getTime());
+    if (end > start) intervals.push({ start, end });
+  }
+
+  if (intervals.length === 0) return base;
+
+  intervals.sort((a, b) => a.start - b.start);
+  let overlapMs = 0;
+  let current = intervals[0];
+
+  for (let index = 1; index < intervals.length; index += 1) {
+    const next = intervals[index];
+    if (next.start <= current.end) {
+      current = { start: current.start, end: Math.max(current.end, next.end) };
+    } else {
+      overlapMs += current.end - current.start;
+      current = next;
+    }
+  }
+  overlapMs += current.end - current.start;
+
+  if (overlapMs <= 0) return base;
+  if (overlapMs >= periodMs) return new Prisma.Decimal(0);
+
+  const chargeableRatio = new Prisma.Decimal(periodMs - overlapMs).div(periodMs);
+  return base.mul(chargeableRatio).toDecimalPlaces(2);
+}

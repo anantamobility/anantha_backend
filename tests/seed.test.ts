@@ -15,8 +15,11 @@ describe("getRolePermissionBuckets", () => {
       "collection:read",
       "deposit:read",
       "hub:read",
+      "inventory:read",
       "rental:read",
       "rider:read",
+      "service:read",
+      "spare:read",
       "staff:read",
       "vehicle:read",
     ]);

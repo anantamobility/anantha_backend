@@ -44,6 +44,10 @@ vi.mock("../src/database/prismaClient.js", () => {
     earningsLedger: delegate(), riderSettlement: delegate(),
     riderSettlementLine: delegate(), payout: delegate(),
     service: delegate(),
+    serviceCharge: delegate(), serviceStatusHistory: delegate(),
+    serviceSpare: delegate(), serviceResponsibilityApproval: delegate(),
+    rentalPause: delegate(), replacementAssignment: delegate(),
+    spare: delegate(), inventoryBalance: delegate(), inventoryMovement: delegate(),
     auditLog: delegate(), hub: delegate(),
     $disconnect: vi.fn(),
   };

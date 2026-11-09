@@ -4,7 +4,7 @@ import { AppError, ErrorCode } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import {
   buildDuePeriods,
-  calculateDueAmount,
+  calculateDueAmountWithPauses,
   deriveDueStatus,
   toDecimal,
 } from "./rental-schedule.js";
@@ -102,6 +102,15 @@ export async function generateRentalDues(
     throughDate: input.throughDate,
   });
 
+  const pauses = await tx.rentalPause.findMany({
+    where: {
+      rentalId: rental.id,
+      pausedAt: { lte: input.throughDate },
+      OR: [{ resumedAt: null }, { resumedAt: { gte: rental.startDate } }],
+    },
+    select: { pausedAt: true, resumedAt: true, status: true },
+  });
+
   const existing = await tx.rentalCollectionDue.findMany({
     where: {
       rentalId: rental.id,
@@ -124,7 +133,7 @@ export async function generateRentalDues(
 
   for (const period of periods) {
     const key = `${period.periodStart.toISOString()}|${period.periodEnd.toISOString()}`;
-    const amountDue = calculateDueAmount({
+    const amountDue = calculateDueAmountWithPauses({
       period: rental.collectionPeriod,
       periodStart: period.periodStart,
       periodEnd: period.periodEnd,
@@ -134,6 +143,8 @@ export async function generateRentalDues(
         fortnightlyRate: rental.fortnightlyRate,
         monthlyRate: rental.monthlyRate,
       },
+      pauses,
+      asOf: input.throughDate,
     });
 
     const due = await tx.rentalCollectionDue.upsert({
