@@ -71,6 +71,12 @@ export function getRolePermissionBuckets(
         buckets.SUPERVISOR.push(key);
       }
 
+      // Dashboards and cross-cutting reports expose financial and operational
+      // data, so they are limited to ADMIN and SUPERVISOR.
+      if (['dashboard', 'report'].includes(group.resource)) {
+        buckets.SUPERVISOR.push(key);
+      }
+
       if (
         [
           'rider',

@@ -26,6 +26,11 @@ export const MODEL_REGISTRY = {
   service: prisma.service,
   spare: prisma.spare,
   inventory: prisma.inventoryMovement,
+  // Aggregate-only resources have no dedicated table. They are authorized
+  // with policy:false, and auditLog is used only as a safe read-only delegate
+  // so the registry contract remains complete.
+  dashboard: prisma.auditLog,
+  report: prisma.auditLog,
 } as const satisfies Record<AppResource, unknown>;
 
 /**

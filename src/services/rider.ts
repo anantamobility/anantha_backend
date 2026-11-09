@@ -641,12 +641,27 @@ export async function getRiderStatusHistory(
   }
 
   const where: Prisma.RiderStatusHistoryWhereInput = { riderId: id };
+  if (query.status) where.status = query.status;
+  if (query.startDate || query.endDate) {
+    where.changedAt = {};
+    if (query.startDate) where.changedAt.gte = query.startDate;
+    if (query.endDate) where.changedAt.lte = query.endDate;
+  }
+
+  const orderBy: Prisma.RiderStatusHistoryOrderByWithRelationInput[] =
+    query.sortBy === "status"
+      ? [
+          { status: query.sortOrder },
+          { changedAt: "desc" },
+          { id: "desc" },
+        ]
+      : [{ changedAt: query.sortOrder }, { id: "desc" }];
 
   const [statusHistory, total] = await Promise.all([
     prisma.riderStatusHistory.findMany({
       where,
       include: { changedBy: { select: statusHistoryUserSelect } },
-      orderBy: [{ changedAt: "desc" }, { id: "desc" }],
+      orderBy,
       skip: (page - 1) * limit,
       take: limit,
     }),

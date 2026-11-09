@@ -22,6 +22,8 @@ import payoutsRouter from './routes/payouts.js'
 import servicesRouter from './routes/services.js'
 import sparesRouter from './routes/spares.js'
 import inventoryRouter from './routes/inventory.js'
+import dashboardRouter from './routes/dashboard.js'
+import reportsRouter from './routes/reports.js'
 
 const app = express()
 app.use(express.json({limit: '1mb'}))
@@ -53,6 +55,8 @@ app.use("/payouts", payoutsRouter)
 app.use("/services", servicesRouter)
 app.use("/spares", sparesRouter)
 app.use("/inventory", inventoryRouter)
+app.use("/dashboard", dashboardRouter)
+app.use("/reports", reportsRouter)
 
 app.use(globalErrorHandler)
 

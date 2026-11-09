@@ -72,6 +72,17 @@ describe("getRolePermissionBuckets", () => {
     );
   });
 
+  it("limits dashboards and reports to ADMIN and SUPERVISOR", () => {
+    expect(buckets.ADMIN).toEqual(
+      expect.arrayContaining(["dashboard:read", "report:read"])
+    );
+    expect(buckets.SUPERVISOR).toEqual(
+      expect.arrayContaining(["dashboard:read", "report:read"])
+    );
+    expect(buckets.OPERATOR).not.toContain("dashboard:read");
+    expect(buckets.OPERATOR).not.toContain("report:read");
+  });
+
   it("produces deterministic buckets for an arbitrary registry", () => {
     const custom = [
       { resource: "alpha", actions: ["read", "create"] },

@@ -162,6 +162,18 @@ export async function createVehicle(
         select: vehicleDetailSelect,
       });
 
+      // Record the creation status so historical trend calculations have a
+      // reliable first status transition for every newly created vehicle.
+      await tx.vehicleStatusHistory.create({
+        data: {
+          vehicleId: vehicle.id,
+          previousStatus: null,
+          status: VehicleStatus.IDLE,
+          changedById: actor.userId,
+          reason: "Vehicle created",
+        },
+      });
+
       await logAudit({
         ...actor,
         action: "CREATE",
@@ -497,12 +509,27 @@ export async function getVehicleStatusHistory(
   }
 
   const where: Prisma.VehicleStatusHistoryWhereInput = { vehicleId: id };
+  if (query.status) where.status = query.status;
+  if (query.startDate || query.endDate) {
+    where.changedAt = {};
+    if (query.startDate) where.changedAt.gte = query.startDate;
+    if (query.endDate) where.changedAt.lte = query.endDate;
+  }
+
+  const orderBy: Prisma.VehicleStatusHistoryOrderByWithRelationInput[] =
+    query.sortBy === "status"
+      ? [
+          { status: query.sortOrder },
+          { changedAt: "desc" },
+          { id: "desc" },
+        ]
+      : [{ changedAt: query.sortOrder }, { id: "desc" }];
 
   const [statusHistory, total] = await Promise.all([
     prisma.vehicleStatusHistory.findMany({
       where,
       include: { changedBy: { select: statusHistoryUserSelect } },
-      orderBy: [{ changedAt: "desc" }, { id: "desc" }],
+      orderBy,
       skip: (page - 1) * limit,
       take: limit,
     }),

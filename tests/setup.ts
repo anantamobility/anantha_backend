@@ -29,6 +29,8 @@ vi.mock("../src/database/prismaClient.js", () => {
     upsert: vi.fn(),
     delete: vi.fn(),
     count: vi.fn(async () => 0),
+    groupBy: vi.fn(async () => []),
+    aggregate: vi.fn(async () => ({})),
   });
   const prisma: any = {
     user: delegate(), role: delegate(), permission: delegate(),

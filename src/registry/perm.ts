@@ -122,6 +122,14 @@ export const PERMISSION_REGISTRY = [
       'return',
       'damage',
     ]
+  },
+  {
+    resource: 'dashboard',
+    actions: ['read'],
+  },
+  {
+    resource: 'report',
+    actions: ['read'],
   }
 ] as const; // <--- 'as const' is CRITICAL for type safety
 

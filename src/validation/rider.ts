@@ -188,7 +188,24 @@ export const changeRiderStatusSchema = z
   })
   .strict();
 
-export const listRiderStatusHistoryQuerySchema = paginationQuerySchema;
+export const listRiderStatusHistoryQuerySchema = paginationQuerySchema
+  .extend({
+    status: riderStatusSchema.optional(),
+    startDate: z.coerce.date().optional(),
+    endDate: z.coerce.date().optional(),
+    sortBy: z.enum(["changedAt", "status"]).default("changedAt"),
+    sortOrder: z.enum(["asc", "desc"]).default("desc"),
+  })
+  .refine(
+    (query) =>
+      !query.startDate ||
+      !query.endDate ||
+      query.startDate.getTime() <= query.endDate.getTime(),
+    {
+      message: "startDate must be before or equal to endDate",
+      path: ["startDate"],
+    }
+  );
 
 export const verificationTypeParamSchema = z.object({
   id: z.string().uuid("id must be a valid UUID"),

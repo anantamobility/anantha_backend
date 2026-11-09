@@ -25,6 +25,8 @@ describe("MODEL_REGISTRY", () => {
         settlement: prismaMock.riderSettlement,
         payout: prismaMock.payout,
         inventory: prismaMock.inventoryMovement,
+        dashboard: prismaMock.auditLog,
+        report: prismaMock.auditLog,
       }[resource] ?? prismaMock[resource];
       expect(getModelDelegate(resource)).toBe(delegate);
     }
