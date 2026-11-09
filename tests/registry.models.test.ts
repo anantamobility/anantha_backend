@@ -13,7 +13,7 @@ describe("MODEL_REGISTRY", () => {
   it("has exactly the same keys as the permission registry resources", () => {
     const registryKeys = Object.keys(MODEL_REGISTRY).sort();
     expect(registryKeys).toEqual(approvedResources);
-    expect(registryKeys).toHaveLength(10);
+    expect(registryKeys).toHaveLength(approvedResources.length);
   });
 
   it("maps every approved resource to its Prisma delegate", () => {

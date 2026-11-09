@@ -56,6 +56,18 @@ export const PERMISSION_REGISTRY = [
   {
     resource: 'ratecardAssignment',
     actions: ['create', 'read', 'update', 'delete']
+  },
+  {
+    resource: 'rental',
+    actions: ['create', 'read', 'update', 'assign', 'activate', 'close']
+  },
+  {
+    resource: 'deposit',
+    actions: ['read', 'receive', 'refund', 'adjust']
+  },
+  {
+    resource: 'collection',
+    actions: ['create', 'read', 'update', 'due:generate']
   }
 ] as const; // <--- 'as const' is CRITICAL for type safety
 
@@ -74,6 +86,13 @@ export const ACTION_DEFINITIONS = {
   "verification:read": "Read verification status and verification history.",
   "verification:submit": "Submit a PVC or BGV verification for review.",
   "verification:review": "Approve or reject a PVC or BGV verification.",
+  assign: "Assign a vehicle or other resource to a record.",
+  activate: "Activate a record that is ready for operation.",
+  close: "Close or complete an operational record.",
+  receive: "Record an inbound financial receipt.",
+  refund: "Record an outbound refund.",
+  adjust: "Record an approved financial adjustment.",
+  "due:generate": "Generate collection dues from a billing schedule.",
 } as const;
 
 // This creates a union type: "user" | "role" | "auditLog"

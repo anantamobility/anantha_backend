@@ -49,6 +49,28 @@ enum BillingFrequency {
   MONTHLY
 }
 
+// Collection period is intentionally separate from BillingFrequency. A rental
+// may be billed daily but collected every 15 days, for example.
+enum CollectionPeriod {
+  WEEKLY
+  EVERY_15_DAYS
+  MONTHLY
+}
+
+enum RentalDueStatus {
+  PENDING
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+}
+
+enum RentalLedgerEntryType {
+  RENT_CHARGED
+  COLLECTION_RECEIVED
+  RENT_ADJUSTMENT
+  REVERSAL
+}
+
 enum RentalStatus {
   DRAFT
   PENDING_APPROVAL
@@ -358,6 +380,9 @@ model User {
   ridersCreated Rider[] @relation("RiderCreatedBy")
   ridersUpdated Rider[] @relation("RiderUpdatedBy")
 
+  rentalsCreated Rental[] @relation("RentalCreatedBy")
+  rentalsClosed  Rental[] @relation("RentalClosedBy")
+
   invoicesApproved      Invoice[]            @relation("InvoiceApprovedBy")
   invoicesVoided        Invoice[]            @relation("InvoiceVoidedBy")
   collectionsReceived   Collection[]         @relation("CollectionReceivedBy")
@@ -365,6 +390,7 @@ model User {
   payoutsApproved       Payout[]             @relation("PayoutApprovedBy")
   depositsAuthorized    DepositTransaction[] @relation("DepositAuthorizedBy")
   ledgerCreated         EarningsLedger[]     @relation("LedgerCreatedBy")
+  rentalLedgerCreated   RentalLedgerEntry[]  @relation("RentalLedgerCreatedBy")
   settlementsApproved   RiderSettlement[]    @relation("SettlementApprovedBy")
 
   assignmentsCreated   VehicleAssignment[]   @relation("AssignmentCreatedBy")
@@ -656,6 +682,7 @@ model RateCardAssignment {
 // ============================================================
 model Rental {
   id                      String           @id @default(uuid(7))
+  rentalNumber            String           @unique
   rentalType              RentalType
   b2cMode                 B2CMode?
   b2bRiderMgmt            B2BRiderMgmt?
@@ -675,6 +702,7 @@ model Rental {
   status                  RentalStatus     @default(DRAFT)
   agreementRef            String?
   billingFrequency        BillingFrequency?
+  collectionPeriod        CollectionPeriod @default(MONTHLY)
   currency                String           @default("INR") @db.Char(3)
   dailyRate               Decimal?         @db.Decimal(14, 4)
   weeklyRate              Decimal?         @db.Decimal(14, 4)
@@ -684,22 +712,35 @@ model Rental {
   rateSnapshot            Json?            @db.JsonB
   version                 Int              @default(0)
   notes                   String?
+  activatedAt             DateTime?        @db.Timestamptz(3)
+  closedAt                DateTime?        @db.Timestamptz(3)
+  finalOutstandingAmount  Decimal?         @db.Decimal(14, 2)
+  finalDepositBalance     Decimal?         @db.Decimal(14, 2)
+  settlementSnapshot      Json?            @db.JsonB
+  createdById             String?
+  createdBy               User?            @relation("RentalCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  closedById              String?
+  closedBy                User?            @relation("RentalClosedBy", fields: [closedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
   createdAt               DateTime         @default(now())
   updatedAt               DateTime         @updatedAt
 
-  assignments     VehicleAssignment[]
-  deposits        Deposit[]
-  invoices        Invoice[]
-  invoiceLines    InvoiceLine[]
-  services        Service[]
-  settlementLines RiderSettlementLine[]
-  ledgerEntries   EarningsLedger[]
+  assignments        VehicleAssignment[]
+  deposits           Deposit[]
+  collections        Collection[]
+  collectionDues     RentalCollectionDue[]
+  rentalLedgerEntries RentalLedgerEntry[]
+  invoices           Invoice[]
+  invoiceLines       InvoiceLine[]
+  services           Service[]
+  settlementLines    RiderSettlementLine[]
+  ledgerEntries      EarningsLedger[]
 
   @@index([clientId, status])
   @@index([riderId, status])
   @@index([hubId])
   @@index([rateCardAssignmentId])
   @@index([startDate, endDate])
+  @@index([status, collectionPeriod])
   @@map("rentals")
 }
 
@@ -790,9 +831,9 @@ model Deposit {
 
   transactions DepositTransaction[]
 
+  @@unique([rentalId])
   @@index([clientId])
   @@index([riderId])
-  @@index([rentalId])
   @@index([status])
   @@map("deposits")
 }
@@ -899,6 +940,10 @@ model Collection {
   client          Client?            @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   riderId         String?
   rider           Rider?             @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  rentalId        String?
+  rental          Rental?            @relation(fields: [rentalId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  rentalDueId     String?
+  rentalDue       RentalCollectionDue? @relation(fields: [rentalDueId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   amount          Decimal            @db.Decimal(14, 2)
   currency        String             @default("INR") @db.Char(3)
   paymentMethod   PaymentMethod
@@ -918,10 +963,64 @@ model Collection {
   allocations         PaymentAllocation[]
   depositTransactions DepositTransaction[]
 
+  @@unique([rentalId, referenceNumber])
   @@index([clientId, receivedAt])
   @@index([riderId, receivedAt])
+  @@index([rentalId, receivedAt])
+  @@index([rentalDueId])
   @@index([status])
   @@map("collections")
+}
+
+// ============================================================
+// RENTAL BILLING LEDGER + COLLECTION DUES
+// ============================================================
+model RentalCollectionDue {
+  id                String          @id @default(uuid(7))
+  rentalId          String
+  rental            Rental          @relation(fields: [rentalId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  periodStart       DateTime        @db.Timestamptz(3)
+  periodEnd         DateTime        @db.Timestamptz(3)
+  dueDate           DateTime        @db.Timestamptz(3)
+  amountDue         Decimal         @db.Decimal(14, 2)
+  amountCollected   Decimal         @default(0) @db.Decimal(14, 2)
+  outstandingAmount Decimal         @db.Decimal(14, 2)
+  status            RentalDueStatus @default(PENDING)
+  generatedAt       DateTime        @default(now()) @db.Timestamptz(3)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  collections Collection[]
+
+  @@unique([rentalId, periodStart, periodEnd])
+  @@index([rentalId, status, dueDate])
+  @@index([status, dueDate])
+  @@map("rental_collection_dues")
+}
+
+model RentalLedgerEntry {
+  id                String                @id @default(uuid(7))
+  rentalId          String
+  rental            Rental                @relation(fields: [rentalId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  entryType         RentalLedgerEntryType
+  direction         LedgerDirection
+  amount            Decimal               @db.Decimal(14, 2)
+  currency          String                @default("INR") @db.Char(3)
+  occurredAt        DateTime              @db.Timestamptz(3)
+  description       String
+  sourceType        String?
+  sourceId          String?
+  reversesEntryId   String?               @unique
+  reversesEntry     RentalLedgerEntry?    @relation("RentalLedgerReversal", fields: [reversesEntryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  reversedBy        RentalLedgerEntry?    @relation("RentalLedgerReversal")
+  idempotencyKey    String                @unique
+  createdById       String?
+  createdBy         User?                 @relation("RentalLedgerCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt         DateTime              @default(now()) @db.Timestamptz(3)
+
+  @@index([rentalId, occurredAt])
+  @@index([sourceType, sourceId])
+  @@map("rental_ledger_entries")
 }
 
 model PaymentAllocation {

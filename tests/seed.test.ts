@@ -12,7 +12,10 @@ describe("getRolePermissionBuckets", () => {
   it("grants OPERATOR exactly the read-only operational permissions", () => {
     expect([...buckets.OPERATOR].sort()).toEqual([
       "client:read",
+      "collection:read",
+      "deposit:read",
       "hub:read",
+      "rental:read",
       "rider:read",
       "staff:read",
       "vehicle:read",
@@ -46,6 +49,22 @@ describe("getRolePermissionBuckets", () => {
         "ratecardAssignment:read",
         "ratecardAssignment:update",
         "ratecardAssignment:delete",
+      ])
+    );
+  });
+
+  it("grants SUPERVISOR the full rental and financial workflow", () => {
+    expect(buckets.SUPERVISOR).toEqual(
+      expect.arrayContaining([
+        "rental:create",
+        "rental:assign",
+        "rental:activate",
+        "rental:close",
+        "deposit:receive",
+        "deposit:refund",
+        "deposit:adjust",
+        "collection:create",
+        "collection:due:generate",
       ])
     );
   });
