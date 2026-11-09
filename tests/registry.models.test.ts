@@ -13,13 +13,24 @@ describe("MODEL_REGISTRY", () => {
   it("has exactly the same keys as the permission registry resources", () => {
     const registryKeys = Object.keys(MODEL_REGISTRY).sort();
     expect(registryKeys).toEqual(approvedResources);
-    expect(registryKeys).toHaveLength(7);
+    expect(registryKeys).toHaveLength(10);
   });
 
   it("maps every approved resource to its Prisma delegate", () => {
     for (const resource of approvedResources) {
-      expect(getModelDelegate(resource)).toBe(prismaMock[resource]);
+      const delegate = {
+        ratecard: prismaMock.rateCard,
+        ratecardAssignment: prismaMock.rateCardAssignment,
+      }[resource] ?? prismaMock[resource];
+      expect(getModelDelegate(resource)).toBe(delegate);
     }
+  });
+
+  it("maps ratecard resources to their Prisma delegates", () => {
+    expect(getModelDelegate("ratecard")).toBe(prismaMock.rateCard);
+    expect(getModelDelegate("ratecardAssignment")).toBe(
+      prismaMock.rateCardAssignment
+    );
   });
 });
 

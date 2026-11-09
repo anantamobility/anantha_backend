@@ -44,6 +44,18 @@ export const PERMISSION_REGISTRY = [
   {
     resource: 'hub',
     actions: ['create', 'read', 'update', 'delete']
+  },
+  {
+    resource: 'client',
+    actions: ['create', 'read', 'update', 'status:update']
+  },
+  {
+    resource: 'ratecard',
+    actions: ['create', 'read', 'update', 'status:update']
+  },
+  {
+    resource: 'ratecardAssignment',
+    actions: ['create', 'read', 'update', 'delete']
   }
 ] as const; // <--- 'as const' is CRITICAL for type safety
 

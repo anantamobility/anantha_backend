@@ -11,6 +11,9 @@ import ridersRouter from './routes/riders.js'
 import staffRouter from './routes/staff.js'
 import vehiclesRouter from './routes/vehicles.js'
 import hubsRouter from './routes/hubs.js'
+import clientsRouter from './routes/clients.js'
+import ratecardsRouter from './routes/ratecards.js'
+import ratecardAssignmentsRouter from './routes/ratecardAssignments.js'
 
 const app = express()
 app.use(express.json({limit: '1mb'}))
@@ -31,6 +34,9 @@ app.use("/riders", ridersRouter)
 app.use("/staff", staffRouter)
 app.use("/vehicles", vehiclesRouter)
 app.use("/hubs", hubsRouter)
+app.use("/clients", clientsRouter)
+app.use("/ratecards", ratecardsRouter)
+app.use("/ratecard-assignments", ratecardAssignmentsRouter)
 
 app.use(globalErrorHandler)
 

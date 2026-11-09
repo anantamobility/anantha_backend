@@ -66,6 +66,12 @@ enum AssignmentStatus {
   CANCELLED
 }
 
+enum RateCardAssignmentStatus {
+  ACTIVE
+  INACTIVE
+  CANCELLED
+}
+
 enum VehicleStatus {
   IDLE
   DEPLOYED
@@ -362,6 +368,8 @@ model User {
   settlementsApproved   RiderSettlement[]    @relation("SettlementApprovedBy")
 
   assignmentsCreated   VehicleAssignment[]   @relation("AssignmentCreatedBy")
+  rateCardsAssigned    RateCardAssignment[]  @relation("RateCardAssignmentAssignedBy")
+  rateCardsUnassigned  RateCardAssignment[]  @relation("RateCardAssignmentUnassignedBy")
   vehicleStatusChanges VehicleStatusHistory[] @relation("VehicleStatusChangedBy")
   riderStatusChanges   RiderStatusHistory[]   @relation("RiderStatusChangedBy")
   serviceStatusChanges ServiceStatusHistory[] @relation("ServiceStatusChangedBy")
@@ -539,6 +547,7 @@ model VehicleHubHistory {
 // ============================================================
 model Client {
   id               String     @id @default(uuid(7))
+  clientCode       String     @unique
   type             ClientType
   name             String
   companyName      String?
@@ -557,15 +566,17 @@ model Client {
   invoices    Invoice[]
   deposits    Deposit[]
   collections Collection[]
-  rateCards   RateCard[]
+  rateCardAssignments RateCardAssignment[]
   documents   Document[]
   clientUsers ClientUser[]
   payouts     Payout[]
   riders      Rider[]
 
   @@index([type])
+  @@index([isActive])
   @@index([phoneNumber])
   @@index([email])
+  @@index([deletedAt])
   @@map("clients")
 }
 
@@ -585,15 +596,17 @@ model ClientUser {
 
 model RateCard {
   id               String           @id @default(uuid(7))
+  code             String           @unique
   name             String
-  clientId         String?
-  client           Client?          @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  description      String?
+  vehicleCategory  String?
   rentalType       RentalType?
   billingFrequency BillingFrequency?
   dailyRate        Decimal          @db.Decimal(14, 4)
   weeklyRate       Decimal?         @db.Decimal(14, 4)
   fortnightlyRate  Decimal?         @db.Decimal(14, 4)
   monthlyRate      Decimal?         @db.Decimal(14, 4)
+  securityDeposit  Decimal?         @db.Decimal(14, 2)
   currency         String           @default("INR") @db.Char(3)
   effectiveFrom    DateTime         @db.Timestamptz(3)
   effectiveTo      DateTime?        @db.Timestamptz(3)
@@ -602,11 +615,40 @@ model RateCard {
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 
+  assignments RateCardAssignment[]
+  rentals     Rental[]
+
+  @@index([vehicleCategory])
+  @@index([rentalType, billingFrequency])
+  @@index([isActive])
+  @@map("rate_cards")
+}
+
+model RateCardAssignment {
+  id               String                   @id @default(uuid(7))
+  clientId         String
+  client           Client                   @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  rateCardId       String
+  rateCard         RateCard                 @relation(fields: [rateCardId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  validFrom        DateTime                 @default(now()) @db.Timestamptz(3)
+  validUntil       DateTime?                @db.Timestamptz(3)
+  status           RateCardAssignmentStatus @default(ACTIVE)
+  assignedAt       DateTime                 @default(now()) @db.Timestamptz(3)
+  assignedById     String?
+  assignedBy       User?                    @relation("RateCardAssignmentAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  unassignedAt     DateTime?                @db.Timestamptz(3)
+  unassignedById   String?
+  unassignedBy     User?                    @relation("RateCardAssignmentUnassignedBy", fields: [unassignedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  reason           String?
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+
   rentals Rental[]
 
-  @@index([clientId, effectiveFrom])
-  @@index([rentalType, billingFrequency])
-  @@map("rate_cards")
+  @@index([clientId, status, validFrom])
+  @@index([rateCardId, status, validFrom])
+  @@index([validUntil])
+  @@map("rate_card_assignments")
 }
 
 // ============================================================
@@ -625,6 +667,8 @@ model Rental {
   hub                     Hub?             @relation(fields: [hubId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   rateCardId              String?
   rateCard                RateCard?        @relation(fields: [rateCardId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  rateCardAssignmentId    String?
+  rateCardAssignment      RateCardAssignment? @relation(fields: [rateCardAssignmentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   startDate               DateTime         @db.Timestamptz(3)
   endDate                 DateTime?        @db.Timestamptz(3)
   expectedEndDate         DateTime?        @db.Timestamptz(3)
@@ -654,6 +698,7 @@ model Rental {
   @@index([clientId, status])
   @@index([riderId, status])
   @@index([hubId])
+  @@index([rateCardAssignmentId])
   @@index([startDate, endDate])
   @@map("rentals")
 }

@@ -20,6 +20,7 @@ vi.mock("../src/config/redis.js", () => ({
 vi.mock("../src/database/prismaClient.js", () => {
   const delegate = () => ({
     findUnique: vi.fn(),
+    findUniqueOrThrow: vi.fn(),
     findFirst: vi.fn(),
     findMany: vi.fn(async () => []),
     create: vi.fn(),
@@ -35,7 +36,8 @@ vi.mock("../src/database/prismaClient.js", () => {
     vehicleStatusHistory: delegate(), vehicleAssignment: delegate(),
     riderStatusHistory: delegate(), riderVerification: delegate(),
     riderVerificationHistory: delegate(), document: delegate(),
-    client: delegate(),
+    client: delegate(), rateCard: delegate(), rateCardAssignment: delegate(),
+    rental: delegate(),
     service: delegate(),
     auditLog: delegate(), hub: delegate(),
     $disconnect: vi.fn(),

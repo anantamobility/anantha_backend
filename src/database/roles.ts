@@ -43,9 +43,18 @@ export function getRolePermissionBuckets(
         buckets.SUPERVISOR.push(key);
       }
 
-      // OPERATOR receives read-only operational permissions.
+      // SUPERVISOR may manage B2B clients, commercial ratecards and their
+      // assignments.
+      if (['client', 'ratecard', 'ratecardAssignment'].includes(group.resource)) {
+        buckets.SUPERVISOR.push(key);
+      }
+
+      // OPERATOR receives read-only operational permissions. Ratecard pricing
+      // remains restricted to ADMIN and SUPERVISOR.
       if (
-        ['rider', 'staff', 'vehicle', 'hub'].includes(group.resource) &&
+        ['rider', 'staff', 'vehicle', 'hub', 'client'].includes(
+          group.resource
+        ) &&
         action === 'read'
       ) {
         buckets.OPERATOR.push(key);

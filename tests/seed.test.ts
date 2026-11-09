@@ -11,6 +11,7 @@ describe("getRolePermissionBuckets", () => {
 
   it("grants OPERATOR exactly the read-only operational permissions", () => {
     expect([...buckets.OPERATOR].sort()).toEqual([
+      "client:read",
       "hub:read",
       "rider:read",
       "staff:read",
@@ -28,6 +29,25 @@ describe("getRolePermissionBuckets", () => {
   it("grants SUPERVISOR user:read but not user:create", () => {
     expect(buckets.SUPERVISOR).toContain("user:read");
     expect(buckets.SUPERVISOR).not.toContain("user:create");
+  });
+
+  it("grants SUPERVISOR full client and ratecard management", () => {
+    expect(buckets.SUPERVISOR).toEqual(
+      expect.arrayContaining([
+        "client:create",
+        "client:read",
+        "client:update",
+        "client:status:update",
+        "ratecard:create",
+        "ratecard:read",
+        "ratecard:update",
+        "ratecard:status:update",
+        "ratecardAssignment:create",
+        "ratecardAssignment:read",
+        "ratecardAssignment:update",
+        "ratecardAssignment:delete",
+      ])
+    );
   });
 
   it("produces deterministic buckets for an arbitrary registry", () => {
