@@ -21,6 +21,9 @@ describe("MODEL_REGISTRY", () => {
       const delegate = {
         ratecard: prismaMock.rateCard,
         ratecardAssignment: prismaMock.rateCardAssignment,
+        earning: prismaMock.earningsLedger,
+        settlement: prismaMock.riderSettlement,
+        payout: prismaMock.payout,
       }[resource] ?? prismaMock[resource];
       expect(getModelDelegate(resource)).toBe(delegate);
     }

@@ -16,6 +16,9 @@ import ratecardsRouter from './routes/ratecards.js'
 import ratecardAssignmentsRouter from './routes/ratecardAssignments.js'
 import rentalsRouter from './routes/rentals.js'
 import collectionsRouter from './routes/collections.js'
+import earningsRouter from './routes/earnings.js'
+import settlementsRouter from './routes/settlements.js'
+import payoutsRouter from './routes/payouts.js'
 
 const app = express()
 app.use(express.json({limit: '1mb'}))
@@ -41,6 +44,9 @@ app.use("/ratecards", ratecardsRouter)
 app.use("/ratecard-assignments", ratecardAssignmentsRouter)
 app.use("/rentals", rentalsRouter)
 app.use("/collections", collectionsRouter)
+app.use("/earnings", earningsRouter)
+app.use("/settlements", settlementsRouter)
+app.use("/payouts", payoutsRouter)
 
 app.use(globalErrorHandler)
 

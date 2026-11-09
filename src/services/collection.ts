@@ -59,7 +59,7 @@ export const collectionDetailSelect = {
   rentalDue: { select: rentalDueSelect },
 } as const;
 
-async function allocateToDues(
+export async function allocateToDues(
   tx: Tx,
   rentalId: string,
   amount: Prisma.Decimal
@@ -147,7 +147,7 @@ async function allocateToDues(
   };
 }
 
-async function createCollectionLedgerEntry(
+export async function createCollectionLedgerEntry(
   tx: Tx,
   input: {
     rentalId: string;

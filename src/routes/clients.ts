@@ -11,12 +11,25 @@ import {
 } from "../validation/client.js";
 import { listClientRateCardsQuerySchema } from "../validation/ratecardAssignment.js";
 import {
+  generateClientDuesSchema,
+  listClientCollectionsQuerySchema,
+  listClientDuesQuerySchema,
+  recordClientPaymentSchema,
+} from "../validation/clientFinance.js";
+import {
   changeClientStatus,
   createClient,
   getClientById,
   getClients,
   updateClient,
 } from "../controllers/client/client.controller.js";
+import {
+  generateClientDues,
+  getClientCollections,
+  getClientDues,
+  getClientFinancials,
+  recordClientPayment,
+} from "../controllers/client/client-finance.controller.js";
 import { getClientRateCards } from "../controllers/ratecard/ratecard-assignment.controller.js";
 
 const r = Router();
@@ -42,6 +55,45 @@ r.get(
   authorize("ratecardAssignment", "read", { policy: false }),
   validate(listClientRateCardsQuerySchema, "query"),
   getClientRateCards
+);
+r.get(
+  "/:id/financials",
+  verifyToken,
+  validate(idParamSchema, "params"),
+  authorize("collection", "client:read", { policy: false }),
+  getClientFinancials
+);
+r.get(
+  "/:id/dues",
+  verifyToken,
+  validate(idParamSchema, "params"),
+  authorize("collection", "client:read", { policy: false }),
+  validate(listClientDuesQuerySchema, "query"),
+  getClientDues
+);
+r.get(
+  "/:id/collections",
+  verifyToken,
+  validate(idParamSchema, "params"),
+  authorize("collection", "client:read", { policy: false }),
+  validate(listClientCollectionsQuerySchema, "query"),
+  getClientCollections
+);
+r.post(
+  "/:id/dues/generate",
+  verifyToken,
+  validate(idParamSchema, "params"),
+  authorize("collection", "client:due:generate", { policy: false }),
+  validate(generateClientDuesSchema),
+  generateClientDues
+);
+r.post(
+  "/:id/payments",
+  verifyToken,
+  validate(idParamSchema, "params"),
+  authorize("collection", "client:pay", { policy: false }),
+  validate(recordClientPaymentSchema),
+  recordClientPayment
 );
 r.patch(
   "/:id/status",

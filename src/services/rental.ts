@@ -313,6 +313,7 @@ async function assignVehicleWithinTransaction(
     rental: {
       id: string;
       rentalNumber: string;
+      rentalType: string;
       riderId: string | null;
       hubId: string | null;
       status: string;
@@ -331,15 +332,19 @@ async function assignVehicleWithinTransaction(
     );
   }
 
-  const activeForRental = await tx.vehicleAssignment.count({
-    where: { rentalId: input.rental.id, status: "ACTIVE" },
-  });
-  if (activeForRental > 0) {
-    throw new AppError(
-      "Rental already has an active vehicle assignment",
-      409,
-      ErrorCode.CONFLICT
-    );
+  // A B2B agreement may cover multiple vehicles. B2C rentals remain limited
+  // to one active vehicle at a time.
+  if (input.rental.rentalType !== "B2B") {
+    const activeForRental = await tx.vehicleAssignment.count({
+      where: { rentalId: input.rental.id, status: "ACTIVE" },
+    });
+    if (activeForRental > 0) {
+      throw new AppError(
+        "Rental already has an active vehicle assignment",
+        409,
+        ErrorCode.CONFLICT
+      );
+    }
   }
 
   const vehicle = await tx.vehicle.findUnique({
@@ -473,8 +478,19 @@ export async function createRental(
       manualPricing: input.manualPricing ?? null,
     });
 
+    const billingFrequency =
+      input.billingFrequency ?? pricing.billingFrequency ?? null;
+
     return await prisma.$transaction(async (tx) => {
       await assertClient(tx, input.rentalType, input.clientId);
+
+      if (input.rentalType === "B2B" && !billingFrequency) {
+        throw new AppError(
+          "billingFrequency is required for B2B rentals (supply it directly or via the ratecard)",
+          400,
+          ErrorCode.VALIDATION_ERROR
+        );
+      }
 
       if (input.riderId) {
         await assertRider(tx, {
@@ -524,8 +540,7 @@ export async function createRental(
         expectedEndDate: input.expectedEndDate ?? null,
         status: "DRAFT",
         agreementRef: input.agreementRef ?? null,
-        billingFrequency:
-          input.billingFrequency ?? pricing.billingFrequency ?? null,
+        billingFrequency,
         collectionPeriod: input.collectionPeriod,
         currency: input.currency ?? pricing.currency,
         dailyRate: pricing.rates.dailyRate,
@@ -554,6 +569,7 @@ export async function createRental(
             rental: {
               id: rental.id,
               rentalNumber: rental.rentalNumber,
+              rentalType: rental.rentalType,
               riderId: rental.riderId,
               hubId: rental.hubId,
               status: rental.status,
@@ -673,6 +689,7 @@ export async function assignVehicle(
         select: {
           id: true,
           rentalNumber: true,
+          rentalType: true,
           riderId: true,
           hubId: true,
           status: true,

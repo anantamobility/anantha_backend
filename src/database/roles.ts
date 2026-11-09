@@ -55,6 +55,11 @@ export function getRolePermissionBuckets(
           'collection',
         ].includes(group.resource)
       ) {
+        // Consolidated B2B client financials and rider earnings/settlements
+        // are ADMIN-only capabilities.
+        if (group.resource === 'collection' && action.startsWith('client:')) {
+          continue;
+        }
         buckets.SUPERVISOR.push(key);
       }
 

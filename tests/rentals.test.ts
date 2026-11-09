@@ -329,6 +329,57 @@ describe("PATCH /rentals/:id/assign-vehicle", () => {
       })
     );
   });
+
+  it("allows multiple active vehicles on a B2B rental", async () => {
+    authenticate([{ resource: "rental", action: "assign" }]);
+    prismaMock.rental.findFirst.mockResolvedValue(rentalDetail());
+    prismaMock.rental.findUnique.mockResolvedValue(
+      rentalDetail({
+        rentalType: "B2B",
+        b2cMode: null,
+        b2bRiderMgmt: "CLIENT_MANAGED",
+        riderId: null,
+      })
+    );
+    prismaMock.vehicleAssignment.count.mockResolvedValue(0);
+    prismaMock.vehicle.findUnique.mockResolvedValue({
+      id: VEHICLE_ID,
+      registrationNumber: "KA01AB1234",
+      status: "IDLE",
+      isActive: true,
+      version: 0,
+      deletedAt: null,
+    });
+    prismaMock.vehicleAssignment.create.mockResolvedValue({
+      id: ASSIGNMENT_ID,
+      vehicleId: VEHICLE_ID,
+      status: "ACTIVE",
+    });
+    prismaMock.vehicle.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.vehicleStatusHistory.create.mockResolvedValue({});
+
+    const res = await request(app)
+      .patch(`/rentals/${RENTAL_ID}/assign-vehicle`)
+      .set("Authorization", `Bearer ${accessToken()}`)
+      .send({ vehicleId: VEHICLE_ID });
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.vehicleAssignment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          rentalId: RENTAL_ID,
+          vehicleId: VEHICLE_ID,
+          status: "ACTIVE",
+        }),
+      })
+    );
+    // The per-rental single-vehicle guard is skipped for B2B agreements.
+    expect(prismaMock.vehicleAssignment.count).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { rentalId: RENTAL_ID, status: "ACTIVE" },
+      })
+    );
+  });
 });
 
 describe("PATCH /rentals/:id/activate", () => {

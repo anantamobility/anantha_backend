@@ -20,6 +20,9 @@ export const MODEL_REGISTRY = {
   rental: prisma.rental,
   deposit: prisma.deposit,
   collection: prisma.collection,
+  earning: prisma.earningsLedger,
+  settlement: prisma.riderSettlement,
+  payout: prisma.payout,
 } as const satisfies Record<AppResource, unknown>;
 
 /**

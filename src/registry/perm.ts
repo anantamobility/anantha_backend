@@ -67,7 +67,27 @@ export const PERMISSION_REGISTRY = [
   },
   {
     resource: 'collection',
-    actions: ['create', 'read', 'update', 'due:generate']
+    actions: [
+      'create',
+      'read',
+      'update',
+      'due:generate',
+      'client:read',
+      'client:due:generate',
+      'client:pay',
+    ]
+  },
+  {
+    resource: 'earning',
+    actions: ['create', 'read', 'adjust']
+  },
+  {
+    resource: 'settlement',
+    actions: ['generate', 'read', 'approve', 'pay', 'reconcile']
+  },
+  {
+    resource: 'payout',
+    actions: ['create', 'read']
   }
 ] as const; // <--- 'as const' is CRITICAL for type safety
 
@@ -93,6 +113,13 @@ export const ACTION_DEFINITIONS = {
   refund: "Record an outbound refund.",
   adjust: "Record an approved financial adjustment.",
   "due:generate": "Generate collection dues from a billing schedule.",
+  generate: "Generate a derived financial record such as a settlement.",
+  approve: "Approve a pending financial record.",
+  pay: "Disburse a payable financial record.",
+  reconcile: "Reconcile or reverse a financial record after verification.",
+  "client:read": "Read consolidated B2B client financials.",
+  "client:due:generate": "Generate collection dues across all rentals of a B2B client.",
+  "client:pay": "Record and allocate a consolidated B2B client payment.",
 } as const;
 
 // This creates a union type: "user" | "role" | "auditLog"

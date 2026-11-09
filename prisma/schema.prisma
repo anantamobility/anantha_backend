@@ -210,6 +210,7 @@ enum PayoutStatus {
 enum SettlementStatus {
   DRAFT
   PENDING_APPROVAL
+  PAYABLE
   APPROVED
   PAID
   FAILED
@@ -1052,6 +1053,8 @@ model RiderSettlement {
   grossEarnings       Decimal          @default(0) @db.Decimal(14, 2)
   totalDeductions     Decimal          @default(0) @db.Decimal(14, 2)
   netPayable          Decimal          @default(0) @db.Decimal(14, 2)
+  shortfallAmount     Decimal          @default(0) @db.Decimal(14, 2)
+  requiresManualReview Boolean         @default(false)
   calculationSnapshot Json?            @db.JsonB
   version             Int              @default(0)
   approvedById        String?
@@ -1161,6 +1164,7 @@ model Payout {
   @@index([staffId])
   @@index([vendorId])
   @@index([clientId])
+  @@index([settlementId])
   @@map("payouts")
 }
 
