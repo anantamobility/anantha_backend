@@ -190,7 +190,7 @@ function listRateCardsWhere(query: ListRateCardsQuery) {
     validOn,
   } = query;
 
-  const where: Prisma.RateCardWhereInput = {};
+  const where: Prisma.RateCardWhereInput = { deletedAt: null };
   if (vehicleCategory) where.vehicleCategory = vehicleCategory;
   if (rentalType) where.rentalType = rentalType;
   if (billingFrequency) where.billingFrequency = billingFrequency;
@@ -250,14 +250,15 @@ export async function listRateCards(query: ListRateCardsQuery) {
 export async function getRateCardById(id: string) {
   const rateCard = await prisma.rateCard.findUnique({
     where: { id },
-    select: rateCardDetailSelect,
+    select: { ...rateCardDetailSelect, deletedAt: true },
   });
 
-  if (!rateCard) {
+  if (!rateCard || rateCard.deletedAt) {
     throw new AppError("Ratecard not found", 404, ErrorCode.NOT_FOUND);
   }
 
-  return rateCard;
+  const { deletedAt: _deletedAt, ...safeRateCard } = rateCard;
+  return safeRateCard;
 }
 
 export async function updateRateCard(
@@ -268,7 +269,7 @@ export async function updateRateCard(
   try {
     return await prisma.$transaction(async (tx) => {
       const existing = await tx.rateCard.findUnique({ where: { id } });
-      if (!existing) {
+      if (!existing || existing.deletedAt) {
         throw new AppError("Ratecard not found", 404, ErrorCode.NOT_FOUND);
       }
 
@@ -358,7 +359,7 @@ export async function changeRateCardStatus(
   try {
     return await prisma.$transaction(async (tx) => {
       const existing = await tx.rateCard.findUnique({ where: { id } });
-      if (!existing) {
+      if (!existing || existing.deletedAt) {
         throw new AppError("Ratecard not found", 404, ErrorCode.NOT_FOUND);
       }
 
@@ -413,5 +414,61 @@ export async function changeRateCardStatus(
     });
   } catch (err) {
     rethrowPrismaError(err, "Ratecard status could not be changed");
+  }
+}
+
+export async function deleteRateCard(id: string, actor: AuditActor) {
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const existing = await tx.rateCard.findUnique({ where: { id } });
+      if (!existing || existing.deletedAt) {
+        throw new AppError("Ratecard not found", 404, ErrorCode.NOT_FOUND);
+      }
+
+      const rentalReferences = await tx.rental.count({
+        where: { rateCardId: id },
+      });
+      if (rentalReferences > 0) {
+        throw new AppError(
+          "Ratecard cannot be deleted because it is referenced by existing rentals",
+          409,
+          ErrorCode.CONFLICT
+        );
+      }
+
+      const assignmentReferences = await tx.rateCardAssignment.count({
+        where: { rateCardId: id },
+      });
+      if (assignmentReferences > 0) {
+        throw new AppError(
+          "Ratecard cannot be deleted because it has assignments",
+          409,
+          ErrorCode.CONFLICT
+        );
+      }
+
+      const deletedAt = new Date();
+      const rateCard = await tx.rateCard.update({
+        where: { id },
+        data: { deletedAt, isActive: false },
+        select: rateCardDetailSelect,
+      });
+
+      await logAudit({
+        ...actor,
+        action: "DELETE",
+        resource: "RateCard",
+        resourceId: rateCard.id,
+        oldData: rateCardSnapshot(existing),
+        newData: { deletedAt, isActive: false },
+        summary: `${actor.userName} soft-deleted ratecard ${existing.code}.`,
+        db: tx,
+        throwOnError: true,
+      });
+
+      return rateCard;
+    });
+  } catch (err) {
+    rethrowPrismaError(err, "Ratecard could not be deleted");
   }
 }

@@ -380,10 +380,11 @@ model User {
   roleId       String
   role         Role          @relation(fields: [roleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
-  staffProfile Staff?
-  riderProfile Rider?
-  clientUsers  ClientUser[]
-  auditLogs    AuditLog[]
+  staffProfile         Staff?
+  riderProfile         Rider?
+  clientUsers          ClientUser[]
+  auditLogs            AuditLog[]
+  passwordResetTokens  PasswordResetToken[]
 
   documentsOwned              Document[]                 @relation("DocumentOwner")
   documentsUploaded           Document[]                 @relation("DocumentUploadedBy")
@@ -665,6 +666,7 @@ model RateCard {
   terms            Json?             @db.JsonB
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
+  deletedAt        DateTime?
 
   assignments RateCardAssignment[]
   rentals     Rental[]
@@ -672,6 +674,7 @@ model RateCard {
   @@index([vehicleCategory])
   @@index([rentalType, billingFrequency])
   @@index([isActive])
+  @@index([deletedAt])
   @@map("rate_cards")
 }
 
@@ -1590,6 +1593,24 @@ model RiderVerificationHistory {
   @@index([verificationId, changedAt])
   @@index([riderId, type, changedAt])
   @@map("rider_verification_history")
+}
+
+// ============================================================
+// PASSWORD RESET
+// ============================================================
+model PasswordResetToken {
+  id         String    @id @default(uuid(7))
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  tokenHash  String    @unique
+  expiresAt  DateTime  @db.Timestamptz(3)
+  usedAt     DateTime? @db.Timestamptz(3)
+  requestedIp String?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
 }
 
 // ============================================================

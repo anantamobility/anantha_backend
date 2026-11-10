@@ -86,3 +86,19 @@ export const changeClientStatus = async (
     next(err);
   }
 };
+
+export const deleteClient = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    await clientService.deleteClient(
+      req.params.id as string,
+      getAuditActor(req)
+    );
+    return success(res, { message: "Client deleted successfully" });
+  } catch (err) {
+    next(err);
+  }
+};

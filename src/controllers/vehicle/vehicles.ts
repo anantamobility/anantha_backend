@@ -33,7 +33,8 @@ export const getVehicles = async (
 ) => {
   try {
     const result = await vehicleService.listVehicles(
-      req.query as unknown as ListVehiclesQuery
+      req.query as unknown as ListVehiclesQuery,
+      req.user
     );
     return success(res, result);
   } catch (err) {
@@ -48,7 +49,8 @@ export const getVehicleById = async (
 ) => {
   try {
     const vehicle = await vehicleService.getVehicleById(
-      req.params.id as string
+      req.params.id as string,
+      req.user
     );
     return success(res, { vehicle });
   } catch (err) {
@@ -114,7 +116,8 @@ export const getVehicleStatusHistory = async (
   try {
     const result = await vehicleService.getVehicleStatusHistory(
       req.params.id as string,
-      req.query as unknown as ListVehicleStatusHistoryQuery
+      req.query as unknown as ListVehicleStatusHistoryQuery,
+      req.user
     );
     return success(res, result);
   } catch (err) {

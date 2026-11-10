@@ -12,6 +12,7 @@ import {
 import {
   changeRateCardStatus,
   createRateCard,
+  deleteRateCard,
   getRateCardById,
   getRateCards,
   updateRateCard,
@@ -73,6 +74,13 @@ r.put(
   authorize("ratecard", "update"),
   validate(updateRateCardSchema),
   updateRateCard
+);
+r.delete(
+  "/:id",
+  verifyToken,
+  validate(idParamSchema, "params"),
+  authorize("ratecard", "delete"),
+  deleteRateCard
 );
 
 export default r;

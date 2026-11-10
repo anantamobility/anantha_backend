@@ -7,6 +7,8 @@ import {
   rethrowPrismaError,
 } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
+import { assertHubAccess, resolveHubFilter } from "../utils/scope.js";
+import type { UserContext } from "../types/user.js";
 import type {
   ChangeVehicleStatusInput,
   CreateVehicleInput,
@@ -142,6 +144,7 @@ export async function createVehicle(
   try {
     return await prisma.$transaction(async (tx) => {
       if (input.hubId) await assertHubExists(tx, input.hubId);
+      assertHubAccess(actor.req.user, input.hubId);
 
       const data: Prisma.VehicleUncheckedCreateInput = {
         registrationNumber: input.registrationNumber,
@@ -195,12 +198,13 @@ export async function createVehicle(
   }
 }
 
-export async function listVehicles(query: ListVehiclesQuery) {
+export async function listVehicles(query: ListVehiclesQuery, user?: UserContext) {
   const { page, limit, search, status, hubId, make, model, isActive } = query;
 
   const where: Prisma.VehicleWhereInput = { deletedAt: null };
   if (status) where.status = status;
-  if (hubId) where.hubId = hubId;
+  const scopedHubId = resolveHubFilter(user, hubId);
+  if (scopedHubId) where.hubId = scopedHubId;
   if (typeof isActive === "boolean") where.isActive = isActive;
   if (make) where.make = { equals: make, mode: "insensitive" };
   if (model) where.model = { equals: model, mode: "insensitive" };
@@ -240,7 +244,7 @@ export async function listVehicles(query: ListVehiclesQuery) {
   };
 }
 
-export async function getVehicleById(id: string) {
+export async function getVehicleById(id: string, user?: UserContext) {
   const vehicle = await prisma.vehicle.findUnique({
     where: { id },
     select: { ...vehicleDetailSelect, deletedAt: true },
@@ -250,6 +254,7 @@ export async function getVehicleById(id: string) {
     throw new AppError("Vehicle not found", 404, ErrorCode.NOT_FOUND);
   }
 
+  assertHubAccess(user, vehicle.hubId);
   const { deletedAt: _deletedAt, ...safeVehicle } = vehicle;
   return safeVehicle;
 }
@@ -264,6 +269,10 @@ export async function updateVehicle(
       const existing = await tx.vehicle.findUnique({ where: { id } });
       if (!existing || existing.deletedAt) {
         throw new AppError("Vehicle not found", 404, ErrorCode.NOT_FOUND);
+      }
+      assertHubAccess(actor.req.user, existing.hubId);
+      if (input.hubId !== undefined && input.hubId !== null) {
+        assertHubAccess(actor.req.user, input.hubId);
       }
 
       if (
@@ -388,6 +397,7 @@ export async function changeVehicleStatus(
       if (!vehicle || vehicle.deletedAt) {
         throw new AppError("Vehicle not found", 404, ErrorCode.NOT_FOUND);
       }
+      assertHubAccess(actor.req.user, vehicle.hubId);
 
       const previousStatus = vehicle.status;
       const nextStatus = input.status;
@@ -495,18 +505,20 @@ export async function changeVehicleStatus(
 
 export async function getVehicleStatusHistory(
   id: string,
-  query: ListVehicleStatusHistoryQuery
+  query: ListVehicleStatusHistoryQuery,
+  user?: UserContext
 ) {
   const { page, limit } = query;
 
   const vehicle = await prisma.vehicle.findUnique({
     where: { id },
-    select: { id: true, deletedAt: true },
+    select: { id: true, deletedAt: true, hubId: true },
   });
 
   if (!vehicle || vehicle.deletedAt) {
     throw new AppError("Vehicle not found", 404, ErrorCode.NOT_FOUND);
   }
+  assertHubAccess(user, vehicle.hubId);
 
   const where: Prisma.VehicleStatusHistoryWhereInput = { vehicleId: id };
   if (query.status) where.status = query.status;

@@ -7,7 +7,10 @@
     "start": "node dist/server.js",
     "dev": "tsx src/server.ts",
     "test": "vitest run",
-    "test-watch": "vitest"
+    "test-watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "seed": "tsx src/database/seed.ts",
+    "seed:demo": "tsx src/database/seed.ts && tsx src/database/demo-seed.ts"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",

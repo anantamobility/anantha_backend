@@ -19,6 +19,7 @@ import {
 import {
   changeClientStatus,
   createClient,
+  deleteClient,
   getClientById,
   getClients,
   updateClient,
@@ -125,6 +126,13 @@ r.put(
   authorize("client", "update"),
   validate(updateClientSchema),
   updateClient
+);
+r.delete(
+  "/:id",
+  verifyToken,
+  validate(idParamSchema, "params"),
+  authorize("client", "delete"),
+  deleteClient
 );
 
 export default r;

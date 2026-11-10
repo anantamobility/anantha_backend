@@ -29,11 +29,17 @@ export const verifyToken = async(req: Request, res: Response, next: NextFunction
         const userWithRole = await prisma.user.findUnique({
                 where: { id: decoded.userId },
                 include: {
-                    role: { include: { permissions: true } }
+                    role: { include: { permissions: true } },
+                    staffProfile: { select: { id: true, hubId: true } }
                 }
         });
 
-        if (!userWithRole) return error(res, 401, ErrorCode.UNAUTHORIZED, "User no longer exists");
+        if (!userWithRole || userWithRole.deletedAt) {
+            return error(res, 401, ErrorCode.UNAUTHORIZED, "User no longer exists");
+        }
+        if (userWithRole.status !== "ACTIVE") {
+            return error(res, 403, ErrorCode.FORBIDDEN, "Account is not active");
+        }
 
         req.user = {
                 id: userWithRole.id,
@@ -41,7 +47,9 @@ export const verifyToken = async(req: Request, res: Response, next: NextFunction
                 role: userWithRole.role.name,
                 status: userWithRole.status,
                 permissions: userWithRole.role.permissions.map(p => `${p.resource}:${p.action}`),
-                attributes: {}
+                attributes: {
+                    hubId: userWithRole.staffProfile?.hubId ?? null,
+                }
         };
         next();   
     } catch (err: any) {

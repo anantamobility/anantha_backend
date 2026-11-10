@@ -6,6 +6,8 @@ import {
   rethrowPrismaError,
 } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
+import { assertHubAccess, resolveHubFilter } from "../utils/scope.js";
+import type { UserContext } from "../types/user.js";
 import type {
   CreateStaffInput,
   ListStaffQuery,
@@ -66,6 +68,7 @@ export async function createStaff(input: CreateStaffInput, actor: AuditActor) {
     return await prisma.$transaction(async (tx) => {
       if (input.userId) await assertUserExists(tx, input.userId);
       if (input.hubId) await assertHubExists(tx, input.hubId);
+      assertHubAccess(actor.req.user, input.hubId);
 
       const data: Prisma.StaffUncheckedCreateInput = {
         fullName: input.fullName,
@@ -103,11 +106,12 @@ export async function createStaff(input: CreateStaffInput, actor: AuditActor) {
   }
 }
 
-export async function listStaff(query: ListStaffQuery) {
+export async function listStaff(query: ListStaffQuery, user?: UserContext) {
   const { page, limit, search, hubId, status } = query;
 
   const where: Prisma.StaffWhereInput = { deletedAt: null };
-  if (hubId) where.hubId = hubId;
+  const scopedHubId = resolveHubFilter(user, hubId);
+  if (scopedHubId) where.hubId = scopedHubId;
   if (status) where.status = status;
   if (search) {
     where.OR = [
@@ -139,7 +143,7 @@ export async function listStaff(query: ListStaffQuery) {
   };
 }
 
-export async function getStaffById(id: string) {
+export async function getStaffById(id: string, user?: UserContext) {
   const staff = await prisma.staff.findUnique({
     where: { id },
     include: { user: { select: staffUserSelect } },
@@ -149,6 +153,7 @@ export async function getStaffById(id: string) {
     throw new AppError("Staff not found", 404, ErrorCode.NOT_FOUND);
   }
 
+  assertHubAccess(user, staff.hubId);
   return staff;
 }
 
@@ -162,6 +167,10 @@ export async function updateStaff(
       const existing = await tx.staff.findUnique({ where: { id } });
       if (!existing || existing.deletedAt) {
         throw new AppError("Staff not found", 404, ErrorCode.NOT_FOUND);
+      }
+      assertHubAccess(actor.req.user, existing.hubId);
+      if (input.hubId !== undefined && input.hubId !== null) {
+        assertHubAccess(actor.req.user, input.hubId);
       }
 
       if (
@@ -228,6 +237,7 @@ export async function deleteStaff(id: string, actor: AuditActor) {
       if (!existing || existing.deletedAt) {
         throw new AppError("Staff not found", 404, ErrorCode.NOT_FOUND);
       }
+      assertHubAccess(actor.req.user, existing.hubId);
 
       // Soft delete preserves payouts, documents, and other historical records.
       // The linked User account is intentionally left untouched.

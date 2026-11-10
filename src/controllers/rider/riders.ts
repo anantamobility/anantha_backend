@@ -33,7 +33,8 @@ export const getRiders = async (
 ) => {
   try {
     const result = await riderService.listRiders(
-      req.query as unknown as ListRidersQuery
+      req.query as unknown as ListRidersQuery,
+      req.user
     );
     return success(res, result);
   } catch (err) {
@@ -47,7 +48,10 @@ export const getRiderById = async (
   next: NextFunction
 ) => {
   try {
-    const rider = await riderService.getRiderById(req.params.id as string);
+    const rider = await riderService.getRiderById(
+      req.params.id as string,
+      req.user
+    );
     return success(res, { rider });
   } catch (err) {
     next(err);
@@ -96,9 +100,26 @@ export const getRiderStatusHistory = async (
   try {
     const result = await riderService.getRiderStatusHistory(
       req.params.id as string,
-      req.query as unknown as ListRiderStatusHistoryQuery
+      req.query as unknown as ListRiderStatusHistoryQuery,
+      req.user
     );
     return success(res, result);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const deleteRiderById = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    await riderService.deleteRider(
+      req.params.id as string,
+      getAuditActor(req)
+    );
+    return success(res, { message: "Rider deleted successfully" });
   } catch (err) {
     next(err);
   }

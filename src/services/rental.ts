@@ -7,6 +7,8 @@ import {
   rethrowPrismaError,
 } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
+import { assertHubAccess, resolveHubFilter } from "../utils/scope.js";
+import type { UserContext } from "../types/user.js";
 import { resolveRentalPricing } from "./rental-pricing.js";
 import {
   getDepositBalanceByRental,
@@ -503,6 +505,7 @@ export async function createRental(
       }
 
       if (input.hubId) await assertHub(tx, input.hubId);
+      assertHubAccess(actor.req.user, input.hubId);
 
       if (input.vehicleId) {
         const vehicle = await tx.vehicle.findUnique({
@@ -614,7 +617,7 @@ export async function createRental(
   }
 }
 
-export async function listRentals(query: ListRentalsQuery) {
+export async function listRentals(query: ListRentalsQuery, user?: UserContext) {
   const { page, limit, search } = query;
   const where: Prisma.RentalWhereInput = {};
 
@@ -622,7 +625,8 @@ export async function listRentals(query: ListRentalsQuery) {
   if (query.status) where.status = query.status;
   if (query.clientId) where.clientId = query.clientId;
   if (query.riderId) where.riderId = query.riderId;
-  if (query.hubId) where.hubId = query.hubId;
+  const scopedHubId = resolveHubFilter(user, query.hubId);
+  if (scopedHubId) where.hubId = scopedHubId;
   if (query.collectionPeriod) where.collectionPeriod = query.collectionPeriod;
 
   if (search) {
@@ -660,7 +664,7 @@ export async function listRentals(query: ListRentalsQuery) {
   };
 }
 
-export async function getRentalById(id: string) {
+export async function getRentalById(id: string, user?: UserContext) {
   const rental = await prisma.rental.findUnique({
     where: { id },
     select: rentalDetailSelect,
@@ -669,6 +673,7 @@ export async function getRentalById(id: string) {
   if (!rental) {
     throw new AppError("Rental not found", 404, ErrorCode.NOT_FOUND);
   }
+  assertHubAccess(user, rental.hubId);
 
   const financialSummary = await prisma.$transaction(async (tx) =>
     getRentalFinancialSummary(tx, id)
@@ -813,6 +818,7 @@ export async function closeRental(
           id: true,
           rentalNumber: true,
           status: true,
+          hubId: true,
           startDate: true,
           endDate: true,
           version: true,
@@ -825,6 +831,7 @@ export async function closeRental(
       if (!rental) {
         throw new AppError("Rental not found", 404, ErrorCode.NOT_FOUND);
       }
+      assertHubAccess(actor.req.user, rental.hubId);
 
       if (rental.status !== "ACTIVE" && rental.status !== "ON_HOLD") {
         throw new AppError(

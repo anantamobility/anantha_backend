@@ -30,7 +30,10 @@ export const getHubs = async (
   next: NextFunction
 ) => {
   try {
-    const result = await hubService.listHubs(req.query as unknown as ListHubsQuery);
+    const result = await hubService.listHubs(
+      req.query as unknown as ListHubsQuery,
+      req.user
+    );
     return success(res, result);
   } catch (err) {
     next(err);
@@ -43,7 +46,10 @@ export const getHubById = async (
   next: NextFunction
 ) => {
   try {
-    const hub = await hubService.getHubById(req.params.id as string);
+    const hub = await hubService.getHubById(
+      req.params.id as string,
+      req.user
+    );
     return success(res, { hub });
   } catch (err) {
     next(err);

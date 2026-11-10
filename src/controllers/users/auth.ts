@@ -5,6 +5,9 @@ import jwt from 'jsonwebtoken'
 import envConfig from "../../config/env.js"
 import { v4 as uuidv4 } from "uuid";
 import { redisGet, redisSet, redisDel } from "../../config/redis.js";
+import { requestPasswordReset, resetPassword } from "../../services/password-reset.js";
+import { validatePasswordStrength } from "../../validation/auth.js";
+import { logAudit } from "../../utils/log.js";
 
 const isProd = envConfig.nodeEnv === "prod";
 const cookieOptions = {
@@ -119,8 +122,25 @@ export const login = async(req: Request, res: Response, next: NextFunction) => {
             return
         }
 
+        if (user.deletedAt || user.status !== "ACTIVE") {
+            res.status(403).json({ message: "Account is not active. Contact an administrator." })
+            return
+        }
+
         const isMatch = await bcrypt.compare(password,String(user?.passwordHash))
         if(!isMatch){
+            await logAudit({
+                req,
+                userId: user.id,
+                userName: user.name,
+                userRole: user.role.name,
+                action: "LOGIN_FAILED",
+                resource: "User",
+                resourceId: user.id,
+                status: "FAILURE",
+                summary: `Failed login attempt for user ${user.name}.`,
+                throwOnError: false,
+            });
             res
             .status(404)
             .json({message: `Invalid phone number or password.`})
@@ -136,6 +156,18 @@ export const login = async(req: Request, res: Response, next: NextFunction) => {
         if (!sessionSaved) {
             console.warn("Redis unavailable: login session was not persisted");
         }
+
+        await logAudit({
+            req,
+            userId: user.id,
+            userName: user.name,
+            userRole: user.role.name,
+            action: "LOGIN",
+            resource: "User",
+            resourceId: user.id,
+            summary: `User ${user.name} signed in.`,
+            throwOnError: false,
+        });
         const accessToken = jwt.sign(
             { userId: String(user?.id), role: String(user?.role.name), sessionId: sessionId }, 
             envConfig.jwtSecret,
@@ -192,7 +224,12 @@ export const refresh = async(req: Request, res: Response, next: NextFunction) =>
             include:{role: true}
         });
 
-        if (!foundUser) return res.status(401).json({ message: "Unauthorized: User not found" });
+        if (!foundUser || foundUser.deletedAt) {
+            return res.status(401).json({ message: "Unauthorized: User not found" });
+        }
+        if (foundUser.status !== "ACTIVE") {
+            return res.status(403).json({ message: "Account is not active" });
+        }
 
         const accessToken = jwt.sign(
             { 
@@ -231,6 +268,24 @@ export const logout = async(req: Request, res: Response)=>{
         if (!deleted) {
             console.warn("Redis unavailable: logout session could not be invalidated");
         }
+
+        const loggedOutUser = await prisma.user.findUnique({
+            where: { id: decoded.userId },
+            include: { role: true },
+        });
+        if (loggedOutUser) {
+            await logAudit({
+                req,
+                userId: loggedOutUser.id,
+                userName: loggedOutUser.name,
+                userRole: loggedOutUser.role.name,
+                action: "LOGOUT",
+                resource: "User",
+                resourceId: loggedOutUser.id,
+                summary: `User ${loggedOutUser.name} signed out.`,
+                throwOnError: false,
+            });
+        }
     } catch {
         // token expired/invalid — nothing to invalidate
     }
@@ -243,8 +298,12 @@ export const logout = async(req: Request, res: Response)=>{
 export const changePass = async(req: Request, res: Response,next: NextFunction) => {
     try {
         const {oldpassword, newPassword} = req.body
-        if (!newPassword || newPassword.length < 6) {
-            return res.status(400).json({ message: "New password must be at least 6 characters." });
+        if (!newPassword) {
+            return res.status(400).json({ message: "New password is required." });
+        }
+        const strengthError = validatePasswordStrength(newPassword);
+        if (strengthError) {
+            return res.status(400).json({ message: strengthError });
         }
         const userId = req.user?.id
         if(!userId) return res.status(404).json({message: "user id not found. Unauthorized."})
@@ -270,6 +329,18 @@ export const changePass = async(req: Request, res: Response,next: NextFunction) 
                 console.warn("Redis unavailable: password-change session could not be invalidated");
             }
 
+            await logAudit({
+                req,
+                userId: userId!,
+                userName: foundUser.name,
+                userRole: req.user?.role ?? "UNKNOWN",
+                action: "PASSWORD_CHANGE",
+                resource: "User",
+                resourceId: userId!,
+                summary: `User ${foundUser.name} changed their password.`,
+                throwOnError: false,
+            });
+
             res.status(200).json({message: "password updated"})
         }else{
             res.status(400).json({message:"old password is wrong. Enter current password correctly."})
@@ -281,5 +352,19 @@ export const changePass = async(req: Request, res: Response,next: NextFunction) 
 }
 
 export const forgotPassword = async(req: Request, res: Response, next: NextFunction) => {
-    res.status(501).json({ message: "Forgot password not yet implemented" })
+    try {
+        const result = await requestPasswordReset(req.body, req)
+        return res.status(200).json(result)
+    } catch (error) {
+        next(error)
+    }
+}
+
+export const resetPasswordController = async(req: Request, res: Response, next: NextFunction) => {
+    try {
+        const result = await resetPassword(req.body, req)
+        return res.status(200).json(result)
+    } catch (error) {
+        next(error)
+    }
 }

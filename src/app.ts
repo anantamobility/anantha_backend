@@ -6,6 +6,8 @@ import cookieParser from 'cookie-parser'
 import './config/redis.js';
 
 import authRouter from './routes/auth.js'
+import usersRouter from './routes/users.js'
+import auditLogsRouter from './routes/auditLogs.js'
 import pbacRouter from './routes/pbac.js'
 import ridersRouter from './routes/riders.js'
 import staffRouter from './routes/staff.js'
@@ -39,6 +41,8 @@ const options = {
 app.use(cors(options))
 
 app.use("/auth", authRouter)
+app.use("/users", usersRouter)
+app.use("/audit-logs", auditLogsRouter)
 app.use("/pbac", pbacRouter)
 app.use("/riders", ridersRouter)
 app.use("/staff", staffRouter)

@@ -7,7 +7,7 @@ export type PermissionDef = {
 export const PERMISSION_REGISTRY = [
   {
     resource: 'user',
-    actions: ['create','read', 'update', 'delete']
+    actions: ['create', 'read', 'update', 'delete', 'role:assign', 'status:update', 'session:revoke']
   },
   {
     resource: 'role',
@@ -23,6 +23,7 @@ export const PERMISSION_REGISTRY = [
       'create',
       'read',
       'update',
+      'delete',
       'status:update',
       'history:read',
       'document:upload',
@@ -47,11 +48,11 @@ export const PERMISSION_REGISTRY = [
   },
   {
     resource: 'client',
-    actions: ['create', 'read', 'update', 'status:update']
+    actions: ['create', 'read', 'update', 'delete', 'status:update']
   },
   {
     resource: 'ratecard',
-    actions: ['create', 'read', 'update', 'status:update']
+    actions: ['create', 'read', 'update', 'delete', 'status:update']
   },
   {
     resource: 'ratecardAssignment',
@@ -140,6 +141,8 @@ export const ACTION_DEFINITIONS = {
   update: "Modify an existing record of the resource.",
   delete: "Remove an existing record of the resource.",
   assign_perm: "Attach or detach permissions on a role (the 'set' operation).",
+  "role:assign": "Assign or change the role of a user account.",
+  "session:revoke": "Revoke all active sessions and refresh tokens for a user.",
   "status:update": "Change the operational status of a resource.",
   "history:read": "Read the status change history of a resource.",
   "document:upload": "Upload a document and its metadata.",

@@ -1,6 +1,11 @@
 import { v4 as uuidv4 } from "uuid";
 import prisma from "../database/prismaClient.js";
-import { Prisma } from "../generated/prisma/client.js";
+import {
+  InvoiceStatus,
+  Prisma,
+  RateCardAssignmentStatus,
+  RentalStatus,
+} from "../generated/prisma/client.js";
 import {
   AppError,
   ErrorCode,
@@ -316,5 +321,92 @@ export async function changeClientStatus(
     });
   } catch (err) {
     rethrowPrismaError(err, "Client status could not be changed");
+  }
+}
+
+export async function deleteClient(id: string, actor: AuditActor) {
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const existing = await tx.client.findUnique({ where: { id } });
+      if (!existing || existing.deletedAt) {
+        throw new AppError("Client not found", 404, ErrorCode.NOT_FOUND);
+      }
+
+      const activeRentals = await tx.rental.count({
+        where: {
+          clientId: id,
+          status: {
+            in: [
+              RentalStatus.DRAFT,
+              RentalStatus.PENDING_APPROVAL,
+              RentalStatus.ACTIVE,
+              RentalStatus.ON_HOLD,
+            ],
+          },
+        },
+      });
+      if (activeRentals > 0) {
+        throw new AppError(
+          "Client cannot be deleted while it has open rentals",
+          409,
+          ErrorCode.CONFLICT
+        );
+      }
+
+      const activeAssignments = await tx.rateCardAssignment.count({
+        where: { clientId: id, status: RateCardAssignmentStatus.ACTIVE },
+      });
+      if (activeAssignments > 0) {
+        throw new AppError(
+          "Client cannot be deleted while it has active ratecard assignments",
+          409,
+          ErrorCode.CONFLICT
+        );
+      }
+
+      const openInvoices = await tx.invoice.count({
+        where: {
+          clientId: id,
+          status: {
+            in: [
+              InvoiceStatus.DRAFT,
+              InvoiceStatus.ISSUED,
+              InvoiceStatus.PARTIALLY_PAID,
+              InvoiceStatus.OVERDUE,
+            ],
+          },
+        },
+      });
+      if (openInvoices > 0) {
+        throw new AppError(
+          "Client cannot be deleted while it has open invoices",
+          409,
+          ErrorCode.CONFLICT
+        );
+      }
+
+      const deletedAt = new Date();
+      const client = await tx.client.update({
+        where: { id },
+        data: { deletedAt, isActive: false },
+        select: clientDetailSelect,
+      });
+
+      await logAudit({
+        ...actor,
+        action: "DELETE",
+        resource: "Client",
+        resourceId: client.id,
+        oldData: clientSnapshot(existing),
+        newData: { deletedAt, isActive: false },
+        summary: `${actor.userName} soft-deleted client ${existing.name}.`,
+        db: tx,
+        throwOnError: true,
+      });
+
+      return client;
+    });
+  } catch (err) {
+    rethrowPrismaError(err, "Client could not be deleted");
   }
 }

@@ -4,8 +4,11 @@ import { Prisma } from "../generated/prisma/client.js";
 import {
   B2BRiderMgmt,
   B2CMode,
+  PayoutStatus,
+  RentalStatus,
   RentalType,
   RiderStatus,
+  SettlementStatus,
   VerificationStatus,
   VerificationType,
 } from "../generated/prisma/client.js";
@@ -15,6 +18,8 @@ import {
   rethrowPrismaError,
 } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
+import { assertHubAccess, resolveHubFilter } from "../utils/scope.js";
+import type { UserContext } from "../types/user.js";
 import type {
   ChangeRiderStatusInput,
   CreateRiderInput,
@@ -249,6 +254,7 @@ export async function createRider(
       if (input.userId) await assertUserExists(tx, input.userId);
       if (input.hubId) await assertHubExists(tx, input.hubId);
       if (input.clientId) await assertClientExists(tx, input.clientId);
+      assertHubAccess(actor.req.user, input.hubId);
 
       validateClassification(
         input.rentalType,
@@ -342,7 +348,7 @@ export async function createRider(
   }
 }
 
-export async function listRiders(query: ListRidersQuery) {
+export async function listRiders(query: ListRidersQuery, user?: UserContext) {
   const {
     page,
     limit,
@@ -361,7 +367,8 @@ export async function listRiders(query: ListRidersQuery) {
   if (b2cMode) where.b2cMode = b2cMode;
   if (b2bRiderMgmt) where.b2bRiderMgmt = b2bRiderMgmt;
   if (clientId) where.clientId = clientId;
-  if (hubId) where.hubId = hubId;
+  const scopedHubId = resolveHubFilter(user, hubId);
+  if (scopedHubId) where.hubId = scopedHubId;
 
   if (search) {
     where.OR = [
@@ -398,7 +405,7 @@ export async function listRiders(query: ListRidersQuery) {
   };
 }
 
-export async function getRiderById(id: string) {
+export async function getRiderById(id: string, user?: UserContext) {
   const rider = await prisma.rider.findUnique({
     where: { id },
     select: { ...riderDetailSelect, deletedAt: true },
@@ -408,6 +415,7 @@ export async function getRiderById(id: string) {
     throw new AppError("Rider not found", 404, ErrorCode.NOT_FOUND);
   }
 
+  assertHubAccess(user, rider.hubId);
   const { deletedAt: _deletedAt, ...safeRider } = rider;
   return safeRider;
 }
@@ -422,6 +430,10 @@ export async function updateRider(
       const existing = await tx.rider.findUnique({ where: { id } });
       if (!existing || existing.deletedAt) {
         throw new AppError("Rider not found", 404, ErrorCode.NOT_FOUND);
+      }
+      assertHubAccess(actor.req.user, existing.hubId);
+      if (input.hubId !== undefined && input.hubId !== null) {
+        assertHubAccess(actor.req.user, input.hubId);
       }
 
       if (
@@ -540,6 +552,7 @@ export async function changeRiderStatus(
       if (!rider || rider.deletedAt) {
         throw new AppError("Rider not found", 404, ErrorCode.NOT_FOUND);
       }
+      assertHubAccess(actor.req.user, rider.hubId);
 
       const previousStatus = rider.status;
       const nextStatus = input.status as RiderStatus;
@@ -627,18 +640,20 @@ export async function changeRiderStatus(
 
 export async function getRiderStatusHistory(
   id: string,
-  query: ListRiderStatusHistoryQuery
+  query: ListRiderStatusHistoryQuery,
+  user?: UserContext
 ) {
   const { page, limit } = query;
 
   const rider = await prisma.rider.findUnique({
     where: { id },
-    select: { id: true, deletedAt: true },
+    select: { id: true, deletedAt: true, hubId: true },
   });
 
   if (!rider || rider.deletedAt) {
     throw new AppError("Rider not found", 404, ErrorCode.NOT_FOUND);
   }
+  assertHubAccess(user, rider.hubId);
 
   const where: Prisma.RiderStatusHistoryWhereInput = { riderId: id };
   if (query.status) where.status = query.status;
@@ -677,4 +692,101 @@ export async function getRiderStatusHistory(
       totalPages: Math.ceil(total / limit),
     },
   };
+}
+
+export async function deleteRider(id: string, actor: AuditActor) {
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const existing = await tx.rider.findUnique({ where: { id } });
+      if (!existing || existing.deletedAt) {
+        throw new AppError("Rider not found", 404, ErrorCode.NOT_FOUND);
+      }
+      assertHubAccess(actor.req.user, existing.hubId);
+
+      const activeRentals = await tx.rental.count({
+        where: {
+          riderId: id,
+          status: {
+            in: [
+              RentalStatus.DRAFT,
+              RentalStatus.PENDING_APPROVAL,
+              RentalStatus.ACTIVE,
+              RentalStatus.ON_HOLD,
+            ],
+          },
+        },
+      });
+      if (activeRentals > 0) {
+        throw new AppError(
+          "Rider cannot be deleted while they have open rentals",
+          409,
+          ErrorCode.CONFLICT
+        );
+      }
+
+      const openSettlements = await tx.riderSettlement.count({
+        where: {
+          riderId: id,
+          status: {
+            in: [
+              SettlementStatus.DRAFT,
+              SettlementStatus.PENDING_APPROVAL,
+              SettlementStatus.PAYABLE,
+              SettlementStatus.APPROVED,
+            ],
+          },
+        },
+      });
+      if (openSettlements > 0) {
+        throw new AppError(
+          "Rider cannot be deleted while they have open settlements",
+          409,
+          ErrorCode.CONFLICT
+        );
+      }
+
+      const openPayouts = await tx.payout.count({
+        where: {
+          riderId: id,
+          status: {
+            in: [
+              PayoutStatus.PENDING,
+              PayoutStatus.APPROVED,
+              PayoutStatus.PROCESSING,
+            ],
+          },
+        },
+      });
+      if (openPayouts > 0) {
+        throw new AppError(
+          "Rider cannot be deleted while they have open payouts",
+          409,
+          ErrorCode.CONFLICT
+        );
+      }
+
+      const deletedAt = new Date();
+      const rider = await tx.rider.update({
+        where: { id },
+        data: { deletedAt },
+        select: riderDetailSelect,
+      });
+
+      await logAudit({
+        ...actor,
+        action: "DELETE",
+        resource: "Rider",
+        resourceId: rider.id,
+        oldData: riderSnapshot(existing),
+        newData: { deletedAt },
+        summary: `${actor.userName} soft-deleted rider ${existing.fullName}.`,
+        db: tx,
+        throwOnError: true,
+      });
+
+      return rider;
+    });
+  } catch (err) {
+    rethrowPrismaError(err, "Rider could not be deleted");
+  }
 }

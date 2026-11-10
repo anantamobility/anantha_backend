@@ -6,6 +6,8 @@ import {
   rethrowPrismaError,
 } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
+import { assertHubAccess, isAdmin, actorHubId } from "../utils/scope.js";
+import type { UserContext } from "../types/user.js";
 import type {
   CreateHubInput,
   ListHubsQuery,
@@ -83,10 +85,12 @@ export async function createHub(input: CreateHubInput, actor: AuditActor) {
   }
 }
 
-export async function listHubs(query: ListHubsQuery) {
+export async function listHubs(query: ListHubsQuery, user?: UserContext) {
   const { page, limit, search, isActive } = query;
 
   const where: Prisma.HubWhereInput = {};
+  const scopedHubId = user && !isAdmin(user) ? actorHubId(user) : null;
+  if (scopedHubId) where.id = scopedHubId;
   if (typeof isActive === "boolean") where.isActive = isActive;
   if (search) {
     where.OR = [
@@ -117,7 +121,7 @@ export async function listHubs(query: ListHubsQuery) {
   };
 }
 
-export async function getHubById(id: string) {
+export async function getHubById(id: string, user?: UserContext) {
   const hub = await prisma.hub.findUnique({
     where: { id },
     include: {
@@ -131,6 +135,7 @@ export async function getHubById(id: string) {
     throw new AppError("Hub not found", 404, ErrorCode.NOT_FOUND);
   }
 
+  assertHubAccess(user, hub.id);
   return hub;
 }
 
@@ -145,6 +150,7 @@ export async function updateHub(
       if (!existing) {
         throw new AppError("Hub not found", 404, ErrorCode.NOT_FOUND);
       }
+      assertHubAccess(actor.req.user, existing.id);
 
       const data: Prisma.HubUpdateInput = {};
       if (input.name !== undefined) data.name = input.name;
@@ -190,6 +196,7 @@ export async function deleteHub(id: string, actor: AuditActor) {
       if (!hub) {
         throw new AppError("Hub not found", 404, ErrorCode.NOT_FOUND);
       }
+      assertHubAccess(actor.req.user, hub.id);
 
       const dependencyCount = Object.values(hub._count).reduce(
         (total, count) => total + count,

@@ -21,6 +21,7 @@ import {
 import {
   changeRiderStatus,
   createRider,
+  deleteRiderById,
   getRiderById,
   getRiderStatusHistory,
   getRiders,
@@ -177,6 +178,13 @@ r.put(
   authorize("rider", "update"),
   validate(updateRiderSchema),
   updateRider
+);
+r.delete(
+  "/:id",
+  verifyToken,
+  validate(idParamSchema, "params"),
+  authorize("rider", "delete"),
+  deleteRiderById
 );
 
 export default r;

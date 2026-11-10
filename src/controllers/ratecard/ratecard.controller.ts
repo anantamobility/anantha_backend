@@ -88,3 +88,19 @@ export const changeRateCardStatus = async (
     next(err);
   }
 };
+
+export const deleteRateCard = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    await rateCardService.deleteRateCard(
+      req.params.id as string,
+      getAuditActor(req)
+    );
+    return success(res, { message: "Ratecard deleted successfully" });
+  } catch (err) {
+    next(err);
+  }
+};
