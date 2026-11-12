@@ -4,6 +4,7 @@ import globalErrorHandler from './middleware/errorHandler.js'
 import cors from 'cors'
 import cookieParser from 'cookie-parser'
 import './config/redis.js';
+import envConfig from "./config/env.js"
 
 import authRouter from './routes/auth.js'
 import usersRouter from './routes/users.js'
@@ -33,7 +34,7 @@ app.use(cookieParser())
 app.use(morgan('dev'))
 
 const options = {
-    origin: ['http://localhost:8080', 'http://localhost:5173'],
+    origin: ['http://localhost:8080', 'http://localhost:5173', envConfig.frontendUrl],
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true

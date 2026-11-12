@@ -18,7 +18,7 @@ type PasswordResetMessage = {
 };
 
 function resetBody(input: PasswordResetMessage) {
-  const url = new URL("/reset-password", envConfig.appBaseUrl);
+  const url = new URL("/reset-password", envConfig.frontendUrl);
   url.searchParams.set("token", input.token);
   return [
     `Hello ${input.name},`,

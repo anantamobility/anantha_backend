@@ -28,7 +28,7 @@ interface envConfig {
   smsApiUrl: string;
   smsApiKey: string;
   smsSenderId: string;
-  appBaseUrl: string;
+  frontendUrl: string;
   logLevel: string;
 }
 
@@ -68,7 +68,7 @@ const envConfig: envConfig = {
     smsApiUrl: String(process.env.SMS_API_URL || ""),
     smsApiKey: String(process.env.SMS_API_KEY || ""),
     smsSenderId: String(process.env.SMS_SENDER_ID || ""),
-    appBaseUrl: String(process.env.APP_BASE_URL || "http://localhost:5173"),
+    frontendUrl: String(process.env.FRONTEND_URL || "http://localhost:5173"),
     logLevel: String(process.env.LOG_LEVEL || "info").toLowerCase(),
 }
 
