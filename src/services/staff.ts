@@ -68,7 +68,7 @@ export async function createStaff(input: CreateStaffInput, actor: AuditActor) {
     return await prisma.$transaction(async (tx) => {
       if (input.userId) await assertUserExists(tx, input.userId);
       if (input.hubId) await assertHubExists(tx, input.hubId);
-      assertHubAccess(actor.req.user, input.hubId);
+      assertHubAccess(actor.user, input.hubId);
 
       const data: Prisma.StaffUncheckedCreateInput = {
         fullName: input.fullName,
@@ -168,9 +168,9 @@ export async function updateStaff(
       if (!existing || existing.deletedAt) {
         throw new AppError("Staff not found", 404, ErrorCode.NOT_FOUND);
       }
-      assertHubAccess(actor.req.user, existing.hubId);
+      assertHubAccess(actor.user, existing.hubId);
       if (input.hubId !== undefined && input.hubId !== null) {
-        assertHubAccess(actor.req.user, input.hubId);
+        assertHubAccess(actor.user, input.hubId);
       }
 
       if (
@@ -237,7 +237,7 @@ export async function deleteStaff(id: string, actor: AuditActor) {
       if (!existing || existing.deletedAt) {
         throw new AppError("Staff not found", 404, ErrorCode.NOT_FOUND);
       }
-      assertHubAccess(actor.req.user, existing.hubId);
+      assertHubAccess(actor.user, existing.hubId);
 
       // Soft delete preserves payouts, documents, and other historical records.
       // The linked User account is intentionally left untouched.

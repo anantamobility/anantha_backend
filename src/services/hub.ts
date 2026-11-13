@@ -150,7 +150,7 @@ export async function updateHub(
       if (!existing) {
         throw new AppError("Hub not found", 404, ErrorCode.NOT_FOUND);
       }
-      assertHubAccess(actor.req.user, existing.id);
+      assertHubAccess(actor.user, existing.id);
 
       const data: Prisma.HubUpdateInput = {};
       if (input.name !== undefined) data.name = input.name;
@@ -196,7 +196,7 @@ export async function deleteHub(id: string, actor: AuditActor) {
       if (!hub) {
         throw new AppError("Hub not found", 404, ErrorCode.NOT_FOUND);
       }
-      assertHubAccess(actor.req.user, hub.id);
+      assertHubAccess(actor.user, hub.id);
 
       const dependencyCount = Object.values(hub._count).reduce(
         (total, count) => total + count,

@@ -505,7 +505,7 @@ export async function createRental(
       }
 
       if (input.hubId) await assertHub(tx, input.hubId);
-      assertHubAccess(actor.req.user, input.hubId);
+      assertHubAccess(actor.user, input.hubId);
 
       if (input.vehicleId) {
         const vehicle = await tx.vehicle.findUnique({
@@ -831,7 +831,7 @@ export async function closeRental(
       if (!rental) {
         throw new AppError("Rental not found", 404, ErrorCode.NOT_FOUND);
       }
-      assertHubAccess(actor.req.user, rental.hubId);
+      assertHubAccess(actor.user, rental.hubId);
 
       if (rental.status !== "ACTIVE" && rental.status !== "ON_HOLD") {
         throw new AppError(

@@ -144,7 +144,7 @@ export async function createVehicle(
   try {
     return await prisma.$transaction(async (tx) => {
       if (input.hubId) await assertHubExists(tx, input.hubId);
-      assertHubAccess(actor.req.user, input.hubId);
+      assertHubAccess(actor.user, input.hubId);
 
       const data: Prisma.VehicleUncheckedCreateInput = {
         registrationNumber: input.registrationNumber,
@@ -270,9 +270,9 @@ export async function updateVehicle(
       if (!existing || existing.deletedAt) {
         throw new AppError("Vehicle not found", 404, ErrorCode.NOT_FOUND);
       }
-      assertHubAccess(actor.req.user, existing.hubId);
+      assertHubAccess(actor.user, existing.hubId);
       if (input.hubId !== undefined && input.hubId !== null) {
-        assertHubAccess(actor.req.user, input.hubId);
+        assertHubAccess(actor.user, input.hubId);
       }
 
       if (
@@ -397,7 +397,7 @@ export async function changeVehicleStatus(
       if (!vehicle || vehicle.deletedAt) {
         throw new AppError("Vehicle not found", 404, ErrorCode.NOT_FOUND);
       }
-      assertHubAccess(actor.req.user, vehicle.hubId);
+      assertHubAccess(actor.user, vehicle.hubId);
 
       const previousStatus = vehicle.status;
       const nextStatus = input.status;

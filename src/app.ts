@@ -4,6 +4,7 @@ import globalErrorHandler from './middleware/errorHandler.js'
 import cors from 'cors'
 import cookieParser from 'cookie-parser'
 import './config/redis.js';
+import './types/express.js';
 import envConfig from "./config/env.js"
 
 import authRouter from './routes/auth.js'

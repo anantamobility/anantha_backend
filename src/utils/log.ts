@@ -1,10 +1,12 @@
 import prisma from "../database/prismaClient.js";
 import type { Request } from "express";
 import type { Prisma } from "../generated/prisma/client.js";
+import type { UserContext } from "../types/express.js";
 import { AppError, ErrorCode } from "./errors.js";
 
 export interface AuditActor {
   req: Request;
+  user: UserContext;
   userId: string;
   userName: string;
   userRole: string;
@@ -21,6 +23,7 @@ export function getAuditActor(req: Request): AuditActor {
   }
   return {
     req,
+    user,
     userId: user.id,
     userName: user.name,
     userRole: user.role,

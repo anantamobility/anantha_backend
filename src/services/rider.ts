@@ -254,7 +254,7 @@ export async function createRider(
       if (input.userId) await assertUserExists(tx, input.userId);
       if (input.hubId) await assertHubExists(tx, input.hubId);
       if (input.clientId) await assertClientExists(tx, input.clientId);
-      assertHubAccess(actor.req.user, input.hubId);
+      assertHubAccess(actor.user, input.hubId);
 
       validateClassification(
         input.rentalType,
@@ -431,9 +431,9 @@ export async function updateRider(
       if (!existing || existing.deletedAt) {
         throw new AppError("Rider not found", 404, ErrorCode.NOT_FOUND);
       }
-      assertHubAccess(actor.req.user, existing.hubId);
+      assertHubAccess(actor.user, existing.hubId);
       if (input.hubId !== undefined && input.hubId !== null) {
-        assertHubAccess(actor.req.user, input.hubId);
+        assertHubAccess(actor.user, input.hubId);
       }
 
       if (
@@ -552,7 +552,7 @@ export async function changeRiderStatus(
       if (!rider || rider.deletedAt) {
         throw new AppError("Rider not found", 404, ErrorCode.NOT_FOUND);
       }
-      assertHubAccess(actor.req.user, rider.hubId);
+      assertHubAccess(actor.user, rider.hubId);
 
       const previousStatus = rider.status;
       const nextStatus = input.status as RiderStatus;
@@ -701,7 +701,7 @@ export async function deleteRider(id: string, actor: AuditActor) {
       if (!existing || existing.deletedAt) {
         throw new AppError("Rider not found", 404, ErrorCode.NOT_FOUND);
       }
-      assertHubAccess(actor.req.user, existing.hubId);
+      assertHubAccess(actor.user, existing.hubId);
 
       const activeRentals = await tx.rental.count({
         where: {

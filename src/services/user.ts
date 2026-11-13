@@ -276,7 +276,7 @@ export async function updateUser(
   try {
     return await prisma.$transaction(async (tx) => {
       const existing = await loadTarget(tx, id);
-      assertUserScope(actor.req.user, existing);
+      assertUserScope(actor.user, existing);
 
       const data: Prisma.UserUncheckedUpdateInput = {};
       if (input.name !== undefined) data.name = input.name;
@@ -318,7 +318,7 @@ export async function assignUserRole(
 ) {
   return prisma.$transaction(async (tx) => {
     const existing = await loadTarget(tx, id);
-    assertUserScope(actor.req.user, existing);
+    assertUserScope(actor.user, existing);
     const role = await resolveRole(tx, { roleId: input.roleId });
 
     if (existing.id === actor.userId && existing.role.name === "ADMIN" && role.name !== "ADMIN") {
@@ -364,7 +364,7 @@ export async function changeUserStatus(
 ) {
   return prisma.$transaction(async (tx) => {
     const existing = await loadTarget(tx, id);
-    assertUserScope(actor.req.user, existing);
+    assertUserScope(actor.user, existing);
 
     if (existing.id === actor.userId && input.status !== "ACTIVE") {
       throw new AppError(
@@ -410,7 +410,7 @@ export async function changeUserStatus(
 export async function revokeUserSessions(id: string, actor: AuditActor) {
   return prisma.$transaction(async (tx) => {
     const existing = await loadTarget(tx, id);
-    assertUserScope(actor.req.user, existing);
+    assertUserScope(actor.user, existing);
     const revoked = await redisDel(`session:${id}`);
     if (!revoked) {
       throw new AppError(
@@ -438,7 +438,7 @@ export async function revokeUserSessions(id: string, actor: AuditActor) {
 export async function deleteUser(id: string, actor: AuditActor) {
   return prisma.$transaction(async (tx) => {
     const existing = await loadTarget(tx, id);
-    assertUserScope(actor.req.user, existing);
+    assertUserScope(actor.user, existing);
 
     if (existing.id === actor.userId) {
       throw new AppError(
