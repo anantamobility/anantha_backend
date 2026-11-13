@@ -5,7 +5,6 @@ import jwt from 'jsonwebtoken'
 import envConfig from "../../config/env.js"
 import { v4 as uuidv4 } from "uuid";
 import { redisGet, redisSet, redisDel } from "../../config/redis.js";
-import { requestPasswordReset, resetPassword } from "../../services/password-reset.js";
 import { validatePasswordStrength } from "../../validation/auth.js";
 import { logAudit } from "../../utils/log.js";
 
@@ -346,24 +345,6 @@ export const changePass = async(req: Request, res: Response,next: NextFunction) 
             res.status(400).json({message:"old password is wrong. Enter current password correctly."})
         }
 
-    } catch (error) {
-        next(error)
-    }
-}
-
-export const forgotPassword = async(req: Request, res: Response, next: NextFunction) => {
-    try {
-        const result = await requestPasswordReset(req.body, req)
-        return res.status(200).json(result)
-    } catch (error) {
-        next(error)
-    }
-}
-
-export const resetPasswordController = async(req: Request, res: Response, next: NextFunction) => {
-    try {
-        const result = await resetPassword(req.body, req)
-        return res.status(200).json(result)
     } catch (error) {
         next(error)
     }
