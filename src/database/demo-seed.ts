@@ -231,7 +231,6 @@ async function main() {
       },
     });
   }
-
   console.log("Demo seed complete.");
   console.log(`Demo login: ${USERS.admin.phone} / ${DEMO_PASSWORD}`);
   console.log(`Demo data: 2 hubs, 2 clients, 2 ratecards, 2 riders, 3 vehicles, 3 staff users.`);
