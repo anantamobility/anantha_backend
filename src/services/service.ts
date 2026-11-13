@@ -652,9 +652,9 @@ export async function createService(
       if (input.assignedToId) {
         const assignee = await tx.user.findUnique({
           where: { id: input.assignedToId },
-          select: { id: true, isActive: true },
+          select: { id: true, status: true },
         });
-        if (!assignee || !assignee.isActive) {
+        if (!assignee || assignee.status !== "ACTIVE") {
           throw new AppError(
             "Assigned user not found or inactive",
             404,
@@ -869,9 +869,9 @@ export async function updateService(
     if (input.assignedToId) {
       const assignee = await tx.user.findUnique({
         where: { id: input.assignedToId },
-        select: { id: true, isActive: true },
+        select: { id: true, status: true },
       });
-      if (!assignee || !assignee.isActive) {
+      if (!assignee || assignee.status !== "ACTIVE") {
         throw new AppError(
           "Assigned user not found or inactive",
           404,
