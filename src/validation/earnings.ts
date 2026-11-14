@@ -65,7 +65,7 @@ export const listEarningsQuerySchema = paginationQuerySchema
   .extend({
     riderId: z.string().uuid("riderId must be a valid UUID").optional(),
     rentalId: z.string().uuid("rentalId must be a valid UUID").optional(),
-    settlementId: z.string().uuid("settlementId must be a valid UUID").optional(),
+    payStatementId: z.string().uuid("payStatementId must be a valid UUID").optional(),
     entryType: ledgerEntryTypeSchema.optional(),
     direction: ledgerDirectionSchema.optional(),
     from: z.coerce.date().optional(),

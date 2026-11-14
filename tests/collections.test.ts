@@ -87,7 +87,7 @@ beforeEach(() => {
   prismaMock.rentalCollectionDue.findMany.mockResolvedValue([]);
   prismaMock.collection.findMany.mockResolvedValue([]);
   prismaMock.collection.count.mockResolvedValue(0);
-  prismaMock.rentalLedgerEntry.upsert.mockResolvedValue({});
+  prismaMock.ledgerEntry.upsert.mockResolvedValue({});
   prismaMock.auditLog.create.mockResolvedValue({});
 });
 
@@ -127,7 +127,7 @@ describe("POST /collections", () => {
         }),
       })
     );
-    expect(prismaMock.rentalLedgerEntry.upsert).toHaveBeenCalled();
+    expect(prismaMock.ledgerEntry.upsert).toHaveBeenCalled();
     expect(prismaMock.auditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         action: "COLLECTION_RECEIVED",

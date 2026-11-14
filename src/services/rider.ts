@@ -8,7 +8,7 @@ import {
   RentalStatus,
   RentalType,
   RiderStatus,
-  SettlementStatus,
+  PayStatementStatus,
 } from "../generated/prisma/client.js";
 import {
   AppError,
@@ -611,22 +611,22 @@ export async function deleteRider(id: string, actor: AuditActor) {
         );
       }
 
-      const openSettlements = await tx.riderSettlement.count({
+      const openPayStatements = await tx.riderPayStatement.count({
         where: {
           riderId: id,
           status: {
             in: [
-              SettlementStatus.DRAFT,
-              SettlementStatus.PENDING_APPROVAL,
-              SettlementStatus.PAYABLE,
-              SettlementStatus.APPROVED,
+              PayStatementStatus.DRAFT,
+              PayStatementStatus.PENDING_APPROVAL,
+              PayStatementStatus.PAYABLE,
+              PayStatementStatus.APPROVED,
             ],
           },
         },
       });
-      if (openSettlements > 0) {
+      if (openPayStatements > 0) {
         throw new AppError(
-          "Rider cannot be deleted while they have open settlements",
+          "Rider cannot be deleted while they have open pay statements",
           409,
           ErrorCode.CONFLICT
         );

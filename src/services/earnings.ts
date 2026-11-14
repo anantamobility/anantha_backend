@@ -28,7 +28,7 @@ export const earningSelect = {
   description: true,
   sourceType: true,
   sourceId: true,
-  settlementId: true,
+  payStatementId: true,
   rentalId: true,
   reversesEntryId: true,
   createdById: true,
@@ -41,8 +41,8 @@ export const earningDetailSelect = {
   ...earningSelect,
   rider: { select: { id: true, riderCode: true, fullName: true } },
   rental: { select: { id: true, rentalNumber: true, status: true } },
-  settlement: {
-    select: { id: true, settlementNumber: true, status: true },
+  payStatement: {
+    select: { id: true, statementNumber: true, status: true },
   },
 } as const;
 
@@ -104,8 +104,8 @@ async function assertRentalForRider(
 }
 
 export async function getAvailableEarningsBalance(tx: Tx, riderId: string) {
-  const entries = await tx.earningsLedger.findMany({
-    where: { riderId, settlementId: null },
+  const entries = await tx.ledgerEntry.findMany({
+    where: { riderId, payStatementId: null },
     select: { direction: true, amount: true },
   });
 
@@ -142,7 +142,7 @@ export async function recordEarning(
           ? `earning:${input.riderId}:${input.referenceNumber}`
           : `earning:${input.riderId}:${uuidv4()}`);
 
-      const existing = await tx.earningsLedger.findUnique({
+      const existing = await tx.ledgerEntry.findUnique({
         where: { idempotencyKey },
         select: earningDetailSelect,
       });
@@ -153,7 +153,7 @@ export async function recordEarning(
       const amount = new Prisma.Decimal(input.amount);
       const occurredAt = input.occurredAt ?? new Date();
 
-      const entry = await tx.earningsLedger.create({
+      const entry = await tx.ledgerEntry.create({
         data: {
           riderId: rider.id,
           entryType: "DELIVERY_EARNING",
@@ -177,7 +177,7 @@ export async function recordEarning(
       await logAudit({
         ...actor,
         action: "CREATE",
-        resource: "EarningsLedger",
+        resource: "LedgerEntry",
         resourceId: entry.id,
         newData: {
           riderId: rider.id,
@@ -223,7 +223,7 @@ export async function adjustEarning(
         input.idempotencyKey ??
         `earning-adjust:${input.riderId}:${uuidv4()}`;
 
-      const existing = await tx.earningsLedger.findUnique({
+      const existing = await tx.ledgerEntry.findUnique({
         where: { idempotencyKey },
         select: earningDetailSelect,
       });
@@ -242,7 +242,7 @@ export async function adjustEarning(
         }
       }
 
-      const entry = await tx.earningsLedger.create({
+      const entry = await tx.ledgerEntry.create({
         data: {
           riderId: rider.id,
           entryType: "ADJUSTMENT",
@@ -264,7 +264,7 @@ export async function adjustEarning(
       await logAudit({
         ...actor,
         action: "ADJUST",
-        resource: "EarningsLedger",
+        resource: "LedgerEntry",
         resourceId: entry.id,
         newData: {
           riderId: rider.id,
@@ -287,11 +287,11 @@ export async function adjustEarning(
 
 export async function listEarnings(query: ListEarningsQuery) {
   const { page, limit, search } = query;
-  const where: Prisma.EarningsLedgerWhereInput = {};
+  // Earnings are the rider side of the shared ledger; never mix rental entries in.
+  const where: Prisma.LedgerEntryWhereInput = { riderId: query.riderId ?? { not: null } };
 
-  if (query.riderId) where.riderId = query.riderId;
   if (query.rentalId) where.rentalId = query.rentalId;
-  if (query.settlementId) where.settlementId = query.settlementId;
+  if (query.payStatementId) where.payStatementId = query.payStatementId;
   if (query.entryType) where.entryType = query.entryType;
   if (query.direction) where.direction = query.direction;
   if (query.from || query.to) {
@@ -309,19 +309,19 @@ export async function listEarnings(query: ListEarningsQuery) {
     ];
   }
 
-  const orderBy: Prisma.EarningsLedgerOrderByWithRelationInput = {
+  const orderBy: Prisma.LedgerEntryOrderByWithRelationInput = {
     [query.sortBy]: query.sortOrder,
   };
 
   const [entries, total] = await Promise.all([
-    prisma.earningsLedger.findMany({
+    prisma.ledgerEntry.findMany({
       where,
       select: earningDetailSelect,
       orderBy,
       skip: (page - 1) * limit,
       take: limit,
     }),
-    prisma.earningsLedger.count({ where }),
+    prisma.ledgerEntry.count({ where }),
   ]);
 
   return {
@@ -351,12 +351,12 @@ export async function getEarningsSummary(query: EarningsSummaryQuery) {
     throw new AppError("Rider not found", 404, ErrorCode.NOT_FOUND);
   }
 
-  const entries = await prisma.earningsLedger.findMany({
+  const entries = await prisma.ledgerEntry.findMany({
     where: { riderId: rider.id },
     select: {
       direction: true,
       amount: true,
-      settlementId: true,
+      payStatementId: true,
       entryType: true,
     },
   });
@@ -367,7 +367,7 @@ export async function getEarningsSummary(query: EarningsSummaryQuery) {
       if (entry.direction === "CREDIT") acc.totalCredits = acc.totalCredits.add(amount);
       else acc.totalDebits = acc.totalDebits.add(amount);
 
-      if (entry.settlementId === null) {
+      if (entry.payStatementId === null) {
         if (entry.direction === "CREDIT") {
           acc.availableBalance = acc.availableBalance.add(amount);
         } else {

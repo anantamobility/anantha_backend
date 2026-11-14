@@ -186,7 +186,7 @@ describe("POST /clients/:id/dues/generate", () => {
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([due()]);
     prismaMock.rentalCollectionDue.upsert.mockResolvedValue({ id: DUE_ID });
-    prismaMock.rentalLedgerEntry.upsert.mockResolvedValue({});
+    prismaMock.ledgerEntry.upsert.mockResolvedValue({});
     prismaMock.rentalCollectionDue.updateMany.mockResolvedValue({ count: 0 });
 
     const res = await request(app)
@@ -227,7 +227,7 @@ describe("POST /clients/:id/payments", () => {
     prismaMock.collection.findMany.mockResolvedValue([
       { amount: overrides.amount ?? "100.00", rentalId: RENTAL_ID },
     ]);
-    prismaMock.rentalLedgerEntry.upsert.mockResolvedValue({});
+    prismaMock.ledgerEntry.upsert.mockResolvedValue({});
   }
 
   it("allocates a consolidated client payment to the rental's oldest dues", async () => {
@@ -260,7 +260,7 @@ describe("POST /clients/:id/payments", () => {
         }),
       })
     );
-    expect(prismaMock.rentalLedgerEntry.upsert).toHaveBeenCalledWith(
+    expect(prismaMock.ledgerEntry.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         create: expect.objectContaining({
           entryType: "COLLECTION_RECEIVED",

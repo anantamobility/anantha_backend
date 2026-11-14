@@ -187,7 +187,7 @@ enum PayoutStatus {
   CANCELLED
 }
 
-enum SettlementStatus {
+enum PayStatementStatus {
   DRAFT
   PENDING_APPROVAL
   PAYABLE
@@ -198,7 +198,7 @@ enum SettlementStatus {
   REVERSED
 }
 
-enum SettlementLineType {
+enum PayStatementLineType {
   DELIVERY_EARNING
   RENT_DEDUCTION
   DEPOSIT_DEDUCTION
@@ -285,12 +285,6 @@ enum InventoryMovementType {
   DAMAGED_STOCK
 }
 
-enum RentalPauseStatus {
-  ACTIVE
-  RESUMED
-  CANCELLED
-}
-
 enum DocumentType {
   ID_PROOF
   PAN
@@ -357,10 +351,10 @@ model User {
   collectionsReceived   Collection[] @relation("CollectionReceivedBy")
   collectionsReconciled Collection[] @relation("CollectionReconciledBy")
 
-  payoutsApproved     Payout[]             @relation("PayoutApprovedBy")
-  depositsAuthorized  DepositTransaction[] @relation("DepositAuthorizedBy")
-  ledgerCreated       LedgerEntry[]        @relation("LedgerCreatedBy")
-  settlementsApproved RiderSettlement[]    @relation("SettlementApprovedBy")
+  payoutsApproved    Payout[]             @relation("PayoutApprovedBy")
+  depositsAuthorized DepositTransaction[] @relation("DepositAuthorizedBy")
+  ledgerCreated      LedgerEntry[]        @relation("LedgerCreatedBy")
+  statementsApproved RiderPayStatement[]  @relation("PayStatementApprovedBy")
 
   assignmentsCreated             VehicleDeployment[]     @relation("AssignmentCreatedBy")
   // serviceStatusChanges           ServiceStatusHistory[]          @relation("ServiceStatusChangedBy")
@@ -370,8 +364,6 @@ model User {
   servicesAssigned               Service[]               @relation("ServiceAssignedTo")
   inventoryMoved                 InventoryMovement[]     @relation("InventoryMovedBy")
   // serviceResponsibilityApprovals ServiceResponsibilityApproval[] @relation("ServiceResponsibilityApprovedBy")
-  rentalsPaused                  RentalPause[]           @relation("RentalPausedBy")
-  rentalsResumed                 RentalPause[]           @relation("RentalResumedBy")
   replacementAssignmentsMade     ReplacementAssignment[] @relation("ReplacementAssignedBy")
   replacementAssignmentsReturned ReplacementAssignment[] @relation("ReplacementReturnedBy")
 
@@ -432,10 +424,10 @@ model Rider {
   hubId    String?
   hub      Hub?    @relation(fields: [hubId], references: [id], onDelete: SetNull, onUpdate: Cascade)
 
-  status      RiderStatus @default(ONBOARDING)
-  onboardedAt DateTime?   @db.Timestamptz(3)
-  statusChangedAt DateTime? @db.Timestamptz(3)
-  version     Int         @default(0) //? remove this maybe
+  status          RiderStatus @default(ONBOARDING)
+  onboardedAt     DateTime?   @db.Timestamptz(3)
+  statusChangedAt DateTime?   @db.Timestamptz(3)
+  version         Int         @default(0) //? remove this maybe
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -445,7 +437,7 @@ model Rider {
   assignments            VehicleDeployment[]
   deposits               Deposit[]
   collections            Collection[]
-  settlements            RiderSettlement[]
+  payStatements          RiderPayStatement[]
   ledgerEntries          LedgerEntry[]
   payouts                Payout[]
   // verifications          RiderVerification[]
@@ -654,6 +646,7 @@ model Rental {
   endDate                 DateTime?         @db.Timestamptz(3)
   expectedEndDate         DateTime?         @db.Timestamptz(3)
   status                  RentalStatus      @default(DRAFT)
+  statusChangedAt         DateTime?         @db.Timestamptz(3)
   agreementRef            String?
   billingFrequency        BillingFrequency?
   collectionPeriod        CollectionPeriod  @default(MONTHLY)
@@ -688,8 +681,7 @@ model Rental {
   invoices                            Invoice[]
   invoiceLines                        InvoiceLine[]
   services                            Service[]
-  settlementLines                     RiderSettlementLine[]
-  pauses                              RentalPause[]
+  payStatementLines                   RiderPayStatementLine[]
   replacementAssignmentsForOriginal   ReplacementAssignment[] @relation("ReplacementOriginalRental")
   replacementAssignmentsAsReplacement ReplacementAssignment[] @relation("ReplacementRental")
 
@@ -761,20 +753,21 @@ model Deposit {
   @@map("deposits")
 }
 
+//deposit ledger
 model DepositTransaction {
   id                    String                 @id @default(uuid(7))
   depositId             String
   deposit               Deposit                @relation(fields: [depositId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   type                  DepositTransactionType
-  direction             LedgerDirection
   amount                Decimal                @db.Decimal(14, 2)
-  currency              String                 @default("INR") @db.Char(3)
   reference             String?
   reason                String?
   authorizedById        String?
   authorizedBy          User?                  @relation("DepositAuthorizedBy", fields: [authorizedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
   collectionId          String?
   collection            Collection?            @relation(fields: [collectionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  payStatementId        String?
+  payStatement          RiderPayStatement?     @relation("DepositPayStatement", fields: [payStatementId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   reversesTransactionId String?                @unique
   reversesTransaction   DepositTransaction?    @relation("DepositReversal", fields: [reversesTransactionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   reversedBy            DepositTransaction?    @relation("DepositReversal")
@@ -911,18 +904,19 @@ model RentalCollectionDue {
   @@index([status, dueDate])
   @@map("rental_collection_dues")
 }
-/*
-ALTER TABLE ledger_entries ADD CONSTRAINT ledger_entries_party_chk
-  CHECK (rental_id IS NOT NULL OR rider_id IS NOT NULL);
- Append-only money journal. One row per movement, never edited:
- - rental side (client/rider owes AML): rentalId set
- - rider side (AML owes rider): riderId set, settlementId when closed out
- One economic event can still be two rows. 
- When rent is deducted from rider earnings, 
- settlement code writes RENT_DEDUCTION (rider, DEBIT) 
- and COLLECTION_RECEIVED (rental, CREDIT) for the same amount. 
- Correct, but nothing enforces the pair balances — only idempotencyKey stops duplicates.
-*/
+
+/**
+ * ALTER TABLE ledger_entries ADD CONSTRAINT ledger_entries_party_chk
+ * CHECK (rental_id IS NOT NULL OR rider_id IS NOT NULL);
+ * Append-only money journal. One row per movement, never edited:
+ * - rental side (client/rider owes AML): rentalId set
+ * - rider side (AML owes rider): riderId set, payStatementId when closed out
+ * One economic event can still be two rows.
+ * When rent is deducted from rider earnings,
+ * payStatement code writes RENT_DEDUCTION (rider, DEBIT)
+ * and COLLECTION_RECEIVED (rental, CREDIT) for the same amount.
+ * Correct, but nothing enforces the pair balances — only idempotencyKey stops duplicates.
+ */
 model LedgerEntry {
   id          String          @id @default(uuid(7))
   entryType   LedgerEntryType
@@ -932,12 +926,12 @@ model LedgerEntry {
   occurredAt  DateTime        @db.Timestamptz(3)
   description String
 
-  rentalId     String?
-  rental       Rental?          @relation(fields: [rentalId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  riderId      String?
-  rider        Rider?           @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  settlementId String?
-  settlement   RiderSettlement? @relation(fields: [settlementId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  rentalId       String?
+  rental         Rental?            @relation(fields: [rentalId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  riderId        String?
+  rider          Rider?             @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  payStatementId String?
+  payStatement   RiderPayStatement? @relation(fields: [payStatementId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   sourceType      String?
   sourceId        String?
@@ -951,11 +945,11 @@ model LedgerEntry {
   createdBy      User?    @relation("LedgerCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
   createdAt      DateTime @default(now()) @db.Timestamptz(3)
 
-  settlementLines RiderSettlementLine[]
+  payStatementLines RiderPayStatementLine[]
 
   @@index([rentalId, occurredAt])
   @@index([riderId, occurredAt])
-  @@index([settlementId])
+  @@index([payStatementId])
   @@index([sourceType, sourceId])
   @@map("ledger_entries")
 }
@@ -974,83 +968,83 @@ model PaymentAllocation {
   @@map("payment_allocations")
 }
 
-model RiderSettlement {
-  id                   String           @id @default(uuid(7))
-  settlementNumber     String           @unique
+model RiderPayStatement {
+  id                   String             @id @default(uuid(7))
+  statementNumber      String             @unique
   riderId              String
-  rider                Rider            @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  periodStart          DateTime         @db.Timestamptz(3)
-  periodEnd            DateTime         @db.Timestamptz(3)
-  status               SettlementStatus @default(DRAFT)
-  currency             String           @default("INR") @db.Char(3)
-  grossEarnings        Decimal          @default(0) @db.Decimal(14, 2)
-  totalDeductions      Decimal          @default(0) @db.Decimal(14, 2)
-  netPayable           Decimal          @default(0) @db.Decimal(14, 2)
-  shortfallAmount      Decimal          @default(0) @db.Decimal(14, 2)
-  requiresManualReview Boolean          @default(false)
-  calculationSnapshot  Json?            @db.JsonB
-  version              Int              @default(0)
+  rider                Rider              @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  periodStart          DateTime           @db.Timestamptz(3)
+  periodEnd            DateTime           @db.Timestamptz(3)
+  status               PayStatementStatus @default(DRAFT)
+  grossEarnings        Decimal            @default(0) @db.Decimal(14, 2)
+  totalDeductions      Decimal            @default(0) @db.Decimal(14, 2)
+  netPayable           Decimal            @default(0) @db.Decimal(14, 2)
+  shortfallAmount      Decimal            @default(0) @db.Decimal(14, 2) //increase if deductions exceed earnings
+  requiresManualReview Boolean            @default(false)
+  calculationSnapshot  Json?              @db.JsonB
+  version              Int                @default(0)
   approvedById         String?
-  approvedBy           User?            @relation("SettlementApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  approvedAt           DateTime?        @db.Timestamptz(3)
-  paidAt               DateTime?        @db.Timestamptz(3)
+  approvedBy           User?              @relation("PayStatementApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  approvedAt           DateTime?          @db.Timestamptz(3)
+  paidAt               DateTime?          @db.Timestamptz(3)
   failureReason        String?
-  createdAt            DateTime         @default(now())
-  updatedAt            DateTime         @updatedAt
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
 
-  lines         RiderSettlementLine[]
-  payouts       Payout[]
-  ledgerEntries LedgerEntry[]
+  lines               RiderPayStatementLine[]
+  payouts             Payout[]
+  ledgerEntries       LedgerEntry[]
+  depositTransactions DepositTransaction[]    @relation("DepositPayStatement")
 
   @@index([riderId, periodStart, periodEnd])
   @@index([status])
-  @@map("rider_settlements")
+  @@map("rider_pay_statements")
 }
 
-model RiderSettlementLine {
-  id            String             @id @default(uuid(7))
-  settlementId  String
-  settlement    RiderSettlement    @relation(fields: [settlementId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  lineType      SettlementLineType
-  direction     LedgerDirection
-  amount        Decimal            @db.Decimal(14, 2)
-  description   String
-  rentalId      String?
-  rental        Rental?            @relation(fields: [rentalId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  ledgerEntryId String?            @unique
-  ledgerEntry   LedgerEntry?       @relation(fields: [ledgerEntryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  referenceType String?
-  referenceId   String?
-  snapshot      Json?              @db.JsonB
-  createdAt     DateTime           @default(now())
+model RiderPayStatementLine {
+  id             String               @id @default(uuid(7))
+  payStatementId String
+  payStatement   RiderPayStatement    @relation(fields: [payStatementId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  lineType       PayStatementLineType
+  direction      LedgerDirection
+  amount         Decimal              @db.Decimal(14, 2)
+  description    String
+  rentalId       String?
+  rental         Rental?              @relation(fields: [rentalId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  ledgerEntryId  String?              @unique
+  ledgerEntry    LedgerEntry?         @relation(fields: [ledgerEntryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  referenceType  String?
+  referenceId    String?
+  snapshot       Json?                @db.JsonB
+  createdAt      DateTime             @default(now())
 
-  @@index([settlementId])
+  @@index([payStatementId])
   @@index([rentalId])
   @@index([ledgerEntryId])
-  @@map("rider_settlement_lines")
+  @@map("rider_pay_statement_lines")
 }
 
 model Payout {
-  id              String           @id @default(uuid(7))
+  id              String             @id @default(uuid(7))
   riderId         String?
-  rider           Rider?           @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  settlementId    String?
-  settlement      RiderSettlement? @relation(fields: [settlementId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  amount          Decimal          @db.Decimal(14, 2)
-  status          PayoutStatus     @default(PENDING)
+  rider           Rider?             @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  payStatementId  String?
+  payStatement    RiderPayStatement? @relation(fields: [payStatementId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  amount          Decimal            @db.Decimal(14, 2)
+  status          PayoutStatus       @default(PENDING)
   approvedById    String?
-  approvedBy      User?            @relation("PayoutApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  approvedAt      DateTime?        @db.Timestamptz(3)
-  paidAt          DateTime?        @db.Timestamptz(3)
+  approvedBy      User?              @relation("PayoutApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  approvedAt      DateTime?          @db.Timestamptz(3)
+  paidAt          DateTime?          @db.Timestamptz(3)
   paymentMethod   PaymentMethod?
   referenceNumber String?
-  idempotencyKey  String           @unique
+  idempotencyKey  String             @unique
   notes           String?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
 
   @@index([riderId, status])
-  @@index([settlementId])
+  @@index([payStatementId])
   @@map("payouts")
 }
 
@@ -1116,7 +1110,6 @@ model Service {
   // statusHistory           ServiceStatusHistory[]
   // responsibilityApprovals ServiceResponsibilityApproval[]
   replacementAssignments ReplacementAssignment[]
-  rentalPause            RentalPause?
 
   @@index([vehicleId, status])
   @@index([rentalId])
@@ -1171,29 +1164,6 @@ model ServiceSpare {
   @@index([serviceId])
   @@index([spareId])
   @@map("service_spares")
-}
-
-model RentalPause {
-  id                   String            @id @default(uuid(7))
-  rentalId             String
-  rental               Rental            @relation(fields: [rentalId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  serviceId            String            @unique
-  service              Service           @relation(fields: [serviceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  status               RentalPauseStatus @default(ACTIVE)
-  previousRentalStatus RentalStatus
-  pausedAt             DateTime          @db.Timestamptz(3)
-  resumedAt            DateTime?         @db.Timestamptz(3)
-  reason               String?
-  pausedById           String?
-  pausedBy             User?             @relation("RentalPausedBy", fields: [pausedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  resumedById          String?
-  resumedBy            User?             @relation("RentalResumedBy", fields: [resumedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  createdAt            DateTime          @default(now())
-  updatedAt            DateTime          @updatedAt
-
-  @@index([rentalId, status])
-  @@index([rentalId, pausedAt])
-  @@map("rental_pauses")
 }
 
 model ReplacementAssignment {

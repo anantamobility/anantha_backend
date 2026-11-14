@@ -159,7 +159,7 @@ export async function createCollectionLedgerEntry(
     description: string;
   }
 ) {
-  await tx.rentalLedgerEntry.upsert({
+  await tx.ledgerEntry.upsert({
     where: { idempotencyKey: `collection:${input.collectionId}` },
     create: {
       rentalId: input.rentalId,

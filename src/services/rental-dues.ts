@@ -4,7 +4,7 @@ import { AppError, ErrorCode } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import {
   buildDuePeriods,
-  calculateDueAmountWithPauses,
+  calculateDueAmount,
   deriveDueStatus,
   toDecimal,
 } from "./rental-schedule.js";
@@ -102,15 +102,6 @@ export async function generateRentalDues(
     throughDate: input.throughDate,
   });
 
-  const pauses = await tx.rentalPause.findMany({
-    where: {
-      rentalId: rental.id,
-      pausedAt: { lte: input.throughDate },
-      OR: [{ resumedAt: null }, { resumedAt: { gte: rental.startDate } }],
-    },
-    select: { pausedAt: true, resumedAt: true, status: true },
-  });
-
   const existing = await tx.rentalCollectionDue.findMany({
     where: {
       rentalId: rental.id,
@@ -133,7 +124,7 @@ export async function generateRentalDues(
 
   for (const period of periods) {
     const key = `${period.periodStart.toISOString()}|${period.periodEnd.toISOString()}`;
-    const amountDue = calculateDueAmountWithPauses({
+    const amountDue = calculateDueAmount({
       period: rental.collectionPeriod,
       periodStart: period.periodStart,
       periodEnd: period.periodEnd,
@@ -143,8 +134,6 @@ export async function generateRentalDues(
         fortnightlyRate: rental.fortnightlyRate,
         monthlyRate: rental.monthlyRate,
       },
-      pauses,
-      asOf: input.throughDate,
     });
 
     const due = await tx.rentalCollectionDue.upsert({
@@ -176,7 +165,7 @@ export async function generateRentalDues(
 
     if (!existingKeys.has(key)) generated += 1;
 
-    await tx.rentalLedgerEntry.upsert({
+    await tx.ledgerEntry.upsert({
       where: {
         idempotencyKey: `rental-due:${due.id}`,
       },
@@ -438,7 +427,7 @@ export async function recordRentAdjustment(
   const idempotencyKey =
     input.idempotencyKey ?? `rent-adjust:${input.rentalId}:${uuidv4()}`;
 
-  const existing = await tx.rentalLedgerEntry.findUnique({
+  const existing = await tx.ledgerEntry.findUnique({
     where: { idempotencyKey },
   });
 
@@ -451,7 +440,7 @@ export async function recordRentAdjustment(
       ? await applyCreditToDues(tx, input.rentalId, input.amount)
       : await applyDebitToDues(tx, input.rentalId, input.amount);
 
-  const entry = await tx.rentalLedgerEntry.create({
+  const entry = await tx.ledgerEntry.create({
     data: {
       rentalId: input.rentalId,
       entryType: "RENT_ADJUSTMENT",

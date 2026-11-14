@@ -129,7 +129,7 @@ export const rentalDetailSelect = {
   ...rentalListSelect,
   createdById: true,
   closedById: true,
-  settlementSnapshot: true,
+  statementSnapshot: true,
   createdBy: { select: { id: true, name: true } },
   closedBy: { select: { id: true, name: true } },
   assignments: {
@@ -987,7 +987,7 @@ export async function closeRental(
       }
 
       const closedAt = new Date();
-      const settlementSnapshot = {
+      const statementSnapshot = {
         closedAt: closedAt.toISOString(),
         endDate: endDate.toISOString(),
         totalCharges: financialSummary.totalCharges.toString(),
@@ -1006,7 +1006,7 @@ export async function closeRental(
           closedById: actor.userId,
           finalOutstandingAmount: financialSummary.outstanding,
           finalDepositBalance: depositTotals.balance,
-          settlementSnapshot: settlementSnapshot as Prisma.InputJsonValue,
+          statementSnapshot: statementSnapshot as Prisma.InputJsonValue,
           notes: input.notes ?? rental.notes,
         },
         select: rentalDetailSelect,
@@ -1021,7 +1021,7 @@ export async function closeRental(
         newData: {
           status: "COMPLETED",
           endDate,
-          settlement: settlementSnapshot,
+          payStatement: statementSnapshot,
         },
         summary: `${actor.userName} closed rental ${rental.rentalNumber}.`,
         db: tx,
@@ -1030,7 +1030,7 @@ export async function closeRental(
 
       return {
         rental: updatedRental,
-        settlement: {
+        payStatement: {
           endDate,
           closedAt,
           totalCharges: financialSummary.totalCharges,

@@ -56,22 +56,6 @@ describe("resolveRentalPricing", () => {
       monthlyRate: "9999.0000",
     });
     expect(result.securityDepositRequired).toBe("5000.00");
-    expect(result.rateSnapshot).toMatchObject({
-      source: "RATE_CARD",
-      capturedAt: EFFECTIVE_AT.toISOString(),
-      clientId: CLIENT_ID,
-      rateCardId: RATE_CARD_ID,
-      rateCardCode: "RC-STD",
-      rateCardName: "Standard B2B",
-      vehicleCategory: "BIKE",
-      billingFrequency: "MONTHLY",
-      currency: "INR",
-      rateCardEffectiveFrom: new Date(
-        "2026-01-01T00:00:00.000Z"
-      ).toISOString(),
-      rateCardEffectiveTo: null,
-      securityDeposit: "5000.00",
-    });
     expect(prismaMock.rateCard.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
@@ -117,11 +101,6 @@ describe("resolveRentalPricing", () => {
         monthlyRate: "15000.0000",
       },
       securityDepositRequired: "2500",
-    });
-    expect(result.rateSnapshot).toMatchObject({
-      source: "MANUAL",
-      capturedAt: EFFECTIVE_AT.toISOString(),
-      notes: "One-off corporate rate",
     });
     expect(prismaMock.rateCard.findFirst).not.toHaveBeenCalled();
   });

@@ -109,8 +109,10 @@ beforeEach(() => {
       });
     }
   });
-  prismaMock.auditLog.create.mockResolvedValue({});  prismaMock.service.findMany.mockResolvedValue([]);
-  prismaMock.service.count.mockResolvedValue(0);  prismaMock.rentalPause.create.mockResolvedValue({ id: "pause1" });
+  prismaMock.auditLog.create.mockResolvedValue({});
+  prismaMock.service.findMany.mockResolvedValue([]);
+  prismaMock.service.count.mockResolvedValue(0);
+  prismaMock.rentalPause.create.mockResolvedValue({ id: "pause1" });
   prismaMock.rentalPause.update.mockResolvedValue({ id: "pause1" });
 });
 
@@ -136,7 +138,7 @@ describe("POST /services", () => {
       riderId: null,
       hubId: null,
     });
-    prismaMock.vehicleAssignment.count.mockResolvedValue(1);
+    prismaMock.vehicleDeployment.count.mockResolvedValue(1);
     prismaMock.service.create.mockResolvedValue(serviceDetail());
 
     const res = await request(app)
@@ -187,7 +189,7 @@ describe("POST /services", () => {
       riderId: null,
       hubId: null,
     });
-    prismaMock.vehicleAssignment.count.mockResolvedValue(0);
+    prismaMock.vehicleDeployment.count.mockResolvedValue(0);
 
     const res = await request(app)
       .post("/services")

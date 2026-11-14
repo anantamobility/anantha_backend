@@ -316,7 +316,7 @@ export async function deleteVehicle(id: string, actor: AuditActor) {
       }
 
       const [activeAssignments, openServices] = await Promise.all([
-        tx.vehicleAssignment.count({
+        tx.vehicleDeployment.count({
           where: { vehicleId: id, status: "ACTIVE" },
         }),
         tx.service.count({
@@ -401,7 +401,7 @@ export async function changeVehicleStatus(
         );
       }
 
-      const activeAssignments = await tx.vehicleAssignment.count({
+      const activeAssignments = await tx.vehicleDeployment.count({
         where: { vehicleId: id, status: "ACTIVE" },
       });
 

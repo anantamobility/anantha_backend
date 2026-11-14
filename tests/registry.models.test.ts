@@ -20,8 +20,8 @@ describe("MODEL_REGISTRY", () => {
     for (const resource of approvedResources) {
       const delegate = {
         ratecard: prismaMock.rateCard,
-        earning: prismaMock.earningsLedger,
-        settlement: prismaMock.riderSettlement,
+        earning: prismaMock.ledgerEntry,
+        payStatement: prismaMock.riderPayStatement,
         payout: prismaMock.payout,
         inventory: prismaMock.inventoryMovement,
         dashboard: prismaMock.auditLog,

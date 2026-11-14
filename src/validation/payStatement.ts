@@ -19,7 +19,7 @@ function moneySchema(scale: number, label: string) {
     .refine((value) => Number(value) > 0, `${label} must be greater than 0`);
 }
 
-export const settlementStatusSchema = z.enum([
+export const payStatementStatusSchema = z.enum([
   "DRAFT",
   "PENDING_APPROVAL",
   "PAYABLE",
@@ -30,7 +30,7 @@ export const settlementStatusSchema = z.enum([
   "REVERSED",
 ]);
 
-export const settlementCycleSchema = z.enum(["SAME_DAY", "NEXT_DAY"]);
+export const statementCycleSchema = z.enum(["SAME_DAY", "NEXT_DAY"]);
 
 export const manualDeductionSchema = z
   .object({
@@ -41,11 +41,11 @@ export const manualDeductionSchema = z
   })
   .strict();
 
-export const generateSettlementSchema = z
+export const generatePayStatementSchema = z
   .object({
     riderId: z.string().uuid("riderId must be a valid UUID"),
     date: z.coerce.date().optional(),
-    cycle: settlementCycleSchema.optional(),
+    cycle: statementCycleSchema.optional(),
     periodStart: z.coerce.date().optional(),
     periodEnd: z.coerce.date().optional(),
     manualDeductions: z.array(manualDeductionSchema).max(20).optional(),
@@ -88,11 +88,11 @@ export const generateSettlementSchema = z
     }
   });
 
-export const listSettlementsQuerySchema = paginationQuerySchema
+export const listPayStatementsQuerySchema = paginationQuerySchema
   .extend(searchQuerySchema.shape)
   .extend({
     riderId: z.string().uuid("riderId must be a valid UUID").optional(),
-    status: settlementStatusSchema.optional(),
+    status: payStatementStatusSchema.optional(),
     from: z.coerce.date().optional(),
     to: z.coerce.date().optional(),
     sortBy: z
@@ -101,14 +101,14 @@ export const listSettlementsQuerySchema = paginationQuerySchema
     sortOrder: z.enum(["asc", "desc"]).default("desc"),
   });
 
-export const approveSettlementSchema = z
+export const approvePayStatementSchema = z
   .object({
     notes: z.string().trim().min(1).max(2000).nullable().optional(),
   })
   .strict()
   .default({});
 
-export type GenerateSettlementInput = z.infer<typeof generateSettlementSchema>;
-export type ListSettlementsQuery = z.infer<typeof listSettlementsQuerySchema>;
-export type ApproveSettlementInput = z.infer<typeof approveSettlementSchema>;
-export type SettlementStatusValue = z.infer<typeof settlementStatusSchema>;
+export type GeneratePayStatementInput = z.infer<typeof generatePayStatementSchema>;
+export type ListPayStatementsQuery = z.infer<typeof listPayStatementsQuerySchema>;
+export type ApprovePayStatementInput = z.infer<typeof approvePayStatementSchema>;
+export type PayStatementStatusValue = z.infer<typeof payStatementStatusSchema>;

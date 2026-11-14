@@ -567,7 +567,7 @@ export async function createService(
         : null;
 
       if (rental) {
-        const activeAssignment = await tx.vehicleAssignment.count({
+        const activeAssignment = await tx.vehicleDeployment.count({
           where: {
             rentalId: rental.id,
             vehicleId: vehicle.id,

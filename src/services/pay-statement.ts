@@ -13,19 +13,19 @@ import {
   toDecimal,
 } from "./rental-schedule.js";
 import type {
-  ApproveSettlementInput,
-  GenerateSettlementInput,
-  ListSettlementsQuery,
-} from "../validation/settlement.js";
+  ApprovePayStatementInput,
+  GeneratePayStatementInput,
+  ListPayStatementsQuery,
+} from "../validation/payStatement.js";
 
 type Tx = Prisma.TransactionClient;
 
 const OPEN_DUE_STATUSES = ["PENDING", "PARTIALLY_PAID", "OVERDUE"] as const;
 const COLLECTIBLE_RENTAL_STATUSES = ["ACTIVE", "ON_HOLD"] as const;
 
-export const settlementLineSelect = {
+export const payStatementLineSelect = {
   id: true,
-  settlementId: true,
+  payStatementId: true,
   lineType: true,
   direction: true,
   amount: true,
@@ -38,9 +38,9 @@ export const settlementLineSelect = {
   createdAt: true,
 } as const;
 
-export const settlementSelect = {
+export const payStatementSelect = {
   id: true,
-  settlementNumber: true,
+  statementNumber: true,
   riderId: true,
   periodStart: true,
   periodEnd: true,
@@ -61,12 +61,12 @@ export const settlementSelect = {
   updatedAt: true,
 } as const;
 
-export const settlementDetailSelect = {
-  ...settlementSelect,
+export const payStatementDetailSelect = {
+  ...payStatementSelect,
   rider: { select: { id: true, riderCode: true, fullName: true } },
   approvedBy: { select: { id: true, name: true } },
   lines: {
-    select: settlementLineSelect,
+    select: payStatementLineSelect,
     orderBy: { createdAt: "asc" },
   },
   payouts: {
@@ -82,7 +82,7 @@ export const settlementDetailSelect = {
   },
 } as const;
 
-function generateSettlementNumber() {
+function generatePayStatementNumber() {
   return `STL-${uuidv4().replace(/-/g, "").slice(0, 10).toUpperCase()}`;
 }
 
@@ -92,7 +92,7 @@ function startOfDayUtc(date: Date) {
   );
 }
 
-function resolveSettlementPeriod(input: GenerateSettlementInput) {
+function resolveStatementPeriod(input: GeneratePayStatementInput) {
   if (input.periodStart && input.periodEnd) {
     return { periodStart: input.periodStart, periodEnd: input.periodEnd };
   }
@@ -104,17 +104,17 @@ function resolveSettlementPeriod(input: GenerateSettlementInput) {
   return { periodStart, periodEnd: addDaysUtc(periodStart, 1) };
 }
 
-type SettlementLineTypeValue =
+type PayStatementLineTypeValue =
   | "DELIVERY_EARNING"
   | "RENT_DEDUCTION"
   | "DEPOSIT_DEDUCTION"
   | "ADJUSTMENT"
   | "OTHER_DEDUCTION";
 
-function settlementLineTypeForEntry(
+function payStatementLineTypeForEntry(
   entryType: string,
   direction: string
-): SettlementLineTypeValue {
+): PayStatementLineTypeValue {
   switch (entryType) {
     case "DELIVERY_EARNING":
       return "DELIVERY_EARNING";
@@ -130,7 +130,7 @@ function settlementLineTypeForEntry(
   }
 }
 
-async function assertSettlementRider(tx: Tx, riderId: string) {
+async function assertStatementRider(tx: Tx, riderId: string) {
   const rider = await tx.rider.findUnique({
     where: { id: riderId },
     select: {
@@ -157,33 +157,33 @@ async function assertSettlementRider(tx: Tx, riderId: string) {
   return rider;
 }
 
-export async function generateSettlement(
-  input: GenerateSettlementInput,
+export async function generatePayStatement(
+  input: GeneratePayStatementInput,
   actor: AuditActor
 ) {
   try {
     return await prisma.$transaction(async (tx) => {
-      const rider = await assertSettlementRider(tx, input.riderId);
-      const { periodStart, periodEnd } = resolveSettlementPeriod(input);
+      const rider = await assertStatementRider(tx, input.riderId);
+      const { periodStart, periodEnd } = resolveStatementPeriod(input);
 
-      const existing = await tx.riderSettlement.findFirst({
+      const existing = await tx.riderPayStatement.findFirst({
         where: {
           riderId: rider.id,
           periodStart,
           periodEnd,
           status: { notIn: ["REVERSED", "FAILED"] },
         },
-        select: settlementDetailSelect,
+        select: payStatementDetailSelect,
       });
 
       if (existing) {
-        return { settlement: existing, duplicate: true };
+        return { payStatement: existing, duplicate: true };
       }
 
-      const earnings = await tx.earningsLedger.findMany({
+      const earnings = await tx.ledgerEntry.findMany({
         where: {
           riderId: rider.id,
-          settlementId: null,
+          payStatementId: null,
           direction: "CREDIT",
           occurredAt: { gte: periodStart, lt: periodEnd },
         },
@@ -201,16 +201,16 @@ export async function generateSettlement(
 
       if (earnings.length === 0) {
         throw new AppError(
-          "No unsettled earnings were found for the settlement period",
+          "No unsettled earnings were found for the pay statement period",
           409,
           ErrorCode.CONFLICT
         );
       }
 
-      const unsettledDebits = await tx.earningsLedger.findMany({
+      const unsettledDebits = await tx.ledgerEntry.findMany({
         where: {
           riderId: rider.id,
-          settlementId: null,
+          payStatementId: null,
           direction: "DEBIT",
         },
         orderBy: [{ occurredAt: "asc" }, { id: "asc" }],
@@ -236,9 +236,9 @@ export async function generateSettlement(
       const currency = earnings[0]?.currency ?? "INR";
       const now = new Date();
 
-      const settlement = await tx.riderSettlement.create({
+      const payStatement = await tx.riderPayStatement.create({
         data: {
-          settlementNumber: generateSettlementNumber(),
+          statementNumber: generatePayStatementNumber(),
           riderId: rider.id,
           periodStart,
           periodEnd,
@@ -256,14 +256,14 @@ export async function generateSettlement(
             notes: input.notes ?? null,
           } as Prisma.InputJsonValue,
         },
-        select: { id: true, settlementNumber: true },
+        select: { id: true, statementNumber: true },
       });
 
       for (const earning of earnings) {
-        await tx.riderSettlementLine.create({
+        await tx.riderPayStatementLine.create({
           data: {
-            settlementId: settlement.id,
-            lineType: settlementLineTypeForEntry(
+            payStatementId: payStatement.id,
+            lineType: payStatementLineTypeForEntry(
               earning.entryType,
               "CREDIT"
             ),
@@ -272,7 +272,7 @@ export async function generateSettlement(
             description: earning.description,
             rentalId: earning.rentalId,
             ledgerEntryId: earning.id,
-            referenceType: "EarningsLedger",
+            referenceType: "LedgerEntry",
             referenceId: earning.id,
             snapshot: {
               occurredAt: earning.occurredAt.toISOString(),
@@ -282,16 +282,16 @@ export async function generateSettlement(
       }
 
       for (const debit of unsettledDebits) {
-        await tx.riderSettlementLine.create({
+        await tx.riderPayStatementLine.create({
           data: {
-            settlementId: settlement.id,
-            lineType: settlementLineTypeForEntry(debit.entryType, "DEBIT"),
+            payStatementId: payStatement.id,
+            lineType: payStatementLineTypeForEntry(debit.entryType, "DEBIT"),
             direction: "DEBIT",
             amount: debit.amount,
             description: debit.description,
             rentalId: debit.rentalId,
             ledgerEntryId: debit.id,
-            referenceType: "EarningsLedger",
+            referenceType: "LedgerEntry",
             referenceId: debit.id,
             snapshot: {
               occurredAt: debit.occurredAt.toISOString(),
@@ -300,13 +300,13 @@ export async function generateSettlement(
         });
       }
 
-      await tx.earningsLedger.updateMany({
+      await tx.ledgerEntry.updateMany({
         where: {
           id: {
             in: [...earnings, ...unsettledDebits].map((entry) => entry.id),
           },
         },
-        data: { settlementId: settlement.id },
+        data: { payStatementId: payStatement.id },
       });
 
       const dues = await tx.rentalCollectionDue.findMany({
@@ -389,13 +389,13 @@ export async function generateSettlement(
             receivedById: actor.userId,
             reconciledAt: now,
             reconciledById: actor.userId,
-            idempotencyKey: `settlement-rent:${settlement.id}:${due.id}`,
-            notes: `Rent deducted from settlement ${settlement.settlementNumber}`,
+            idempotencyKey: `payStatement-rent:${payStatement.id}:${due.id}`,
+            notes: `Rent deducted from pay statement ${payStatement.statementNumber}`,
           },
           select: { id: true },
         });
 
-        await tx.rentalLedgerEntry.create({
+        await tx.ledgerEntry.create({
           data: {
             rentalId: due.rentalId,
             entryType: "COLLECTION_RECEIVED",
@@ -403,7 +403,7 @@ export async function generateSettlement(
             amount: applied,
             currency: due.rental.currency,
             occurredAt: now,
-            description: `Rent deducted from settlement ${settlement.settlementNumber}`,
+            description: `Rent deducted from pay statement ${payStatement.statementNumber}`,
             sourceType: "Collection",
             sourceId: collection.id,
             idempotencyKey: `collection:${collection.id}`,
@@ -411,7 +411,7 @@ export async function generateSettlement(
           },
         });
 
-        const deduction = await tx.earningsLedger.create({
+        const deduction = await tx.ledgerEntry.create({
           data: {
             riderId: rider.id,
             entryType: "RENT_DEDUCTION",
@@ -420,19 +420,19 @@ export async function generateSettlement(
             currency,
             occurredAt: now,
             description: `Rent deducted for rental ${due.rental.rentalNumber}`,
-            sourceType: "RiderSettlement",
-            sourceId: settlement.id,
-            settlementId: settlement.id,
+            sourceType: "RiderPayStatement",
+            sourceId: payStatement.id,
+            payStatementId: payStatement.id,
             rentalId: due.rentalId,
             createdById: actor.userId,
-            idempotencyKey: `settlement-rent:${settlement.id}:${due.id}`,
+            idempotencyKey: `payStatement-rent:${payStatement.id}:${due.id}`,
           },
           select: { id: true },
         });
 
-        await tx.riderSettlementLine.create({
+        await tx.riderPayStatementLine.create({
           data: {
-            settlementId: settlement.id,
+            payStatementId: payStatement.id,
             lineType: "RENT_DEDUCTION",
             direction: "DEBIT",
             amount: applied,
@@ -462,7 +462,7 @@ export async function generateSettlement(
 
       for (const [index, deduction] of (input.manualDeductions ?? []).entries()) {
         const amount = new Prisma.Decimal(deduction.amount);
-        const entry = await tx.earningsLedger.create({
+        const entry = await tx.ledgerEntry.create({
           data: {
             riderId: rider.id,
             entryType:
@@ -474,19 +474,19 @@ export async function generateSettlement(
             currency,
             occurredAt: now,
             description: deduction.description,
-            sourceType: "RiderSettlement",
-            sourceId: settlement.id,
-            settlementId: settlement.id,
+            sourceType: "RiderPayStatement",
+            sourceId: payStatement.id,
+            payStatementId: payStatement.id,
             rentalId: deduction.rentalId ?? null,
             createdById: actor.userId,
-            idempotencyKey: `settlement-manual:${settlement.id}:${index}`,
+            idempotencyKey: `payStatement-manual:${payStatement.id}:${index}`,
           },
           select: { id: true },
         });
 
-        await tx.riderSettlementLine.create({
+        await tx.riderPayStatementLine.create({
           data: {
-            settlementId: settlement.id,
+            payStatementId: payStatement.id,
             lineType: deduction.lineType,
             direction: "DEBIT",
             amount,
@@ -508,15 +508,15 @@ export async function generateSettlement(
       const shortfallAmount = net.lt(0) ? net.abs() : new Prisma.Decimal(0);
       const netPayable = net.gt(0) ? net : new Prisma.Decimal(0);
       const requiresManualReview = shortfallAmount.gt(0);
-      const zeroNetSettlement = net.eq(0);
+      const zeroNetStatement = net.eq(0);
       const status = requiresManualReview
         ? "DRAFT"
-        : zeroNetSettlement
+        : zeroNetStatement
           ? "PAID"
           : "PAYABLE";
 
-      const updatedSettlement = await tx.riderSettlement.update({
-        where: { id: settlement.id },
+      const updatedStatement = await tx.riderPayStatement.update({
+        where: { id: payStatement.id },
         data: {
           status,
           grossEarnings,
@@ -524,7 +524,7 @@ export async function generateSettlement(
           netPayable,
           shortfallAmount,
           requiresManualReview,
-          paidAt: zeroNetSettlement ? now : undefined,
+          paidAt: zeroNetStatement ? now : undefined,
           version: { increment: 1 },
           calculationSnapshot: {
             periodStart: periodStart.toISOString(),
@@ -533,21 +533,21 @@ export async function generateSettlement(
             existingDebitDeduction: existingDeductionTotal.toString(),
             rentDeduction: rentDeduction.toString(),
             manualDeductionTotal: manualDeductionTotal.toString(),
-            zeroNetSettlement,
+            zeroNetStatement,
             rentAllocations,
             notes: input.notes ?? null,
           } as Prisma.InputJsonValue,
         },
-        select: settlementDetailSelect,
+        select: payStatementDetailSelect,
       });
 
       await logAudit({
         ...actor,
         action: "GENERATE",
-        resource: "RiderSettlement",
-        resourceId: updatedSettlement.id,
+        resource: "RiderPayStatement",
+        resourceId: updatedStatement.id,
         newData: {
-          settlementNumber: updatedSettlement.settlementNumber,
+          statementNumber: updatedStatement.statementNumber,
           riderId: rider.id,
           riderCode: rider.riderCode,
           periodStart,
@@ -558,33 +558,33 @@ export async function generateSettlement(
           shortfallAmount,
           status,
         },
-        summary: `${actor.userName} generated settlement ${updatedSettlement.settlementNumber} for rider ${rider.riderCode} with net payable ${netPayable}.`,
+        summary: `${actor.userName} generated payStatement ${updatedStatement.statementNumber} for rider ${rider.riderCode} with net payable ${netPayable}.`,
         db: tx,
         throwOnError: true,
       });
 
-      return { settlement: updatedSettlement, duplicate: false };
+      return { payStatement: updatedStatement, duplicate: false };
     });
   } catch (err) {
     rethrowPrismaError(
       err,
-      "A settlement already exists for this rider and period"
+      "A pay statement already exists for this rider and period"
     );
   }
 }
 
-export async function approveSettlement(
+export async function approvePayStatement(
   id: string,
-  input: ApproveSettlementInput,
+  input: ApprovePayStatementInput,
   actor: AuditActor
 ) {
   try {
     return await prisma.$transaction(async (tx) => {
-      const settlement = await tx.riderSettlement.findUnique({
+      const payStatement = await tx.riderPayStatement.findUnique({
         where: { id },
         select: {
           id: true,
-          settlementNumber: true,
+          statementNumber: true,
           riderId: true,
           status: true,
           netPayable: true,
@@ -594,47 +594,47 @@ export async function approveSettlement(
         },
       });
 
-      if (!settlement) {
-        throw new AppError("Settlement not found", 404, ErrorCode.NOT_FOUND);
+      if (!payStatement) {
+        throw new AppError("Pay statement not found", 404, ErrorCode.NOT_FOUND);
       }
 
-      if (settlement.status === "APPROVED") {
-        const existing = await tx.riderSettlement.findUniqueOrThrow({
+      if (payStatement.status === "APPROVED") {
+        const existing = await tx.riderPayStatement.findUniqueOrThrow({
           where: { id },
-          select: settlementDetailSelect,
+          select: payStatementDetailSelect,
         });
-        return { settlement: existing, duplicate: true };
+        return { payStatement: existing, duplicate: true };
       }
 
-      if (settlement.status !== "PAYABLE") {
+      if (payStatement.status !== "PAYABLE") {
         throw new AppError(
-          `Only a PAYABLE settlement can be approved (current status: ${settlement.status})`,
+          `Only a PAYABLE payStatement can be approved (current status: ${payStatement.status})`,
           409,
           ErrorCode.CONFLICT
         );
       }
 
       if (
-        settlement.requiresManualReview ||
-        toDecimal(settlement.shortfallAmount).gt(0)
+        payStatement.requiresManualReview ||
+        toDecimal(payStatement.shortfallAmount).gt(0)
       ) {
         throw new AppError(
-          "Settlement requires manual review before it can be approved",
+          "Pay statement requires manual review before it can be approved",
           409,
           ErrorCode.CONFLICT
         );
       }
 
-      if (toDecimal(settlement.netPayable).lte(0)) {
+      if (toDecimal(payStatement.netPayable).lte(0)) {
         throw new AppError(
-          "Settlement has no payable amount",
+          "Pay statement has no payable amount",
           409,
           ErrorCode.CONFLICT
         );
       }
 
       const approvedAt = new Date();
-      const updated = await tx.riderSettlement.update({
+      const updated = await tx.riderPayStatement.update({
         where: { id },
         data: {
           status: "APPROVED",
@@ -642,36 +642,36 @@ export async function approveSettlement(
           approvedAt,
           version: { increment: 1 },
         },
-        select: settlementDetailSelect,
+        select: payStatementDetailSelect,
       });
 
       await logAudit({
         ...actor,
         action: "APPROVE",
-        resource: "RiderSettlement",
-        resourceId: settlement.id,
-        oldData: { status: settlement.status },
+        resource: "RiderPayStatement",
+        resourceId: payStatement.id,
+        oldData: { status: payStatement.status },
         newData: {
           status: "APPROVED",
-          settlementNumber: settlement.settlementNumber,
-          netPayable: settlement.netPayable,
+          statementNumber: payStatement.statementNumber,
+          netPayable: payStatement.netPayable,
           notes: input.notes ?? null,
         },
-        summary: `${actor.userName} approved settlement ${settlement.settlementNumber}.`,
+        summary: `${actor.userName} approved payStatement ${payStatement.statementNumber}.`,
         db: tx,
         throwOnError: true,
       });
 
-      return { settlement: updated, duplicate: false };
+      return { payStatement: updated, duplicate: false };
     });
   } catch (err) {
-    rethrowPrismaError(err, "Settlement could not be approved");
+    rethrowPrismaError(err, "Pay statement could not be approved");
   }
 }
 
-export async function listSettlements(query: ListSettlementsQuery) {
+export async function listPayStatements(query: ListPayStatementsQuery) {
   const { page, limit, search } = query;
-  const where: Prisma.RiderSettlementWhereInput = {};
+  const where: Prisma.RiderPayStatementWhereInput = {};
 
   if (query.riderId) where.riderId = query.riderId;
   if (query.status) where.status = query.status;
@@ -682,29 +682,29 @@ export async function listSettlements(query: ListSettlementsQuery) {
   }
   if (search) {
     where.OR = [
-      { settlementNumber: { contains: search, mode: "insensitive" } },
+      { statementNumber: { contains: search, mode: "insensitive" } },
       { rider: { fullName: { contains: search, mode: "insensitive" } } },
       { rider: { riderCode: { contains: search, mode: "insensitive" } } },
     ];
   }
 
-  const orderBy: Prisma.RiderSettlementOrderByWithRelationInput = {
+  const orderBy: Prisma.RiderPayStatementOrderByWithRelationInput = {
     [query.sortBy]: query.sortOrder,
   };
 
-  const [settlements, total] = await Promise.all([
-    prisma.riderSettlement.findMany({
+  const [payStatements, total] = await Promise.all([
+    prisma.riderPayStatement.findMany({
       where,
-      select: settlementSelect,
+      select: payStatementSelect,
       orderBy,
       skip: (page - 1) * limit,
       take: limit,
     }),
-    prisma.riderSettlement.count({ where }),
+    prisma.riderPayStatement.count({ where }),
   ]);
 
   return {
-    settlements,
+    payStatements,
     pagination: {
       page,
       limit,
@@ -714,15 +714,15 @@ export async function listSettlements(query: ListSettlementsQuery) {
   };
 }
 
-export async function getSettlementById(id: string) {
-  const settlement = await prisma.riderSettlement.findUnique({
+export async function getPayStatementById(id: string) {
+  const payStatement = await prisma.riderPayStatement.findUnique({
     where: { id },
-    select: settlementDetailSelect,
+    select: payStatementDetailSelect,
   });
 
-  if (!settlement) {
-    throw new AppError("Settlement not found", 404, ErrorCode.NOT_FOUND);
+  if (!payStatement) {
+    throw new AppError("Pay statement not found", 404, ErrorCode.NOT_FOUND);
   }
 
-  return settlement;
+  return payStatement;
 }

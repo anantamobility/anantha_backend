@@ -9,7 +9,7 @@ const prismaMock = prisma as any;
 const RIDER_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a8e";
 const RENTAL_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b";
 const DUE_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a9f";
-const SETTLEMENT_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4b01";
+const STATEMENT_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4b01";
 const COLLECTION_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4b02";
 const PAYOUT_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4b03";
 
@@ -38,10 +38,10 @@ function rider(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function settlementDetail(overrides: Record<string, unknown> = {}) {
+function statementDetail(overrides: Record<string, unknown> = {}) {
   return {
-    id: SETTLEMENT_ID,
-    settlementNumber: "STL-ABC123",
+    id: STATEMENT_ID,
+    statementNumber: "STL-ABC123",
     riderId: RIDER_ID,
     periodStart: new Date("2026-01-01T00:00:00.000Z"),
     periodEnd: new Date("2026-01-02T00:00:00.000Z"),
@@ -75,22 +75,22 @@ beforeEach(() => {
       });
     }
   });
-  prismaMock.riderSettlement.findMany.mockResolvedValue([]);
-  prismaMock.riderSettlement.count.mockResolvedValue(0);
-  prismaMock.earningsLedger.findMany.mockResolvedValue([]);
+  prismaMock.riderPayStatement.findMany.mockResolvedValue([]);
+  prismaMock.riderPayStatement.count.mockResolvedValue(0);
+  prismaMock.ledgerEntry.findMany.mockResolvedValue([]);
   prismaMock.rentalCollectionDue.findMany.mockResolvedValue([]);
   prismaMock.auditLog.create.mockResolvedValue({});
 });
 
-describe("POST /settlements/generate", () => {
+describe("POST /pay-statements/generate", () => {
   function mockGeneration(overrides: {
     earnings?: unknown[];
     debits?: unknown[];
     dues?: unknown[];
   } = {}) {
     prismaMock.rider.findUnique.mockResolvedValue(rider());
-    prismaMock.riderSettlement.findFirst.mockResolvedValue(null);
-    prismaMock.earningsLedger.findMany
+    prismaMock.riderPayStatement.findFirst.mockResolvedValue(null);
+    prismaMock.ledgerEntry.findMany
       .mockResolvedValueOnce(
         overrides.earnings ?? [
           {
@@ -105,12 +105,12 @@ describe("POST /settlements/generate", () => {
         ]
       )
       .mockResolvedValueOnce(overrides.debits ?? []);
-    prismaMock.riderSettlement.create.mockResolvedValue({
-      id: SETTLEMENT_ID,
-      settlementNumber: "STL-ABC123",
+    prismaMock.riderPayStatement.create.mockResolvedValue({
+      id: STATEMENT_ID,
+      statementNumber: "STL-ABC123",
     });
-    prismaMock.riderSettlementLine.create.mockResolvedValue({});
-    prismaMock.earningsLedger.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.riderPayStatementLine.create.mockResolvedValue({});
+    prismaMock.ledgerEntry.updateMany.mockResolvedValue({ count: 1 });
     prismaMock.rentalCollectionDue.findMany.mockResolvedValue(
       overrides.dues ?? [
         {
@@ -127,17 +127,17 @@ describe("POST /settlements/generate", () => {
     );
     prismaMock.rentalCollectionDue.updateMany.mockResolvedValue({ count: 1 });
     prismaMock.collection.create.mockResolvedValue({ id: COLLECTION_ID });
-    prismaMock.rentalLedgerEntry.create.mockResolvedValue({});
-    prismaMock.earningsLedger.create.mockResolvedValue({ id: "deduction-1" });
-    prismaMock.riderSettlement.update.mockResolvedValue(settlementDetail());
+    prismaMock.ledgerEntry.create.mockResolvedValue({});
+    prismaMock.ledgerEntry.create.mockResolvedValue({ id: "deduction-1" });
+    prismaMock.riderPayStatement.update.mockResolvedValue(statementDetail());
   }
 
-  it("deducts outstanding rent and marks the settlement PAYABLE", async () => {
-    authenticate([{ resource: "settlement", action: "generate" }]);
+  it("deducts outstanding rent and marks the payStatement PAYABLE", async () => {
+    authenticate([{ resource: "payStatement", action: "generate" }]);
     mockGeneration();
 
     const res = await request(app)
-      .post("/settlements/generate")
+      .post("/pay-statements/generate")
       .set("Authorization", `Bearer ${accessToken()}`)
       .send({ riderId: RIDER_ID, date: "2026-01-01", cycle: "SAME_DAY" });
 
@@ -154,17 +154,17 @@ describe("POST /settlements/generate", () => {
         }),
       })
     );
-    expect(prismaMock.earningsLedger.create).toHaveBeenCalledWith(
+    expect(prismaMock.ledgerEntry.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           entryType: "RENT_DEDUCTION",
           direction: "DEBIT",
-          settlementId: SETTLEMENT_ID,
+          payStatementId: STATEMENT_ID,
         }),
       })
     );
 
-    const update = prismaMock.riderSettlement.update.mock.calls[0][0];
+    const update = prismaMock.riderPayStatement.update.mock.calls[0][0];
     expect(update.data.status).toBe("PAYABLE");
     expect(update.data.grossEarnings.toString()).toBe("1000");
     expect(update.data.totalDeductions.toString()).toBe("300");
@@ -172,8 +172,8 @@ describe("POST /settlements/generate", () => {
     expect(update.data.requiresManualReview).toBe(false);
   });
 
-  it("applies unsettled debit adjustments and links them to the settlement", async () => {
-    authenticate([{ resource: "settlement", action: "generate" }]);
+  it("applies unsettled debit adjustments and links them to the payStatement", async () => {
+    authenticate([{ resource: "payStatement", action: "generate" }]);
     mockGeneration({
       debits: [
         {
@@ -189,16 +189,16 @@ describe("POST /settlements/generate", () => {
     });
 
     const res = await request(app)
-      .post("/settlements/generate")
+      .post("/pay-statements/generate")
       .set("Authorization", `Bearer ${accessToken()}`)
       .send({ riderId: RIDER_ID, date: "2026-01-01" });
 
     expect(res.status).toBe(201);
-    const update = prismaMock.riderSettlement.update.mock.calls[0][0];
+    const update = prismaMock.riderPayStatement.update.mock.calls[0][0];
     expect(update.data.totalDeductions.toString()).toBe("400");
     expect(update.data.netPayable.toString()).toBe("600");
 
-    expect(prismaMock.riderSettlementLine.create).toHaveBeenCalledWith(
+    expect(prismaMock.riderPayStatementLine.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           ledgerEntryId: "adj-1",
@@ -209,14 +209,14 @@ describe("POST /settlements/generate", () => {
       })
     );
 
-    const link = prismaMock.earningsLedger.updateMany.mock.calls[0][0];
+    const link = prismaMock.ledgerEntry.updateMany.mock.calls[0][0];
     expect(link.where.id.in).toEqual(
       expect.arrayContaining(["entry-1", "adj-1"])
     );
   });
 
   it("labels credit adjustment lines as ADJUSTMENT", async () => {
-    authenticate([{ resource: "settlement", action: "generate" }]);
+    authenticate([{ resource: "payStatement", action: "generate" }]);
     mockGeneration({
       earnings: [
         {
@@ -232,12 +232,12 @@ describe("POST /settlements/generate", () => {
     });
 
     const res = await request(app)
-      .post("/settlements/generate")
+      .post("/pay-statements/generate")
       .set("Authorization", `Bearer ${accessToken()}`)
       .send({ riderId: RIDER_ID, date: "2026-01-01" });
 
     expect(res.status).toBe(201);
-    expect(prismaMock.riderSettlementLine.create).toHaveBeenCalledWith(
+    expect(prismaMock.riderPayStatementLine.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           ledgerEntryId: "adj-credit",
@@ -248,8 +248,8 @@ describe("POST /settlements/generate", () => {
     );
   });
 
-  it("marks a zero-net settlement PAID without creating a payout", async () => {
-    authenticate([{ resource: "settlement", action: "generate" }]);
+  it("marks a zero-net payStatement PAID without creating a payout", async () => {
+    authenticate([{ resource: "payStatement", action: "generate" }]);
     mockGeneration({
       earnings: [
         {
@@ -277,12 +277,12 @@ describe("POST /settlements/generate", () => {
     });
 
     const res = await request(app)
-      .post("/settlements/generate")
+      .post("/pay-statements/generate")
       .set("Authorization", `Bearer ${accessToken()}`)
       .send({ riderId: RIDER_ID, date: "2026-01-01" });
 
     expect(res.status).toBe(201);
-    const update = prismaMock.riderSettlement.update.mock.calls[0][0];
+    const update = prismaMock.riderPayStatement.update.mock.calls[0][0];
     expect(update.data.status).toBe("PAID");
     expect(update.data.netPayable.toString()).toBe("0");
     expect(update.data.paidAt).toBeInstanceOf(Date);
@@ -290,7 +290,7 @@ describe("POST /settlements/generate", () => {
   });
 
   it("flags a shortfall when deductions exceed earnings", async () => {
-    authenticate([{ resource: "settlement", action: "generate" }]);
+    authenticate([{ resource: "payStatement", action: "generate" }]);
     mockGeneration({
       earnings: [
         {
@@ -305,7 +305,7 @@ describe("POST /settlements/generate", () => {
     });
 
     const res = await request(app)
-      .post("/settlements/generate")
+      .post("/pay-statements/generate")
       .set("Authorization", `Bearer ${accessToken()}`)
       .send({
         riderId: RIDER_ID,
@@ -320,38 +320,38 @@ describe("POST /settlements/generate", () => {
       });
 
     expect(res.status).toBe(201);
-    const update = prismaMock.riderSettlement.update.mock.calls[0][0];
+    const update = prismaMock.riderPayStatement.update.mock.calls[0][0];
     expect(update.data.status).toBe("DRAFT");
     expect(update.data.netPayable.toString()).toBe("0");
     expect(update.data.shortfallAmount.toString()).toBe("50");
     expect(update.data.requiresManualReview).toBe(true);
   });
 
-  it("returns the existing settlement for the same rider and period", async () => {
-    authenticate([{ resource: "settlement", action: "generate" }]);
+  it("returns the existing payStatement for the same rider and period", async () => {
+    authenticate([{ resource: "payStatement", action: "generate" }]);
     prismaMock.rider.findUnique.mockResolvedValue(rider());
-    prismaMock.riderSettlement.findFirst.mockResolvedValue(settlementDetail());
+    prismaMock.riderPayStatement.findFirst.mockResolvedValue(statementDetail());
 
     const res = await request(app)
-      .post("/settlements/generate")
+      .post("/pay-statements/generate")
       .set("Authorization", `Bearer ${accessToken()}`)
       .send({ riderId: RIDER_ID, date: "2026-01-01" });
 
     expect(res.status).toBe(200);
     expect(res.body.data.duplicate).toBe(true);
-    expect(prismaMock.riderSettlement.create).not.toHaveBeenCalled();
+    expect(prismaMock.riderPayStatement.create).not.toHaveBeenCalled();
   });
 });
 
-describe("POST /settlements/:id/approve", () => {
-  it("approves a PAYABLE settlement", async () => {
-    authenticate([{ resource: "settlement", action: "approve" }]);
-    prismaMock.riderSettlement.findFirst.mockResolvedValue({
-      id: SETTLEMENT_ID,
+describe("POST /pay-statements/:id/approve", () => {
+  it("approves a PAYABLE payStatement", async () => {
+    authenticate([{ resource: "payStatement", action: "approve" }]);
+    prismaMock.riderPayStatement.findFirst.mockResolvedValue({
+      id: STATEMENT_ID,
     });
-    prismaMock.riderSettlement.findUnique.mockResolvedValue({
-      id: SETTLEMENT_ID,
-      settlementNumber: "STL-ABC123",
+    prismaMock.riderPayStatement.findUnique.mockResolvedValue({
+      id: STATEMENT_ID,
+      statementNumber: "STL-ABC123",
       riderId: RIDER_ID,
       status: "PAYABLE",
       netPayable: "700.00",
@@ -359,17 +359,17 @@ describe("POST /settlements/:id/approve", () => {
       requiresManualReview: false,
       version: 1,
     });
-    prismaMock.riderSettlement.update.mockResolvedValue(
-      settlementDetail({ status: "APPROVED" })
+    prismaMock.riderPayStatement.update.mockResolvedValue(
+      statementDetail({ status: "APPROVED" })
     );
 
     const res = await request(app)
-      .post(`/settlements/${SETTLEMENT_ID}/approve`)
+      .post(`/pay-statements/${STATEMENT_ID}/approve`)
       .set("Authorization", `Bearer ${accessToken()}`)
       .send({});
 
     expect(res.status).toBe(200);
-    expect(prismaMock.riderSettlement.update).toHaveBeenCalledWith(
+    expect(prismaMock.riderPayStatement.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           status: "APPROVED",
@@ -379,14 +379,14 @@ describe("POST /settlements/:id/approve", () => {
     );
   });
 
-  it("refuses to approve a settlement that requires manual review", async () => {
-    authenticate([{ resource: "settlement", action: "approve" }]);
-    prismaMock.riderSettlement.findFirst.mockResolvedValue({
-      id: SETTLEMENT_ID,
+  it("refuses to approve a payStatement that requires manual review", async () => {
+    authenticate([{ resource: "payStatement", action: "approve" }]);
+    prismaMock.riderPayStatement.findFirst.mockResolvedValue({
+      id: STATEMENT_ID,
     });
-    prismaMock.riderSettlement.findUnique.mockResolvedValue({
-      id: SETTLEMENT_ID,
-      settlementNumber: "STL-ABC123",
+    prismaMock.riderPayStatement.findUnique.mockResolvedValue({
+      id: STATEMENT_ID,
+      statementNumber: "STL-ABC123",
       riderId: RIDER_ID,
       status: "PAYABLE",
       netPayable: "0.00",
@@ -396,24 +396,24 @@ describe("POST /settlements/:id/approve", () => {
     });
 
     const res = await request(app)
-      .post(`/settlements/${SETTLEMENT_ID}/approve`)
+      .post(`/pay-statements/${STATEMENT_ID}/approve`)
       .set("Authorization", `Bearer ${accessToken()}`)
       .send({});
 
     expect(res.status).toBe(409);
-    expect(prismaMock.riderSettlement.update).not.toHaveBeenCalled();
+    expect(prismaMock.riderPayStatement.update).not.toHaveBeenCalled();
   });
 });
 
-describe("POST /settlements/:id/pay", () => {
-  it("pays an approved settlement and writes a PAYOUT ledger entry", async () => {
-    authenticate([{ resource: "settlement", action: "pay" }]);
-    prismaMock.riderSettlement.findFirst.mockResolvedValue({
-      id: SETTLEMENT_ID,
+describe("POST /pay-statements/:id/pay", () => {
+  it("pays an approved payStatement and writes a PAYOUT ledger entry", async () => {
+    authenticate([{ resource: "payStatement", action: "pay" }]);
+    prismaMock.riderPayStatement.findFirst.mockResolvedValue({
+      id: STATEMENT_ID,
     });
-    prismaMock.riderSettlement.findUnique.mockResolvedValue({
-      id: SETTLEMENT_ID,
-      settlementNumber: "STL-ABC123",
+    prismaMock.riderPayStatement.findUnique.mockResolvedValue({
+      id: STATEMENT_ID,
+      statementNumber: "STL-ABC123",
       riderId: RIDER_ID,
       status: "APPROVED",
       currency: "INR",
@@ -426,17 +426,17 @@ describe("POST /settlements/:id/pay", () => {
       amount: "700.00",
       status: "PAID",
     });
-    prismaMock.earningsLedger.create.mockResolvedValue({});
-    prismaMock.riderSettlement.update.mockResolvedValue({
-      id: SETTLEMENT_ID,
-      settlementNumber: "STL-ABC123",
+    prismaMock.ledgerEntry.create.mockResolvedValue({});
+    prismaMock.riderPayStatement.update.mockResolvedValue({
+      id: STATEMENT_ID,
+      statementNumber: "STL-ABC123",
       status: "PAID",
       netPayable: "700.00",
       paidAt: new Date("2026-01-02T00:00:00.000Z"),
     });
 
     const res = await request(app)
-      .post(`/settlements/${SETTLEMENT_ID}/pay`)
+      .post(`/pay-statements/${STATEMENT_ID}/pay`)
       .set("Authorization", `Bearer ${accessToken()}`)
       .send({ paymentMethod: "UPI", referenceNumber: "PAY-1" });
 
@@ -446,21 +446,21 @@ describe("POST /settlements/:id/pay", () => {
         data: expect.objectContaining({
           recipientType: "RIDER",
           riderId: RIDER_ID,
-          settlementId: SETTLEMENT_ID,
+          payStatementId: STATEMENT_ID,
           status: "PAID",
         }),
       })
     );
-    expect(prismaMock.earningsLedger.create).toHaveBeenCalledWith(
+    expect(prismaMock.ledgerEntry.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           entryType: "PAYOUT",
           direction: "DEBIT",
-          settlementId: SETTLEMENT_ID,
+          payStatementId: STATEMENT_ID,
         }),
       })
     );
-    expect(prismaMock.riderSettlement.update).toHaveBeenCalledWith(
+    expect(prismaMock.riderPayStatement.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ status: "PAID" }),
       })

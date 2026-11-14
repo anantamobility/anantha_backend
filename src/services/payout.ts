@@ -20,7 +20,7 @@ export const payoutSelect = {
   staffId: true,
   vendorId: true,
   clientId: true,
-  settlementId: true,
+  payStatementId: true,
   amount: true,
   currency: true,
   status: true,
@@ -38,10 +38,10 @@ export const payoutSelect = {
 export const payoutDetailSelect = {
   ...payoutSelect,
   rider: { select: { id: true, riderCode: true, fullName: true } },
-  settlement: {
+  payStatement: {
     select: {
       id: true,
-      settlementNumber: true,
+      statementNumber: true,
       status: true,
       periodStart: true,
       periodEnd: true,
@@ -56,11 +56,11 @@ export async function createPayout(
 ) {
   try {
     return await prisma.$transaction(async (tx) => {
-      const settlement = await tx.riderSettlement.findUnique({
-        where: { id: input.settlementId },
+      const payStatement = await tx.riderPayStatement.findUnique({
+        where: { id: input.payStatementId },
         select: {
           id: true,
-          settlementNumber: true,
+          statementNumber: true,
           riderId: true,
           status: true,
           currency: true,
@@ -69,37 +69,37 @@ export async function createPayout(
         },
       });
 
-      if (!settlement) {
-        throw new AppError("Settlement not found", 404, ErrorCode.NOT_FOUND);
+      if (!payStatement) {
+        throw new AppError("Pay statement not found", 404, ErrorCode.NOT_FOUND);
       }
 
-      if (settlement.status === "PAID") {
+      if (payStatement.status === "PAID") {
         const paidPayout = await tx.payout.findFirst({
-          where: { settlementId: settlement.id, status: "PAID" },
+          where: { payStatementId: payStatement.id, status: "PAID" },
           select: payoutDetailSelect,
         });
         if (paidPayout) {
-          return { payout: paidPayout, settlement, duplicate: true };
+          return { payout: paidPayout, payStatement, duplicate: true };
         }
         throw new AppError(
-          "Settlement is already marked as paid",
+          "Pay statement is already marked as paid",
           409,
           ErrorCode.CONFLICT
         );
       }
 
-      if (settlement.status !== "APPROVED") {
+      if (payStatement.status !== "APPROVED") {
         throw new AppError(
-          `Only an APPROVED settlement can be paid (current status: ${settlement.status})`,
+          `Only an APPROVED payStatement can be paid (current status: ${payStatement.status})`,
           409,
           ErrorCode.CONFLICT
         );
       }
 
-      const amount = toDecimal(settlement.netPayable);
+      const amount = toDecimal(payStatement.netPayable);
       if (amount.lte(0)) {
         throw new AppError(
-          "Settlement has no payable amount",
+          "Pay statement has no payable amount",
           409,
           ErrorCode.CONFLICT
         );
@@ -108,15 +108,15 @@ export async function createPayout(
       const idempotencyKey =
         input.idempotencyKey ??
         (input.referenceNumber
-          ? `payout:${settlement.id}:${input.referenceNumber}`
-          : `payout:${settlement.id}:${uuidv4()}`);
+          ? `payout:${payStatement.id}:${input.referenceNumber}`
+          : `payout:${payStatement.id}:${uuidv4()}`);
 
       const existing = await tx.payout.findUnique({
         where: { idempotencyKey },
         select: payoutDetailSelect,
       });
       if (existing) {
-        return { payout: existing, settlement, duplicate: true };
+        return { payout: existing, payStatement, duplicate: true };
       }
 
       const paidAt = input.paidAt ?? new Date();
@@ -124,10 +124,10 @@ export async function createPayout(
       const payout = await tx.payout.create({
         data: {
           recipientType: "RIDER",
-          riderId: settlement.riderId,
-          settlementId: settlement.id,
+          riderId: payStatement.riderId,
+          payStatementId: payStatement.id,
           amount,
-          currency: settlement.currency,
+          currency: payStatement.currency,
           status: "PAID",
           approvedById: actor.userId,
           approvedAt: paidAt,
@@ -140,25 +140,25 @@ export async function createPayout(
         select: payoutDetailSelect,
       });
 
-      await tx.earningsLedger.create({
+      await tx.ledgerEntry.create({
         data: {
-          riderId: settlement.riderId,
+          riderId: payStatement.riderId,
           entryType: "PAYOUT",
           direction: "DEBIT",
           amount,
-          currency: settlement.currency,
+          currency: payStatement.currency,
           occurredAt: paidAt,
-          description: `Payout for settlement ${settlement.settlementNumber}`,
+          description: `Payout for pay statement ${payStatement.statementNumber}`,
           sourceType: "Payout",
           sourceId: payout.id,
-          settlementId: settlement.id,
+          payStatementId: payStatement.id,
           createdById: actor.userId,
           idempotencyKey: `payout:${payout.id}`,
         },
       });
 
-      const updatedSettlement = await tx.riderSettlement.update({
-        where: { id: settlement.id },
+      const updatedStatement = await tx.riderPayStatement.update({
+        where: { id: payStatement.id },
         data: {
           status: "PAID",
           paidAt,
@@ -166,7 +166,7 @@ export async function createPayout(
         },
         select: {
           id: true,
-          settlementNumber: true,
+          statementNumber: true,
           status: true,
           netPayable: true,
           paidAt: true,
@@ -179,20 +179,20 @@ export async function createPayout(
         resource: "Payout",
         resourceId: payout.id,
         newData: {
-          settlementId: settlement.id,
-          settlementNumber: settlement.settlementNumber,
-          riderId: settlement.riderId,
+          payStatementId: payStatement.id,
+          statementNumber: payStatement.statementNumber,
+          riderId: payStatement.riderId,
           amount,
           paymentMethod: input.paymentMethod,
           referenceNumber: input.referenceNumber ?? null,
           paidAt,
         },
-        summary: `${actor.userName} paid ${amount} for settlement ${settlement.settlementNumber}.`,
+        summary: `${actor.userName} paid ${amount} for pay statement ${payStatement.statementNumber}.`,
         db: tx,
         throwOnError: true,
       });
 
-      return { payout, settlement: updatedSettlement, duplicate: false };
+      return { payout, payStatement: updatedStatement, duplicate: false };
     });
   } catch (err) {
     rethrowPrismaError(err, "A payout with this reference already exists");
@@ -203,7 +203,7 @@ export async function listPayouts(query: ListPayoutsQuery) {
   const { page, limit } = query;
   const where: Prisma.PayoutWhereInput = {};
 
-  if (query.settlementId) where.settlementId = query.settlementId;
+  if (query.payStatementId) where.payStatementId = query.payStatementId;
   if (query.riderId) where.riderId = query.riderId;
   if (query.status) where.status = query.status;
   if (query.from || query.to) {

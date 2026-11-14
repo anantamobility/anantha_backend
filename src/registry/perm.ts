@@ -75,7 +75,7 @@ export const PERMISSION_REGISTRY = [
     actions: ['create', 'read', 'adjust']
   },
   {
-    resource: 'settlement',
+    resource: 'payStatement',
     actions: ['generate', 'read', 'approve', 'pay', 'reconcile']
   },
   {
@@ -147,7 +147,7 @@ export const ACTION_DEFINITIONS = {
   refund: "Record an outbound refund.",
   adjust: "Record an approved financial adjustment.",
   "due:generate": "Generate collection dues from a billing schedule.",
-  generate: "Generate a derived financial record such as a settlement.",
+  generate: "Generate a derived financial record such as a pay statement.",
   approve: "Approve a pending financial record.",
   pay: "Disburse a payable financial record.",
   reconcile: "Reconcile or reverse a financial record after verification.",

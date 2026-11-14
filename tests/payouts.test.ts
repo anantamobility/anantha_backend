@@ -7,7 +7,7 @@ import { accessToken } from "./helpers/auth.js";
 const prismaMock = prisma as any;
 
 const PAYOUT_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4b03";
-const SETTLEMENT_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4b01";
+const STATEMENT_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4b01";
 const RIDER_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a8e";
 
 function authUser(permissions: { resource: string; action: string }[]) {
@@ -26,7 +26,7 @@ function authenticate(permissions: { resource: string; action: string }[]) {
 function payout(overrides: Record<string, unknown> = {}) {
   return {
     id: PAYOUT_ID,
-    settlementId: SETTLEMENT_ID,
+    payStatementId: STATEMENT_ID,
     riderId: RIDER_ID,
     amount: "700.00",
     currency: "INR",

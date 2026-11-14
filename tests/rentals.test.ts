@@ -85,8 +85,8 @@ beforeEach(() => {
   prismaMock.rental.count.mockResolvedValue(0);
   prismaMock.rentalCollectionDue.findMany.mockResolvedValue([]);
   prismaMock.collection.findMany.mockResolvedValue([]);
-  prismaMock.vehicleAssignment.findMany.mockResolvedValue([]);
-  prismaMock.rentalLedgerEntry.upsert.mockResolvedValue({});
+  prismaMock.vehicleDeployment.findMany.mockResolvedValue([]);
+  prismaMock.ledgerEntry.upsert.mockResolvedValue({});
   prismaMock.auditLog.create.mockResolvedValue({});
 });
 
@@ -286,7 +286,7 @@ describe("PATCH /rentals/:id/assign-vehicle", () => {
     prismaMock.rental.findUnique.mockResolvedValue(
       rentalDetail({ riderId: RIDER_ID, hubId: null })
     );
-    prismaMock.vehicleAssignment.count.mockResolvedValue(0);
+    prismaMock.vehicleDeployment.count.mockResolvedValue(0);
     prismaMock.vehicle.findUnique.mockResolvedValue({
       id: VEHICLE_ID,
       registrationNumber: "KA01AB1234",
@@ -295,12 +295,13 @@ describe("PATCH /rentals/:id/assign-vehicle", () => {
       version: 0,
       deletedAt: null,
     });
-    prismaMock.vehicleAssignment.create.mockResolvedValue({
+    prismaMock.vehicleDeployment.create.mockResolvedValue({
       id: ASSIGNMENT_ID,
       vehicleId: VEHICLE_ID,
       status: "ACTIVE",
     });
-    prismaMock.vehicle.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.vehicle.updateMany.mockResolvedValue({ count: 1 });
+
     const res = await request(app)
       .patch(`/rentals/${RENTAL_ID}/assign-vehicle`)
       .set("Authorization", `Bearer ${accessToken()}`)
@@ -311,7 +312,7 @@ describe("PATCH /rentals/:id/assign-vehicle", () => {
       id: ASSIGNMENT_ID,
       vehicleId: VEHICLE_ID,
     });
-    expect(prismaMock.vehicleAssignment.create).toHaveBeenCalledWith(
+    expect(prismaMock.vehicleDeployment.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           rentalId: RENTAL_ID,
@@ -338,7 +339,7 @@ describe("PATCH /rentals/:id/assign-vehicle", () => {
         riderId: null,
       })
     );
-    prismaMock.vehicleAssignment.count.mockResolvedValue(0);
+    prismaMock.vehicleDeployment.count.mockResolvedValue(0);
     prismaMock.vehicle.findUnique.mockResolvedValue({
       id: VEHICLE_ID,
       registrationNumber: "KA01AB1234",
@@ -347,19 +348,20 @@ describe("PATCH /rentals/:id/assign-vehicle", () => {
       version: 0,
       deletedAt: null,
     });
-    prismaMock.vehicleAssignment.create.mockResolvedValue({
+    prismaMock.vehicleDeployment.create.mockResolvedValue({
       id: ASSIGNMENT_ID,
       vehicleId: VEHICLE_ID,
       status: "ACTIVE",
     });
-    prismaMock.vehicle.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.vehicle.updateMany.mockResolvedValue({ count: 1 });
+
     const res = await request(app)
       .patch(`/rentals/${RENTAL_ID}/assign-vehicle`)
       .set("Authorization", `Bearer ${accessToken()}`)
       .send({ vehicleId: VEHICLE_ID });
 
     expect(res.status).toBe(200);
-    expect(prismaMock.vehicleAssignment.create).toHaveBeenCalledWith(
+    expect(prismaMock.vehicleDeployment.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           rentalId: RENTAL_ID,
@@ -369,7 +371,7 @@ describe("PATCH /rentals/:id/assign-vehicle", () => {
       })
     );
     // The per-rental single-vehicle guard is skipped for B2B agreements.
-    expect(prismaMock.vehicleAssignment.count).not.toHaveBeenCalledWith(
+    expect(prismaMock.vehicleDeployment.count).not.toHaveBeenCalledWith(
       expect.objectContaining({
         where: { rentalId: RENTAL_ID, status: "ACTIVE" },
       })
@@ -384,7 +386,7 @@ describe("PATCH /rentals/:id/activate", () => {
     prismaMock.rental.findUnique.mockResolvedValue(
       rentalDetail({ status: "DRAFT" })
     );
-    prismaMock.vehicleAssignment.count.mockResolvedValue(1);
+    prismaMock.vehicleDeployment.count.mockResolvedValue(1);
     prismaMock.rental.updateMany.mockResolvedValue({ count: 1 });
     prismaMock.rental.findUniqueOrThrow.mockResolvedValue(
       rentalDetail({ status: "ACTIVE" })
@@ -413,7 +415,7 @@ describe("PATCH /rentals/:id/activate", () => {
     prismaMock.rental.findUnique.mockResolvedValue(
       rentalDetail({ status: "DRAFT" })
     );
-    prismaMock.vehicleAssignment.count.mockResolvedValue(0);
+    prismaMock.vehicleDeployment.count.mockResolvedValue(0);
 
     const res = await request(app)
       .patch(`/rentals/${RENTAL_ID}/activate`)
@@ -426,7 +428,7 @@ describe("PATCH /rentals/:id/activate", () => {
 });
 
 describe("PATCH /rentals/:id/close", () => {
-  it("completes the rental, generates final dues and stores settlement", async () => {
+  it("completes the rental, generates final dues and stores payStatement", async () => {
     authenticate([{ resource: "rental", action: "close" }]);
     const activeRental = rentalDetail({ status: "ACTIVE" });
     prismaMock.rental.findFirst.mockResolvedValue(activeRental);
@@ -449,7 +451,7 @@ describe("PATCH /rentals/:id/close", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.rental.status).toBe("COMPLETED");
-    expect(res.body.data.settlement).toMatchObject({
+    expect(res.body.data.payStatement).toMatchObject({
       totalCharges: expect.anything(),
       depositBalance: expect.anything(),
       vehicleDispositions: [],

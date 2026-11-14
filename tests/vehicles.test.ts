@@ -72,7 +72,8 @@ beforeEach(() => {
   prismaMock.vehicle.create.mockReset();
   prismaMock.vehicle.update.mockReset();
   prismaMock.vehicle.updateMany.mockReset();
-  prismaMock.vehicle.delete.mockReset();  prismaMock.vehicleAssignment.count.mockReset();
+  prismaMock.vehicle.delete.mockReset();
+  prismaMock.vehicleDeployment.count.mockReset();
   prismaMock.service.count.mockReset();
   prismaMock.auditLog.create.mockReset();
 });
@@ -473,7 +474,7 @@ describe("DELETE /vehicles/:id", () => {
     authenticate([{ resource: "vehicle", action: "delete" }]);
     prismaMock.vehicle.findFirst.mockResolvedValue(existingVehicle());
     prismaMock.vehicle.findUnique.mockResolvedValue(existingVehicle());
-    prismaMock.vehicleAssignment.count.mockResolvedValue(0);
+    prismaMock.vehicleDeployment.count.mockResolvedValue(0);
     prismaMock.service.count.mockResolvedValue(0);
     prismaMock.vehicle.update.mockResolvedValue(
       existingVehicle({ deletedAt: new Date("2026-01-03T00:00:00.000Z") })
@@ -504,7 +505,7 @@ describe("DELETE /vehicles/:id", () => {
     authenticate([{ resource: "vehicle", action: "delete" }]);
     prismaMock.vehicle.findFirst.mockResolvedValue(existingVehicle());
     prismaMock.vehicle.findUnique.mockResolvedValue(existingVehicle());
-    prismaMock.vehicleAssignment.count.mockResolvedValue(1);
+    prismaMock.vehicleDeployment.count.mockResolvedValue(1);
     prismaMock.service.count.mockResolvedValue(0);
 
     const res = await request(app)
@@ -521,7 +522,7 @@ describe("DELETE /vehicles/:id", () => {
     authenticate([{ resource: "vehicle", action: "delete" }]);
     prismaMock.vehicle.findFirst.mockResolvedValue(existingVehicle());
     prismaMock.vehicle.findUnique.mockResolvedValue(existingVehicle());
-    prismaMock.vehicleAssignment.count.mockResolvedValue(0);
+    prismaMock.vehicleDeployment.count.mockResolvedValue(0);
     prismaMock.service.count.mockResolvedValue(1);
 
     const res = await request(app)
@@ -567,7 +568,7 @@ describe("PATCH /vehicles/:id/status", () => {
     authenticate([{ resource: "vehicle", action: "status:update" }]);
     prismaMock.vehicle.findFirst.mockResolvedValue(existingVehicle());
     prismaMock.vehicle.findUnique.mockResolvedValue(existingVehicle());
-    prismaMock.vehicleAssignment.count.mockResolvedValue(0);
+    prismaMock.vehicleDeployment.count.mockResolvedValue(0);
     prismaMock.vehicle.updateMany.mockResolvedValue({ count: 1 });
 
     const res = await request(app)
@@ -670,7 +671,7 @@ describe("PATCH /vehicles/:id/status", () => {
     prismaMock.vehicle.findUnique.mockResolvedValue(
       existingVehicle({ status: "DEPLOYED" })
     );
-    prismaMock.vehicleAssignment.count.mockResolvedValue(1);
+    prismaMock.vehicleDeployment.count.mockResolvedValue(1);
 
     const res = await request(app)
       .patch(`/vehicles/${VEHICLE_ID}/status`)
@@ -698,7 +699,7 @@ describe("PATCH /vehicles/:id/status", () => {
     authenticate([{ resource: "vehicle", action: "status:update" }]);
     prismaMock.vehicle.findFirst.mockResolvedValue(existingVehicle());
     prismaMock.vehicle.findUnique.mockResolvedValue(existingVehicle());
-    prismaMock.vehicleAssignment.count.mockResolvedValue(0);
+    prismaMock.vehicleDeployment.count.mockResolvedValue(0);
     prismaMock.vehicle.updateMany.mockResolvedValue({ count: 0 });
 
     const res = await request(app)

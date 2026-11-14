@@ -45,7 +45,7 @@ function earning(overrides: Record<string, unknown> = {}) {
     currency: "INR",
     occurredAt: new Date("2026-01-01T10:00:00.000Z"),
     description: "Delivery earning",
-    settlementId: null,
+    payStatementId: null,
     rentalId: RENTAL_ID,
     idempotencyKey: `earning:${RIDER_ID}:DEL-1`,
     ...overrides,
@@ -60,8 +60,8 @@ beforeEach(() => {
       });
     }
   });
-  prismaMock.earningsLedger.findMany.mockResolvedValue([]);
-  prismaMock.earningsLedger.count.mockResolvedValue(0);
+  prismaMock.ledgerEntry.findMany.mockResolvedValue([]);
+  prismaMock.ledgerEntry.count.mockResolvedValue(0);
   prismaMock.auditLog.create.mockResolvedValue({});
 });
 
@@ -76,8 +76,8 @@ describe("POST /earnings", () => {
       riderId: RIDER_ID,
       currency: "INR",
     });
-    prismaMock.earningsLedger.findUnique.mockResolvedValue(null);
-    prismaMock.earningsLedger.create.mockResolvedValue(earning());
+    prismaMock.ledgerEntry.findUnique.mockResolvedValue(null);
+    prismaMock.ledgerEntry.create.mockResolvedValue(earning());
 
     const res = await request(app)
       .post("/earnings")
@@ -91,7 +91,7 @@ describe("POST /earnings", () => {
 
     expect(res.status).toBe(201);
     expect(res.body.data.entry.id).toBe(ENTRY_ID);
-    expect(prismaMock.earningsLedger.create).toHaveBeenCalledWith(
+    expect(prismaMock.ledgerEntry.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           riderId: RIDER_ID,
@@ -114,7 +114,7 @@ describe("POST /earnings", () => {
       riderId: RIDER_ID,
       currency: "INR",
     });
-    prismaMock.earningsLedger.findUnique.mockResolvedValue(earning());
+    prismaMock.ledgerEntry.findUnique.mockResolvedValue(earning());
 
     const res = await request(app)
       .post("/earnings")
@@ -128,7 +128,7 @@ describe("POST /earnings", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.duplicate).toBe(true);
-    expect(prismaMock.earningsLedger.create).not.toHaveBeenCalled();
+    expect(prismaMock.ledgerEntry.create).not.toHaveBeenCalled();
   });
 
   it("rejects earning creation without the earning:create permission", async () => {
@@ -147,23 +147,23 @@ describe("GET /earnings/summary", () => {
   it("separates settled and available earnings", async () => {
     authenticate([{ resource: "earning", action: "read" }]);
     prismaMock.rider.findUnique.mockResolvedValue(rider());
-    prismaMock.earningsLedger.findMany.mockResolvedValue([
+    prismaMock.ledgerEntry.findMany.mockResolvedValue([
       {
         direction: "CREDIT",
         amount: "100.00",
-        settlementId: null,
+        payStatementId: null,
         entryType: "DELIVERY_EARNING",
       },
       {
         direction: "DEBIT",
         amount: "20.00",
-        settlementId: null,
+        payStatementId: null,
         entryType: "ADJUSTMENT",
       },
       {
         direction: "CREDIT",
         amount: "500.00",
-        settlementId: "settled-1",
+        payStatementId: "settled-1",
         entryType: "DELIVERY_EARNING",
       },
     ]);
@@ -183,7 +183,7 @@ describe("POST /earnings/adjustments", () => {
   it("returns the existing entry on an idempotent debit retry", async () => {
     authenticate([{ resource: "earning", action: "adjust" }]);
     prismaMock.rider.findUnique.mockResolvedValue(rider());
-    prismaMock.earningsLedger.findUnique.mockResolvedValue(
+    prismaMock.ledgerEntry.findUnique.mockResolvedValue(
       earning({
         entryType: "ADJUSTMENT",
         direction: "DEBIT",
@@ -192,7 +192,7 @@ describe("POST /earnings/adjustments", () => {
     );
     // The first debit already consumed the balance; the retry must still
     // return the original entry instead of failing the balance check.
-    prismaMock.earningsLedger.findMany.mockResolvedValue([]);
+    prismaMock.ledgerEntry.findMany.mockResolvedValue([]);
 
     const res = await request(app)
       .post("/earnings/adjustments")
@@ -207,17 +207,17 @@ describe("POST /earnings/adjustments", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.duplicate).toBe(true);
-    expect(prismaMock.earningsLedger.create).not.toHaveBeenCalled();
+    expect(prismaMock.ledgerEntry.create).not.toHaveBeenCalled();
   });
 
   it("rejects a debit adjustment that exceeds the available balance", async () => {
     authenticate([{ resource: "earning", action: "adjust" }]);
     prismaMock.rider.findUnique.mockResolvedValue(rider());
-    prismaMock.earningsLedger.findMany.mockResolvedValue([
+    prismaMock.ledgerEntry.findMany.mockResolvedValue([
       {
         direction: "CREDIT",
         amount: "50.00",
-        settlementId: null,
+        payStatementId: null,
       },
     ]);
 
@@ -232,6 +232,6 @@ describe("POST /earnings/adjustments", () => {
       });
 
     expect(res.status).toBe(409);
-    expect(prismaMock.earningsLedger.create).not.toHaveBeenCalled();
+    expect(prismaMock.ledgerEntry.create).not.toHaveBeenCalled();
   });
 });

@@ -20,7 +20,7 @@ import ratecardsRouter from './routes/ratecards.js'
 import rentalsRouter from './routes/rentals.js'
 import collectionsRouter from './routes/collections.js'
 import earningsRouter from './routes/earnings.js'
-import settlementsRouter from './routes/settlements.js'
+import payStatementsRouter from './routes/payStatements.js'
 import payoutsRouter from './routes/payouts.js'
 import servicesRouter from './routes/services.js'
 import sparesRouter from './routes/spares.js'
@@ -54,7 +54,7 @@ app.use("/ratecards", ratecardsRouter)
 app.use("/rentals", rentalsRouter)
 app.use("/collections", collectionsRouter)
 app.use("/earnings", earningsRouter)
-app.use("/settlements", settlementsRouter)
+app.use("/pay-statements", payStatementsRouter)
 app.use("/payouts", payoutsRouter)
 app.use("/services", servicesRouter)
 app.use("/spares", sparesRouter)

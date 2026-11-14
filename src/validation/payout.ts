@@ -12,7 +12,7 @@ export const payoutStatusSchema = z.enum([
 
 export const createPayoutSchema = z
   .object({
-    settlementId: z.string().uuid("settlementId must be a valid UUID"),
+    payStatementId: z.string().uuid("payStatementId must be a valid UUID"),
     paymentMethod: z.enum([
       "CASH",
       "UPI",
@@ -29,7 +29,7 @@ export const createPayoutSchema = z
   .strict();
 
 export const listPayoutsQuerySchema = paginationQuerySchema.extend({
-  settlementId: z.string().uuid("settlementId must be a valid UUID").optional(),
+  payStatementId: z.string().uuid("payStatementId must be a valid UUID").optional(),
   riderId: z.string().uuid("riderId must be a valid UUID").optional(),
   status: payoutStatusSchema.optional(),
   from: z.coerce.date().optional(),
@@ -40,10 +40,10 @@ export const listPayoutsQuerySchema = paginationQuerySchema.extend({
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
 });
 
-export const paySettlementSchema = createPayoutSchema.omit({
-  settlementId: true,
+export const payStatementSchema = createPayoutSchema.omit({
+  payStatementId: true,
 });
 
 export type CreatePayoutInput = z.infer<typeof createPayoutSchema>;
-export type PaySettlementInput = z.infer<typeof paySettlementSchema>;
+export type PayStatementPaymentInput = z.infer<typeof payStatementSchema>;
 export type ListPayoutsQuery = z.infer<typeof listPayoutsQuerySchema>;
