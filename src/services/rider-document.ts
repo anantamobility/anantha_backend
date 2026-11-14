@@ -3,10 +3,8 @@ import { v4 as uuidv4 } from "uuid";
 import envConfig from "../config/env.js";
 import prisma from "../database/prismaClient.js";
 import {
-  DocumentStatus,
   DocumentType,
   Prisma,
-  VerificationType,
 } from "../generated/prisma/client.js";
 import { storage } from "../storage/index.js";
 import { safeDocumentExtension } from "../storage/mime.js";
@@ -24,7 +22,6 @@ import type {
 export const riderDocumentSelect = {
   id: true,
   documentType: true,
-  status: true,
   title: true,
   fileName: true,
   mimeType: true,
@@ -33,15 +30,10 @@ export const riderDocumentSelect = {
   storageBucket: true,
   issueDate: true,
   expiryDate: true,
+  documentNumber: true,
   riderId: true,
-  verificationId: true,
   staffId: true,
   vehicleId: true,
-  clientId: true,
-  userId: true,
-  verifiedById: true,
-  verifiedAt: true,
-  uploadedById: true,
   notes: true,
   metadata: true,
   createdAt: true,
@@ -136,37 +128,6 @@ export async function uploadRiderDocument(
   const rider = await assertRiderExists(riderId);
   const extension = safeDocumentExtension(file.originalname, file.mimetype);
 
-  let verificationId: string | null = null;
-  if (metadata.verificationType) {
-    if (metadata.documentType !== metadata.verificationType) {
-      throw new AppError(
-        `A ${metadata.verificationType} verification can only be linked to a ${metadata.verificationType} document`,
-        400,
-        ErrorCode.VALIDATION_ERROR
-      );
-    }
-
-    const verification = await prisma.riderVerification.findUnique({
-      where: {
-        riderId_type: {
-          riderId,
-          type: metadata.verificationType as VerificationType,
-        },
-      },
-      select: { id: true },
-    });
-
-    if (!verification) {
-      throw new AppError(
-        "Verification not found for this rider",
-        404,
-        ErrorCode.NOT_FOUND
-      );
-    }
-
-    verificationId = verification.id;
-  }
-
   const documentId = uuidv4();
   const storageKey = `riders/${riderId}/${documentId}${extension}`;
 
@@ -178,7 +139,6 @@ export async function uploadRiderDocument(
         data: {
           id: documentId,
           documentType: metadata.documentType as DocumentType,
-          status: DocumentStatus.PENDING,
           title: metadata.title,
           fileName: basename(file.originalname).slice(0, 255),
           mimeType: file.mimetype,
@@ -188,8 +148,6 @@ export async function uploadRiderDocument(
           issueDate: metadata.issueDate ?? null,
           expiryDate: metadata.expiryDate ?? null,
           riderId,
-          verificationId,
-          uploadedById: actor.userId,
           notes: metadata.notes ?? null,
         },
         select: riderDocumentSelect,
@@ -206,7 +164,6 @@ export async function uploadRiderDocument(
           title: document.title,
           mimeType: document.mimeType,
           fileSize: document.fileSize,
-          verificationId,
         },
         summary: `${actor.userName} uploaded a ${document.documentType} document for rider ${rider.riderCode}.`,
         db: tx,

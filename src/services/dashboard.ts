@@ -1,7 +1,7 @@
 import prisma from "../database/prismaClient.js";
 import { Prisma } from "../generated/prisma/client.js";
+import { resolveTrendRange } from "../utils/date-range.js";
 import { toDecimal } from "./rental-schedule.js";
-import { getStatusTrends, resolveTrendRange } from "./trends.js";
 import type { DashboardQuery } from "../validation/dashboard.js";
 
 const VEHICLE_STATUSES = [
@@ -35,16 +35,6 @@ const OPEN_DEPOSIT_STATUSES = [
   "REQUIRED",
   "PENDING_RECEIPT",
   "PARTIALLY_RECEIVED",
-] as const;
-
-const VERIFICATION_STATUSES = [
-  "PENDING",
-  "SUBMITTED",
-  "VERIFIED",
-  "REJECTED",
-  "EXPIRED",
-  "NOT_SUBMITTED",
-  "UNDER_REVIEW",
 ] as const;
 
 type CountGroup = { _count: { _all: number } };
@@ -324,17 +314,14 @@ function summarizeDeposits(deposits: DepositRow[]) {
 export async function getDashboard(query: DashboardQuery) {
   const { startDate, endDate } = resolveTrendRange(query);
   const dateFilter = { gte: startDate, lte: endDate };
-  const trendQuery = { ...query, startDate, endDate };
 
   const [
     vehicleGroups,
     riderGroups,
-    verificationGroups,
     collectionGroups,
     b2cDueGroups,
     b2bDueGroups,
     deposits,
-    trends,
   ] = await Promise.all([
     prisma.vehicle.groupBy({
       by: ["status"],
@@ -344,11 +331,6 @@ export async function getDashboard(query: DashboardQuery) {
     prisma.rider.groupBy({
       by: ["status"],
       where: { deletedAt: null },
-      _count: { _all: true },
-    }),
-    prisma.riderVerification.groupBy({
-      by: ["type", "status"],
-      where: { rider: { deletedAt: null } },
       _count: { _all: true },
     }),
     prisma.collection.groupBy({
@@ -395,7 +377,6 @@ export async function getDashboard(query: DashboardQuery) {
         },
       },
     }),
-    getStatusTrends(trendQuery),
   ]);
 
   const vehicleByStatus = zeroMap(VEHICLE_STATUSES);
@@ -408,21 +389,6 @@ export async function getDashboard(query: DashboardQuery) {
     riderByStatus,
     riderGroups as Array<{ status: string } & CountGroup>
   );
-
-  const verificationByType: Record<string, Record<string, number>> = {
-    PVC: zeroMap(VERIFICATION_STATUSES),
-    BGV: zeroMap(VERIFICATION_STATUSES),
-  };
-
-  for (const group of verificationGroups as Array<{
-    type: string;
-    status: string;
-    _count: { _all: number };
-  }>) {
-    const bucket = verificationByType[group.type] ?? {};
-    bucket[group.status] = (bucket[group.status] ?? 0) + group._count._all;
-    verificationByType[group.type] = bucket;
-  }
 
   const allDueRows = [
     ...(b2cDueGroups as DueAggregateRow[]),
@@ -459,12 +425,8 @@ export async function getDashboard(query: DashboardQuery) {
           0
         ),
         byStatus: riderByStatus,
-        verifications: {
-          byType: verificationByType,
-        },
       },
     },
-    trends,
     collectionDue: {
       totalCollections: collections.totalCount,
       totalCollectedAmount: collections.collectedAmount,

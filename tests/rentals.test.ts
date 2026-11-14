@@ -300,9 +300,7 @@ describe("PATCH /rentals/:id/assign-vehicle", () => {
       vehicleId: VEHICLE_ID,
       status: "ACTIVE",
     });
-    prismaMock.vehicle.updateMany.mockResolvedValue({ count: 1 });
-    prismaMock.vehicleStatusHistory.create.mockResolvedValue({});
-
+    prismaMock.vehicle.updateMany.mockResolvedValue({ count: 1 });
     const res = await request(app)
       .patch(`/rentals/${RENTAL_ID}/assign-vehicle`)
       .set("Authorization", `Bearer ${accessToken()}`)
@@ -354,9 +352,7 @@ describe("PATCH /rentals/:id/assign-vehicle", () => {
       vehicleId: VEHICLE_ID,
       status: "ACTIVE",
     });
-    prismaMock.vehicle.updateMany.mockResolvedValue({ count: 1 });
-    prismaMock.vehicleStatusHistory.create.mockResolvedValue({});
-
+    prismaMock.vehicle.updateMany.mockResolvedValue({ count: 1 });
     const res = await request(app)
       .patch(`/rentals/${RENTAL_ID}/assign-vehicle`)
       .set("Authorization", `Bearer ${accessToken()}`)

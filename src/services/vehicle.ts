@@ -12,7 +12,6 @@ import type { UserContext } from "../types/user.js";
 import type {
   ChangeVehicleStatusInput,
   CreateVehicleInput,
-  ListVehicleStatusHistoryQuery,
   ListVehiclesQuery,
   UpdateVehicleInput,
 } from "../validation/vehicle.js";
@@ -34,6 +33,7 @@ export const vehicleListSelect = {
   color: true,
   vin: true,
   status: true,
+  statusChangedAt: true,
   acquiredAt: true,
   retiredAt: true,
   isActive: true,
@@ -50,14 +50,8 @@ export const vehicleDetailSelect = {
       assignments: true,
       services: true,
       documents: true,
-      statusHistory: true,
     },
   },
-} as const;
-
-export const statusHistoryUserSelect = {
-  id: true,
-  name: true,
 } as const;
 
 // Operational lifecycle: only an IDLE vehicle can be deployed. In-service,
@@ -155,6 +149,7 @@ export async function createVehicle(
         color: input.color ?? null,
         vin: input.vin ?? null,
         status: VehicleStatus.IDLE,
+        statusChangedAt: new Date(),
         isActive: input.isActive ?? true,
       };
 
@@ -163,18 +158,6 @@ export async function createVehicle(
       const vehicle = await tx.vehicle.create({
         data,
         select: vehicleDetailSelect,
-      });
-
-      // Record the creation status so historical trend calculations have a
-      // reliable first status transition for every newly created vehicle.
-      await tx.vehicleStatusHistory.create({
-        data: {
-          vehicleId: vehicle.id,
-          previousStatus: null,
-          status: VehicleStatus.IDLE,
-          changedById: actor.userId,
-          reason: "Vehicle created",
-        },
       });
 
       await logAudit({
@@ -435,6 +418,7 @@ export async function changeVehicleStatus(
 
       const retiredAt =
         nextStatus === VehicleStatus.RETIRED ? new Date() : undefined;
+      const statusChangedAt = new Date();
 
       // Conditional update on the version we read guarantees that a concurrent
       // status change cannot silently overwrite a newer status.
@@ -447,6 +431,7 @@ export async function changeVehicleStatus(
         },
         data: {
           status: nextStatus,
+          statusChangedAt,
           version: { increment: 1 },
           ...(retiredAt ? { retiredAt } : {}),
         },
@@ -460,22 +445,11 @@ export async function changeVehicleStatus(
         );
       }
 
-      const statusHistory = await tx.vehicleStatusHistory.create({
-        data: {
-          vehicleId: id,
-          previousStatus,
-          status: nextStatus,
-          changedById: actor.userId,
-          reason: input.reason ?? null,
-          notes: input.notes ?? null,
-        },
-        include: { changedBy: { select: statusHistoryUserSelect } },
-      });
-
       const { deletedAt: _deletedAt, ...currentVehicle } = vehicle;
       const updatedVehicle = {
         ...currentVehicle,
         status: nextStatus,
+        statusChangedAt,
         version: vehicle.version + 1,
         ...(retiredAt ? { retiredAt } : {}),
       };
@@ -496,65 +470,9 @@ export async function changeVehicleStatus(
         throwOnError: true,
       });
 
-      return { vehicle: updatedVehicle, statusHistory };
+      return { vehicle: updatedVehicle };
     });
   } catch (err) {
     rethrowPrismaError(err, "Vehicle status could not be changed");
   }
-}
-
-export async function getVehicleStatusHistory(
-  id: string,
-  query: ListVehicleStatusHistoryQuery,
-  user?: UserContext
-) {
-  const { page, limit } = query;
-
-  const vehicle = await prisma.vehicle.findUnique({
-    where: { id },
-    select: { id: true, deletedAt: true, hubId: true },
-  });
-
-  if (!vehicle || vehicle.deletedAt) {
-    throw new AppError("Vehicle not found", 404, ErrorCode.NOT_FOUND);
-  }
-  assertHubAccess(user, vehicle.hubId);
-
-  const where: Prisma.VehicleStatusHistoryWhereInput = { vehicleId: id };
-  if (query.status) where.status = query.status;
-  if (query.startDate || query.endDate) {
-    where.changedAt = {};
-    if (query.startDate) where.changedAt.gte = query.startDate;
-    if (query.endDate) where.changedAt.lte = query.endDate;
-  }
-
-  const orderBy: Prisma.VehicleStatusHistoryOrderByWithRelationInput[] =
-    query.sortBy === "status"
-      ? [
-          { status: query.sortOrder },
-          { changedAt: "desc" },
-          { id: "desc" },
-        ]
-      : [{ changedAt: query.sortOrder }, { id: "desc" }];
-
-  const [statusHistory, total] = await Promise.all([
-    prisma.vehicleStatusHistory.findMany({
-      where,
-      include: { changedBy: { select: statusHistoryUserSelect } },
-      orderBy,
-      skip: (page - 1) * limit,
-      take: limit,
-    }),
-    prisma.vehicleStatusHistory.count({ where }),
-  ]);
-
-  return {
-    statusHistory,
-    pagination: {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
-    },
-  };
 }

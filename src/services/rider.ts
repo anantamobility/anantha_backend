@@ -9,8 +9,6 @@ import {
   RentalType,
   RiderStatus,
   SettlementStatus,
-  VerificationStatus,
-  VerificationType,
 } from "../generated/prisma/client.js";
 import {
   AppError,
@@ -23,7 +21,6 @@ import type { UserContext } from "../types/user.js";
 import type {
   ChangeRiderStatusInput,
   CreateRiderInput,
-  ListRiderStatusHistoryQuery,
   ListRidersQuery,
   UpdateRiderInput,
 } from "../validation/rider.js";
@@ -79,21 +76,14 @@ export const riderListSelect = {
 
 export const riderDetailSelect = {
   ...riderListSelect,
+  statusChangedAt: true,
   _count: {
     select: {
-      verifications: true,
       documents: true,
-      statusHistory: true,
     },
   },
 } as const;
 
-export const statusHistoryUserSelect = {
-  id: true,
-  name: true,
-} as const;
-
-// Operational lifecycle is deliberately separate from PVC/BGV verification.
 // TERMINATED is terminal and requires a new rider record for re-onboarding.
 export const ALLOWED_RIDER_STATUS_TRANSITIONS: Record<
   RiderStatus,
@@ -280,8 +270,7 @@ export async function createRider(
         hubId: input.hubId ?? null,
         status: RiderStatus.ONBOARDING,
         onboardedAt: new Date(),
-        createdById: actor.userId,
-        updatedById: actor.userId,
+        statusChangedAt: new Date(),
       };
 
       const address = addressInput(input.address);
@@ -291,41 +280,6 @@ export async function createRider(
         data,
         select: riderDetailSelect,
       });
-
-      await tx.riderStatusHistory.create({
-        data: {
-          riderId: rider.id,
-          previousStatus: null,
-          status: RiderStatus.ONBOARDING,
-          changedById: actor.userId,
-          reason: "Rider onboarded",
-        },
-      });
-
-      // PVC and BGV are independent processes. Creating records here only
-      // initialises them; neither is ever auto-approved.
-      for (const type of [VerificationType.PVC, VerificationType.BGV]) {
-        const verification = await tx.riderVerification.create({
-          data: {
-            riderId: rider.id,
-            type,
-            status: VerificationStatus.NOT_SUBMITTED,
-            version: 0,
-          },
-          select: { id: true },
-        });
-
-        await tx.riderVerificationHistory.create({
-          data: {
-            verificationId: verification.id,
-            riderId: rider.id,
-            type,
-            previousStatus: null,
-            status: VerificationStatus.NOT_SUBMITTED,
-            notes: "Verification initialised during rider onboarding",
-          },
-        });
-      }
 
       await logAudit({
         ...actor,
@@ -482,9 +436,7 @@ export async function updateRider(
         mergedClientId
       );
 
-      const data: Prisma.RiderUncheckedUpdateInput = {
-        updatedById: actor.userId,
-      };
+      const data: Prisma.RiderUncheckedUpdateInput = {};
       if (input.fullName !== undefined) data.fullName = input.fullName;
       if (input.userId !== undefined) data.userId = input.userId;
       if (input.riderCode !== undefined) data.riderCode = input.riderCode;
@@ -575,6 +527,7 @@ export async function changeRiderStatus(
         );
       }
 
+      const statusChangedAt = new Date();
       const updateResult = await tx.rider.updateMany({
         where: {
           id,
@@ -584,6 +537,7 @@ export async function changeRiderStatus(
         },
         data: {
           status: nextStatus,
+          statusChangedAt,
           version: { increment: 1 },
         },
       });
@@ -596,22 +550,11 @@ export async function changeRiderStatus(
         );
       }
 
-      const statusHistory = await tx.riderStatusHistory.create({
-        data: {
-          riderId: id,
-          previousStatus,
-          status: nextStatus,
-          changedById: actor.userId,
-          reason: input.reason ?? null,
-          notes: input.notes ?? null,
-        },
-        include: { changedBy: { select: statusHistoryUserSelect } },
-      });
-
       const { deletedAt: _deletedAt, ...currentRider } = rider;
       const updatedRider = {
         ...currentRider,
         status: nextStatus,
+        statusChangedAt,
         version: rider.version + 1,
       };
 
@@ -631,67 +574,11 @@ export async function changeRiderStatus(
         throwOnError: true,
       });
 
-      return { rider: updatedRider, statusHistory };
+      return { rider: updatedRider };
     });
   } catch (err) {
     rethrowPrismaError(err, "Rider status could not be changed");
   }
-}
-
-export async function getRiderStatusHistory(
-  id: string,
-  query: ListRiderStatusHistoryQuery,
-  user?: UserContext
-) {
-  const { page, limit } = query;
-
-  const rider = await prisma.rider.findUnique({
-    where: { id },
-    select: { id: true, deletedAt: true, hubId: true },
-  });
-
-  if (!rider || rider.deletedAt) {
-    throw new AppError("Rider not found", 404, ErrorCode.NOT_FOUND);
-  }
-  assertHubAccess(user, rider.hubId);
-
-  const where: Prisma.RiderStatusHistoryWhereInput = { riderId: id };
-  if (query.status) where.status = query.status;
-  if (query.startDate || query.endDate) {
-    where.changedAt = {};
-    if (query.startDate) where.changedAt.gte = query.startDate;
-    if (query.endDate) where.changedAt.lte = query.endDate;
-  }
-
-  const orderBy: Prisma.RiderStatusHistoryOrderByWithRelationInput[] =
-    query.sortBy === "status"
-      ? [
-          { status: query.sortOrder },
-          { changedAt: "desc" },
-          { id: "desc" },
-        ]
-      : [{ changedAt: query.sortOrder }, { id: "desc" }];
-
-  const [statusHistory, total] = await Promise.all([
-    prisma.riderStatusHistory.findMany({
-      where,
-      include: { changedBy: { select: statusHistoryUserSelect } },
-      orderBy,
-      skip: (page - 1) * limit,
-      take: limit,
-    }),
-    prisma.riderStatusHistory.count({ where }),
-  ]);
-
-  return {
-    statusHistory,
-    pagination: {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
-    },
-  };
 }
 
 export async function deleteRider(id: string, actor: AuditActor) {

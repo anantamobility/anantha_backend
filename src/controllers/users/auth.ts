@@ -6,7 +6,9 @@ import envConfig from "../../config/env.js"
 import { v4 as uuidv4 } from "uuid";
 import { redisGet, redisSet, redisDel } from "../../config/redis.js";
 import { validatePasswordStrength } from "../../validation/auth.js";
-import { logAudit } from "../../utils/log.js";
+import { AppError, ErrorCode } from "../../utils/errors.js";
+import { success } from "../../utils/http.js";
+import { getAuditActor, logAudit } from "../../utils/log.js";
 
 const isProd = envConfig.nodeEnv === "prod";
 const cookieOptions = {
@@ -349,3 +351,71 @@ export const changePass = async(req: Request, res: Response,next: NextFunction) 
         next(error)
     }
 }
+
+/**
+ * Admin-initiated password reset for another user. Requires user:resetPassword.
+ * Does not accept self-reset; use change-password for that.
+ */
+export const adminResetPassword = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const actor = getAuditActor(req);
+    const userId = req.params.userId as string;
+    const { newPassword } = req.body as { newPassword: string };
+
+    if (actor.userId === userId) {
+      throw new AppError(
+        "Use change-password to update your own password",
+        400,
+        ErrorCode.VALIDATION_ERROR
+      );
+    }
+
+    const target = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        deletedAt: true,
+        role: { select: { name: true } },
+      },
+    });
+
+    if (!target || target.deletedAt) {
+      throw new AppError("User not found", 404, ErrorCode.NOT_FOUND);
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash },
+    });
+
+    const revoked = await redisDel(`session:${userId}`);
+    if (!revoked) {
+      console.warn(
+        `Redis unavailable: sessions for user ${userId} could not be revoked after admin password reset`
+      );
+    }
+
+    await logAudit({
+      ...actor,
+      action: "PASSWORD_RESET",
+      resource: "User",
+      resourceId: userId,
+      summary: `${actor.userName} reset the password for user ${target.name}.`,
+      throwOnError: false,
+    });
+
+    return success(res, {
+      message: "Password reset successfully",
+      userId,
+      sessionsRevoked: revoked,
+    });
+  } catch (error) {
+    next(error);
+  }
+};

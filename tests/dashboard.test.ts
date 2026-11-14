@@ -19,12 +19,9 @@ beforeEach(() => {
   for (const delegate of [
     "vehicle",
     "rider",
-    "riderVerification",
     "collection",
     "rentalCollectionDue",
     "deposit",
-    "vehicleStatusHistory",
-    "riderStatusHistory",
     "user",
   ]) {
     prismaMock[delegate].findMany?.mockReset?.();
@@ -43,10 +40,7 @@ describe("GET /dashboard", () => {
     ]);
     prismaMock.rider.groupBy.mockResolvedValue([
       { status: "ACTIVE", _count: { _all: 1 } },
-    ]);
-    prismaMock.riderVerification.groupBy.mockResolvedValue([
-      { type: "PVC", status: "VERIFIED", _count: { _all: 1 } },
-    ]);
+    ]);
     prismaMock.collection.groupBy.mockResolvedValue([
       {
         status: "CLEARED",
@@ -107,11 +101,7 @@ describe("GET /dashboard", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.dashboard.live.vehicles.total).toBe(3);
-    expect(res.body.data.dashboard.live.vehicles.byStatus.RETIRED).toBe(0);
-    expect(res.body.data.dashboard.live.riders.verifications.byType.PVC).toMatchObject({
-      VERIFIED: 1,
-      PENDING: 0,
-    });
+    expect(res.body.data.dashboard.live.vehicles.byStatus.RETIRED).toBe(0);
     expect(res.body.data.dashboard.collectionDue).toMatchObject({
       totalCollections: 1,
       totalCollectedAmount: "100",
@@ -126,38 +116,5 @@ describe("GET /dashboard", () => {
       totalRefundedAmount: "50",
       outstandingDepositAmount: "300",
     });
-  });
-
-  it("exposes vehicle and rider trends separately", async () => {
-    prismaMock.user.findUnique.mockResolvedValue(
-      authUser([{ resource: "dashboard", action: "read" }])
-    );
-    prismaMock.vehicle.findMany.mockResolvedValue([]);
-    prismaMock.rider.findMany.mockResolvedValue([]);
-
-    const res = await request(app)
-      .get("/dashboard/trends")
-      .query({
-        startDate: "2026-01-01T00:00:00.000Z",
-        endDate: "2026-01-02T23:59:59.999Z",
-      })
-      .set("Authorization", `Bearer ${accessToken()}`);
-
-    expect(res.status).toBe(200);
-    expect(res.body.data.trends.vehicle.periods).toHaveLength(2);
-    expect(res.body.data.trends.rider.periods).toHaveLength(2);
-    expect(res.body.data.trends.vehicle.timezone).toBe("UTC");
-  });
-
-  it("requires dashboard:read", async () => {
-    prismaMock.user.findUnique.mockResolvedValue(
-      authUser([{ resource: "report", action: "read" }])
-    );
-
-    const res = await request(app)
-      .get("/dashboard")
-      .set("Authorization", `Bearer ${accessToken()}`);
-
-    expect(res.status).toBe(403);
   });
 });

@@ -9,7 +9,6 @@ Service * --- 1 Vehicle
         * --- 0..1 Rental --- 0..1 RentalPause
         * --- * ServiceCharge
         * --- * ServiceSpare --- 1 Spare
-        * --- * ServiceStatusHistory
         * --- * ServiceResponsibilityApproval
         * --- * ReplacementAssignment --- 1 original/replacement Vehicle
 
@@ -19,9 +18,9 @@ Spare 1 --- * InventoryBalance --- 1 Hub
 
 - `Service.serviceNumber` is generated as `SVC-XXXXXXXXXXXX` and is immutable.
 - A service may be attached to a rental only when the vehicle is actively assigned to that rental.
-- Every status change writes a `ServiceStatusHistory` row in the same transaction.
+- Every status change stamps `Service.statusChangedAt` in the same transaction (no status-history table).
 - `Service.version` guards all service mutations; stale writes return `409 CONFLICT`.
-- Charges, spare lines, replacement assignments, responsibility approvals and status history are included in `GET /services/:id`.
+- Charges, spare lines, replacement assignments and responsibility approvals are included in `GET /services/:id`.
 
 ## Service lifecycle
 
@@ -52,8 +51,10 @@ REPORTED ------> IN_PROGRESS <--> AWAITING_PARTS
 | `vehicleId` | UUID | Required; active, non-deleted, not `RETIRED`/`OUT_OF_SERVICE` |
 | `rentalId` | UUID / null | Optional; rental must not be terminal and must have an active assignment for the vehicle |
 | `status` | `ServiceStatus` | Defaults to `REPORTED` |
+| `statusChangedAt` | timestamp | Stamped on create and every status transition |
 | `responsibleParty` | `AML`, `RIDER`, `CLIENT`, `THIRD_PARTY`, `INSURANCE`, `UNKNOWN` | Defaults to `UNKNOWN` |
 | `reportedAt` | timestamp | Optional; defaults to now |
+
 | `startedAt`, `completedAt`, `closedAt`, `cancelledAt` | timestamp / null | Set by lifecycle actions |
 | `downtimeStart`, `downtimeEnd` | timestamp / null | `startedAt`, then `completedAt`/`cancelledAt` |
 | `downtimeReason` | string / null | Updated by `start` when supplied |

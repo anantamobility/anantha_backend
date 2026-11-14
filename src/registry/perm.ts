@@ -7,7 +7,7 @@ export type PermissionDef = {
 export const PERMISSION_REGISTRY = [
   {
     resource: 'user',
-    actions: ['create', 'read', 'update', 'delete', 'role:assign', 'status:update', 'session:revoke']
+    actions: ['create', 'read', 'update', 'delete', 'role:assign', 'status:update', 'session:revoke', 'resetPassword']
   },
   {
     resource: 'role',
@@ -25,13 +25,9 @@ export const PERMISSION_REGISTRY = [
       'update',
       'delete',
       'status:update',
-      'history:read',
       'document:upload',
       'document:read',
       'document:delete',
-      'verification:read',
-      'verification:submit',
-      'verification:review',
     ]
   },
   {
@@ -40,7 +36,7 @@ export const PERMISSION_REGISTRY = [
   },
   {
     resource: 'vehicle',
-    actions: ['create', 'read', 'update', 'delete', 'status:update', 'history:read']
+    actions: ['create', 'read', 'update', 'delete', 'status:update']
   },
   {
     resource: 'hub',
@@ -139,14 +135,11 @@ export const ACTION_DEFINITIONS = {
   assign_perm: "Attach or detach permissions on a role (the 'set' operation).",
   "role:assign": "Assign or change the role of a user account.",
   "session:revoke": "Revoke all active sessions and refresh tokens for a user.",
+  resetPassword: "Administratively reset another user's password.",
   "status:update": "Change the operational status of a resource.",
-  "history:read": "Read the status change history of a resource.",
   "document:upload": "Upload a document and its metadata.",
   "document:read": "Read document metadata or securely download a document.",
   "document:delete": "Soft-delete a document and remove its stored file.",
-  "verification:read": "Read verification status and verification history.",
-  "verification:submit": "Submit a PVC or BGV verification for review.",
-  "verification:review": "Approve or reject a PVC or BGV verification.",
   assign: "Assign a vehicle or other resource to a record.",
   activate: "Activate a record that is ready for operation.",
   close: "Close or complete an operational record.",

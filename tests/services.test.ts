@@ -91,14 +91,11 @@ function serviceDetail(overrides: Record<string, unknown> = {}) {
     rentalPause: null,
     charges: [],
     spares: [],
-    statusHistory: [],
-    responsibilityApprovals: [],
     replacementAssignments: [],
     _count: {
       charges: 0,
       spares: 0,
       replacementAssignments: 0,
-      responsibilityApprovals: 0,
     },
     ...overrides,
   };
@@ -112,12 +109,8 @@ beforeEach(() => {
       });
     }
   });
-  prismaMock.auditLog.create.mockResolvedValue({});
-  prismaMock.serviceStatusHistory.create.mockResolvedValue({});
-  prismaMock.service.findMany.mockResolvedValue([]);
-  prismaMock.service.count.mockResolvedValue(0);
-  prismaMock.vehicleStatusHistory.create.mockResolvedValue({});
-  prismaMock.rentalPause.create.mockResolvedValue({ id: "pause1" });
+  prismaMock.auditLog.create.mockResolvedValue({});  prismaMock.service.findMany.mockResolvedValue([]);
+  prismaMock.service.count.mockResolvedValue(0);  prismaMock.rentalPause.create.mockResolvedValue({ id: "pause1" });
   prismaMock.rentalPause.update.mockResolvedValue({ id: "pause1" });
 });
 
@@ -321,7 +314,11 @@ describe("PATCH /services/:id/awaiting-parts and /resume", () => {
     expect(res.body.data.service.status).toBe("AWAITING_PARTS");
     expect(prismaMock.service.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: { status: "AWAITING_PARTS", version: { increment: 1 } },
+        data: {
+          status: "AWAITING_PARTS",
+          statusChangedAt: expect.any(Date),
+          version: { increment: 1 },
+        },
       })
     );
   });
@@ -352,7 +349,11 @@ describe("PATCH /services/:id/awaiting-parts and /resume", () => {
     expect(res.body.data.service.status).toBe("IN_PROGRESS");
     expect(prismaMock.service.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: { status: "IN_PROGRESS", version: { increment: 1 } },
+        data: {
+          status: "IN_PROGRESS",
+          statusChangedAt: expect.any(Date),
+          version: { increment: 1 },
+        },
       })
     );
   });

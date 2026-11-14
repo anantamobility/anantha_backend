@@ -5,7 +5,6 @@ import * as riderService from "../../services/rider.js";
 import type {
   ChangeRiderStatusInput,
   CreateRiderInput,
-  ListRiderStatusHistoryQuery,
   ListRidersQuery,
   UpdateRiderInput,
 } from "../../validation/rider.js";
@@ -85,23 +84,6 @@ export const changeRiderStatus = async (
       req.params.id as string,
       req.body as ChangeRiderStatusInput,
       getAuditActor(req)
-    );
-    return success(res, result);
-  } catch (err) {
-    next(err);
-  }
-};
-
-export const getRiderStatusHistory = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const result = await riderService.getRiderStatusHistory(
-      req.params.id as string,
-      req.query as unknown as ListRiderStatusHistoryQuery,
-      req.user
     );
     return success(res, result);
   } catch (err) {

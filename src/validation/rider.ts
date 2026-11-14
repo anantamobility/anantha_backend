@@ -19,8 +19,6 @@ export const genderSchema = z.enum([
   "PREFER_NOT_TO_SAY",
 ]);
 
-export const verificationTypeSchema = z.enum(["PVC", "BGV"]);
-
 export const documentTypeSchema = z.enum([
   "ID_PROOF",
   "ADDRESS_PROOF",
@@ -188,62 +186,12 @@ export const changeRiderStatusSchema = z
   })
   .strict();
 
-export const listRiderStatusHistoryQuerySchema = paginationQuerySchema
-  .extend({
-    status: riderStatusSchema.optional(),
-    startDate: z.coerce.date().optional(),
-    endDate: z.coerce.date().optional(),
-    sortBy: z.enum(["changedAt", "status"]).default("changedAt"),
-    sortOrder: z.enum(["asc", "desc"]).default("desc"),
-  })
-  .refine(
-    (query) =>
-      !query.startDate ||
-      !query.endDate ||
-      query.startDate.getTime() <= query.endDate.getTime(),
-    {
-      message: "startDate must be before or equal to endDate",
-      path: ["startDate"],
-    }
-  );
-
-export const verificationTypeParamSchema = z.object({
-  id: z.string().uuid("id must be a valid UUID"),
-  type: verificationTypeSchema,
-});
-
-export const submitVerificationSchema = z
-  .object({
-    documentIds: z.array(z.string().uuid("documentIds must be valid UUIDs")).max(20).optional(),
-    expiresAt: z.coerce.date().nullable().optional(),
-    notes: z.string().trim().min(1).max(1000).optional(),
-  })
-  .strict();
-
-export const approveVerificationSchema = z
-  .object({
-    notes: z.string().trim().min(1).max(1000).optional(),
-  })
-  .strict();
-
-export const rejectVerificationSchema = z
-  .object({
-    reason: z
-      .string()
-      .trim()
-      .min(1, "reason is required when rejecting a verification")
-      .max(1000),
-    notes: z.string().trim().min(1).max(1000).optional(),
-  })
-  .strict();
-
 export const riderDocumentMetadataSchema = z
   .object({
     documentType: documentTypeSchema,
     title: z.string().trim().min(1, "title is required").max(200),
     issueDate: z.coerce.date().nullable().optional(),
     expiryDate: z.coerce.date().nullable().optional(),
-    verificationType: verificationTypeSchema.optional(),
     notes: z.string().trim().min(1).max(1000).optional(),
   })
   .strict();
@@ -261,16 +209,6 @@ export type CreateRiderInput = z.infer<typeof createRiderSchema>;
 export type UpdateRiderInput = z.infer<typeof updateRiderSchema>;
 export type ListRidersQuery = z.infer<typeof listRidersQuerySchema>;
 export type ChangeRiderStatusInput = z.infer<typeof changeRiderStatusSchema>;
-export type ListRiderStatusHistoryQuery = z.infer<
-  typeof listRiderStatusHistoryQuerySchema
->;
-export type SubmitVerificationInput = z.infer<
-  typeof submitVerificationSchema
->;
-export type ApproveVerificationInput = z.infer<
-  typeof approveVerificationSchema
->;
-export type RejectVerificationInput = z.infer<typeof rejectVerificationSchema>;
 export type RiderDocumentMetadata = z.infer<
   typeof riderDocumentMetadataSchema
 >;

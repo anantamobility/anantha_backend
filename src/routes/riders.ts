@@ -5,25 +5,19 @@ import { validate } from "../middleware/validate.js";
 import { uploadRiderDocument } from "../middleware/upload.js";
 import { idParamSchema } from "../validation/common.js";
 import {
-  approveVerificationSchema,
   changeRiderStatusSchema,
   createRiderSchema,
   listRiderDocumentsQuerySchema,
-  listRiderStatusHistoryQuerySchema,
   listRidersQuerySchema,
-  rejectVerificationSchema,
   riderDocumentMetadataSchema,
   riderDocumentParamSchema,
-  submitVerificationSchema,
   updateRiderSchema,
-  verificationTypeParamSchema,
 } from "../validation/rider.js";
 import {
   changeRiderStatus,
   createRider,
   deleteRiderById,
   getRiderById,
-  getRiderStatusHistory,
   getRiders,
   updateRider,
 } from "../controllers/rider/riders.js";
@@ -34,13 +28,6 @@ import {
   listRiderDocuments,
   uploadRiderDocument as uploadRiderDocumentController,
 } from "../controllers/rider/rider-document.controller.js";
-import {
-  approveRiderVerification,
-  getRiderVerification,
-  listRiderVerifications,
-  rejectRiderVerification,
-  submitRiderVerification,
-} from "../controllers/rider/rider-verification.controller.js";
 
 const r = Router();
 
@@ -59,14 +46,6 @@ r.get(
   getRiders
 );
 
-r.get(
-  "/:id/status-history",
-  verifyToken,
-  validate(idParamSchema, "params"),
-  authorize("rider", "history:read"),
-  validate(listRiderStatusHistoryQuerySchema, "query"),
-  getRiderStatusHistory
-);
 r.patch(
   "/:id/status",
   verifyToken,
@@ -114,46 +93,6 @@ r.delete(
   validate(riderDocumentParamSchema, "params"),
   authorize("rider", "document:delete"),
   deleteRiderDocument
-);
-
-// PVC / BGV verifications
-r.get(
-  "/:id/verifications",
-  verifyToken,
-  validate(idParamSchema, "params"),
-  authorize("rider", "verification:read"),
-  listRiderVerifications
-);
-r.get(
-  "/:id/verifications/:type",
-  verifyToken,
-  validate(verificationTypeParamSchema, "params"),
-  authorize("rider", "verification:read"),
-  getRiderVerification
-);
-r.post(
-  "/:id/verifications/:type/submit",
-  verifyToken,
-  validate(verificationTypeParamSchema, "params"),
-  authorize("rider", "verification:submit"),
-  validate(submitVerificationSchema),
-  submitRiderVerification
-);
-r.post(
-  "/:id/verifications/:type/approve",
-  verifyToken,
-  validate(verificationTypeParamSchema, "params"),
-  authorize("rider", "verification:review"),
-  validate(approveVerificationSchema),
-  approveRiderVerification
-);
-r.post(
-  "/:id/verifications/:type/reject",
-  verifyToken,
-  validate(verificationTypeParamSchema, "params"),
-  authorize("rider", "verification:review"),
-  validate(rejectVerificationSchema),
-  rejectRiderVerification
 );
 
 r.get(

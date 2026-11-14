@@ -1,6 +1,6 @@
 import type { Response } from "express";
 import { Prisma } from "../../generated/prisma/client.js";
-import { resolveTrendRange } from "../trends.js";
+import { resolveTrendRange } from "../../utils/date-range.js";
 
 export type ReportColumn = {
   key: string;

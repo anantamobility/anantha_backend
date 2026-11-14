@@ -59,7 +59,7 @@ When `TEST_DATABASE_URL` is not set, the suite derives the URL from `DATABASE_UR
 
 Routers are mounted in `src/app.ts`:
 
-- `/auth` - signup, login, refresh, logout, change/forgot/reset password
+- `/auth` - signup, login, refresh, logout, change-password, admin reset-password
 - `/users` - user CRUD, role/status changes, session revocation
 - `/audit-logs` - audit log read API
 - `/hubs`, `/staff`, `/vehicles`, `/riders`, `/clients`, `/ratecards`
