@@ -64,13 +64,6 @@ enum RentalDueStatus {
   OVERDUE
 }
 
-enum RentalLedgerEntryType {
-  RENT_CHARGED
-  COLLECTION_RECEIVED
-  RENT_ADJUSTMENT
-  REVERSAL
-}
-
 enum RentalStatus {
   DRAFT
   PENDING_APPROVAL
@@ -185,13 +178,6 @@ enum PaymentMethod {
   OTHER
 }
 
-enum PayoutRecipientType {
-  RIDER
-  STAFF
-  VENDOR
-  CLIENT
-}
-
 enum PayoutStatus {
   PENDING
   APPROVED
@@ -221,7 +207,12 @@ enum SettlementLineType {
   PAYOUT_REVERSAL
 }
 
+// One ledger for both directions: money owed to AML by a client/rider
+// (rent) and money owed by AML to a rider (earnings). entryType says which.
 enum LedgerEntryType {
+  RENT_CHARGED
+  COLLECTION_RECEIVED
+  RENT_ADJUSTMENT
   DELIVERY_EARNING
   RENT_DEDUCTION
   DEPOSIT_DEDUCTION
@@ -231,9 +222,10 @@ enum LedgerEntryType {
   OTHER
 }
 
+// need to work on this later
 enum LedgerDirection {
-  CREDIT
-  DEBIT
+  CREDIT // rental side: amonut recieved. rider side: AML owes more
+  DEBIT // rental side: cutomer owns more. rider side: paid/deducted
 }
 
 enum ServiceType {
@@ -347,9 +339,7 @@ model Role {
   @@map("roles")
 }
 
-// ============================================================
-// IDENTITY
-// ============================================================
+//p
 model User {
   id           String        @id @default(uuid(7))
   name         String
@@ -364,71 +354,66 @@ model User {
   roleId       String
   role         Role          @relation(fields: [roleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
-  staffProfile         Staff?
-  riderProfile         Rider?
-  auditLogs            AuditLog[]
-
-  // documentsUploaded           Document[]                 @relation("DocumentUploadedBy")
-  // documentsVerified           Document[]                 @relation("DocumentVerifiedBy")
-  // verificationsVerified       RiderVerification[]        @relation("VerificationVerifiedBy")
-  // verificationHistoryReviewed RiderVerificationHistory[] @relation("VerificationHistoryReviewedBy")
+  staffProfile Staff?
+  riderProfile Rider?
+  auditLogs    AuditLog[]
 
   rentalsCreated Rental[] @relation("RentalCreatedBy")
   rentalsClosed  Rental[] @relation("RentalClosedBy")
 
-  invoicesApproved      Invoice[]            @relation("InvoiceApprovedBy")
-  invoicesVoided        Invoice[]            @relation("InvoiceVoidedBy")
+  invoicesApproved Invoice[] @relation("InvoiceApprovedBy")
+  invoicesVoided   Invoice[] @relation("InvoiceVoidedBy")
 
-  collectionsReceived   Collection[]         @relation("CollectionReceivedBy")
-  collectionsReconciled Collection[]         @relation("CollectionReconciledBy")
+  collectionsReceived   Collection[] @relation("CollectionReceivedBy")
+  collectionsReconciled Collection[] @relation("CollectionReconciledBy")
 
-  payoutsApproved       Payout[]             @relation("PayoutApprovedBy")
-  depositsAuthorized    DepositTransaction[] @relation("DepositAuthorizedBy")
-  ledgerCreated         EarningsLedger[]     @relation("LedgerCreatedBy")
-  rentalLedgerCreated   RentalLedger[]       @relation("RentalLedgerCreatedBy")
-  settlementsApproved   RiderSettlement[]    @relation("SettlementApprovedBy")
+  payoutsApproved     Payout[]             @relation("PayoutApprovedBy")
+  depositsAuthorized  DepositTransaction[] @relation("DepositAuthorizedBy")
+  ledgerCreated       LedgerEntry[]        @relation("LedgerCreatedBy")
+  settlementsApproved RiderSettlement[]    @relation("SettlementApprovedBy")
 
-  assignmentsCreated             VehicleDeployment[]             @relation("AssignmentCreatedBy")
+  assignmentsCreated             VehicleDeployment[]     @relation("AssignmentCreatedBy")
   // serviceStatusChanges           ServiceStatusHistory[]          @relation("ServiceStatusChangedBy")
   // vehicleHubChanges              VehicleHubHistory[]             @relation("VehicleHubChangedBy")
-  servicesReported               Service[]                       @relation("ServiceReportedBy")
-  servicesApproved               Service[]                       @relation("ServiceApprovedBy")
-  servicesAssigned               Service[]                       @relation("ServiceAssignedTo")
-  inventoryMoved                 InventoryMovement[]             @relation("InventoryMovedBy")
+  servicesReported               Service[]               @relation("ServiceReportedBy")
+  servicesApproved               Service[]               @relation("ServiceApprovedBy")
+  servicesAssigned               Service[]               @relation("ServiceAssignedTo")
+  inventoryMoved                 InventoryMovement[]     @relation("InventoryMovedBy")
   // serviceResponsibilityApprovals ServiceResponsibilityApproval[] @relation("ServiceResponsibilityApprovedBy")
-  rentalsPaused                  RentalPause[]                   @relation("RentalPausedBy")
-  rentalsResumed                 RentalPause[]                   @relation("RentalResumedBy")
-  replacementAssignmentsMade     ReplacementAssignment[]         @relation("ReplacementAssignedBy")
-  replacementAssignmentsReturned ReplacementAssignment[]         @relation("ReplacementReturnedBy")
+  rentalsPaused                  RentalPause[]           @relation("RentalPausedBy")
+  rentalsResumed                 RentalPause[]           @relation("RentalResumedBy")
+  replacementAssignmentsMade     ReplacementAssignment[] @relation("ReplacementAssignedBy")
+  replacementAssignmentsReturned ReplacementAssignment[] @relation("ReplacementReturnedBy")
 
   @@index([roleId])
   @@index([status])
   @@map("users")
 }
 
+//p
 model Staff {
-  id           String      @id @default(uuid(7))
-  userId       String?     @unique
-  user         User?       @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  employeeCode String?     @unique
-  fullName     String
-  phoneNumber  String?
-  hubId        String?
-  hub          Hub?        @relation(fields: [hubId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  jobTitle     String?
-  status       StaffStatus @default(ACTIVE)
-  statusChangedAt DateTime? @db.Timestamptz(3)
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-  deletedAt    DateTime?
+  id              String      @id @default(uuid(7))
+  userId          String?     @unique
+  user            User?       @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  employeeCode    String?     @unique
+  fullName        String
+  phoneNumber     String?
+  hubId           String?
+  hub             Hub?        @relation(fields: [hubId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  jobTitle        String?
+  status          StaffStatus @default(ACTIVE)
+  statusChangedAt DateTime?   @db.Timestamptz(3)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  deletedAt       DateTime?
 
-  payouts   Payout[]
   documents Document[]
 
   @@index([hubId])
   @@map("staff")
 }
 
+//p
 model Rider {
   id                    String    @id @default(uuid(7))
   userId                String?   @unique
@@ -443,11 +428,11 @@ model Rider {
   emergencyContactName  String?
   emergencyContactPhone String?
 
-  deliveryPartnerCode String? @unique   // AML code or personal code
+  deliveryPartnerCode String? @unique // AML code or personal code
   bankAccountNumber   String?
   bankIfsc            String?
   bankHolderName      String?
-  // Business classification is independent of operational and verification status.
+
   rentalType   RentalType?
   b2cMode      B2CMode?
   b2bRiderMgmt B2BRiderMgmt?
@@ -457,13 +442,13 @@ model Rider {
   hubId    String?
   hub      Hub?    @relation(fields: [hubId], references: [id], onDelete: SetNull, onUpdate: Cascade)
 
-  status      RiderStatus @default(ONBOARDING)
-  pvcStatus VerificationStatus? @default(NOT_SUBMITTED)
-  bgvStatus VerificationStatus? @default(NOT_SUBMITTED)   
+  status          RiderStatus         @default(ONBOARDING)
+  pvcStatus       VerificationStatus? @default(NOT_SUBMITTED)
+  bgvStatus       VerificationStatus? @default(NOT_SUBMITTED)
   // add pvc and bgv status fields.
-  onboardedAt DateTime?   @db.Timestamptz(3)
-  statusChangedAt DateTime? @db.Timestamptz(3)
-  version     Int         @default(0) //? remove this maybe
+  onboardedAt     DateTime?           @db.Timestamptz(3)
+  statusChangedAt DateTime?           @db.Timestamptz(3)
+  version         Int                 @default(0) //? remove this maybe
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -474,7 +459,7 @@ model Rider {
   deposits               Deposit[]
   collections            Collection[]
   settlements            RiderSettlement[]
-  ledgerEntries          EarningsLedger[]
+  ledgerEntries          LedgerEntry[]
   payouts                Payout[]
   // verifications          RiderVerification[]
   // verificationHistory    RiderVerificationHistory[]
@@ -492,9 +477,7 @@ model Rider {
   @@map("riders")
 }
 
-// ============================================================
-// OPERATIONS
-// ============================================================
+//p
 model Hub {
   id           String   @id @default(uuid(7))
   name         String   @unique
@@ -504,8 +487,8 @@ model Hub {
   address      Json?    @db.JsonB
   contactPhone String?
   contactEmail String?
-  latitude  Float?
-  longitude Float?
+  latitude     Float?
+  longitude    Float?
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -524,32 +507,33 @@ model Hub {
   @@map("hubs")
 }
 
+//p
 model Vehicle {
-  id                 String        @id @default(uuid(7))
-  registrationNumber String        @unique @db.VarChar(15)
+  id                 String  @id @default(uuid(7))
+  registrationNumber String  @unique @db.VarChar(15)
   hubId              String?
-  hub                Hub?          @relation(fields: [hubId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  hub                Hub?    @relation(fields: [hubId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   make               String?
   model              String?
   year               Int?
   color              String?
 
-  vehicleType      String?   // e.g. EV scooter / cargo
+  vehicleType      String? // e.g. EV scooter / cargo
   batteryType      String?
   chargerProvided  Boolean?
-  registrationType String?   // commercial / private
-  ownershipType    String?   // owned / leased / financed
+  registrationType String? // commercial / private
+  ownershipType    String? // owned / leased / financed
 
-  vin                String?       @unique
-  status             VehicleStatus @default(IDLE)
-  acquiredAt         DateTime?     @db.Timestamptz(3)
-  retiredAt          DateTime?     @db.Timestamptz(3)
-  isActive           Boolean       @default(true)
-  version            Int           @default(0)
-  statusChangedAt    DateTime?     @db.Timestamptz(3)
-  createdAt          DateTime      @default(now())
-  updatedAt          DateTime      @updatedAt
-  deletedAt          DateTime?
+  vin             String?       @unique
+  status          VehicleStatus @default(IDLE)
+  acquiredAt      DateTime?     @db.Timestamptz(3)
+  retiredAt       DateTime?     @db.Timestamptz(3)
+  isActive        Boolean       @default(true)
+  version         Int           @default(0)
+  statusChangedAt DateTime?     @db.Timestamptz(3)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
 
   assignments                    VehicleDeployment[]
   // hubHistory                     VehicleHubHistory[]
@@ -565,31 +549,32 @@ model Vehicle {
   @@map("vehicles")
 }
 
+//p
 model ClientContract {
-  id               String          @id @default(uuid(7))
-  contractNumber   String          @unique
-  clientId         String
-  client           Client          @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  hubId            String?
-  hub              Hub?            @relation(fields: [hubId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  riderManagement  B2BRiderMgmt
-  startDate        DateTime        @db.Timestamptz(3)
-  endDate          DateTime?       @db.Timestamptz(3)
-  vehicleCount     Int
-  vehicleModels    String[]
-  dailyRate        Decimal         @db.Decimal(14, 4)
-  securityDeposit  Decimal?        @db.Decimal(14, 2) // per vehicle or per agreement, decided per contract
-  billingFrequency BillingFrequency
-  minBillingDays   Int?
-  graceDays        Int?
-  paymentTermsDays Int?
-  replacementRules   String?
-  downtimeRules      String?
+  id                  String           @id @default(uuid(7))
+  contractNumber      String           @unique
+  clientId            String
+  client              Client           @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  hubId               String?
+  hub                 Hub?             @relation(fields: [hubId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  riderManagement     B2BRiderMgmt
+  startDate           DateTime         @db.Timestamptz(3)
+  endDate             DateTime?        @db.Timestamptz(3)
+  vehicleCount        Int
+  vehicleModels       String[]
+  dailyRate           Decimal          @db.Decimal(14, 4)
+  securityDeposit     Decimal?         @db.Decimal(14, 2) // per vehicle or per agreement, decided per contract
+  billingFrequency    BillingFrequency
+  minBillingDays      Int?
+  graceDays           Int?
+  paymentTermsDays    Int?
+  replacementRules    String?
+  downtimeRules       String?
   damageRecoveryRules String?
-  taxDetails         Json?     @db.JsonB
-  notes              String?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  taxDetails          Json?            @db.JsonB
+  notes               String?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
 
   rentals Rental[]
 
@@ -597,6 +582,7 @@ model ClientContract {
   @@map("client_contracts")
 }
 
+//p
 model Client {
   id               String     @id @default(uuid(7))
   clientCode       String     @unique
@@ -618,10 +604,9 @@ model Client {
   invoices               Invoice[]
   deposits               Deposit[]
   collections            Collection[]
-  payouts                Payout[]
   riders                 Rider[]
   replacementAssignments ReplacementAssignment[]
-  contracts ClientContract[]
+  contracts              ClientContract[]
 
   @@index([type])
   @@index([isActive])
@@ -631,7 +616,7 @@ model Client {
   @@map("clients")
 }
 
-
+//p
 model RateCard {
   id               String            @id @default(uuid(7))
   code             String            @unique
@@ -663,60 +648,60 @@ model RateCard {
   @@map("rate_cards")
 }
 
+//p
 model Rental {
-  id                      String              @id @default(uuid(7))
-  rentalNumber            String              @unique
+  id                      String            @id @default(uuid(7))
+  rentalNumber            String            @unique
   rentalType              RentalType
   b2cMode                 B2CMode?
   b2bRiderMgmt            B2BRiderMgmt?
   clientId                String?
-  client                  Client?              @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  client                  Client?           @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   riderId                 String?
-  rider                   Rider?              @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  rider                   Rider?            @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   hubId                   String?
-  hub                     Hub?                @relation(fields: [hubId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  hub                     Hub?              @relation(fields: [hubId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   rateCardId              String?
-  rateCard                RateCard?           @relation(fields: [rateCardId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  startDate               DateTime            @db.Timestamptz(3)
-  endDate                 DateTime?           @db.Timestamptz(3)
-  expectedEndDate         DateTime?           @db.Timestamptz(3)
-  status                  RentalStatus        @default(DRAFT)
+  rateCard                RateCard?         @relation(fields: [rateCardId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  startDate               DateTime          @db.Timestamptz(3)
+  endDate                 DateTime?         @db.Timestamptz(3)
+  expectedEndDate         DateTime?         @db.Timestamptz(3)
+  status                  RentalStatus      @default(DRAFT)
   agreementRef            String?
   billingFrequency        BillingFrequency?
-  collectionPeriod        CollectionPeriod    @default(MONTHLY)
-  currency                String              @default("INR") @db.Char(3)
-  dailyRate               Decimal?            @db.Decimal(14, 4)
-  weeklyRate              Decimal?            @db.Decimal(14, 4)
-  fortnightlyRate         Decimal?            @db.Decimal(14, 4)
-  monthlyRate             Decimal?            @db.Decimal(14, 4)
-  securityDepositRequired Decimal?            @db.Decimal(14, 2)
-  rateSnapshot            Json?               @db.JsonB
-  version                 Int                 @default(0)
-  notes                   String?
-  activatedAt             DateTime?           @db.Timestamptz(3)
-  closedAt                DateTime?           @db.Timestamptz(3)
-  finalOutstandingAmount  Decimal?            @db.Decimal(14, 2)
-  finalDepositBalance     Decimal?            @db.Decimal(14, 2)
-  settlementSnapshot      Json?               @db.JsonB
-  createdById             String?
-  createdBy               User?               @relation("RentalCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  closedById              String?
-  closedBy                User?               @relation("RentalClosedBy", fields: [closedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  createdAt               DateTime            @default(now())
-  updatedAt               DateTime            @updatedAt
-  contractId   String?
-  contract     ClientContract? @relation(fields: [contractId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  collectionPeriod        CollectionPeriod  @default(MONTHLY)
+  currency                String            @default("INR") @db.Char(3)
+  dailyRate               Decimal?          @db.Decimal(14, 4)
+  weeklyRate              Decimal?          @db.Decimal(14, 4)
+  fortnightlyRate         Decimal?          @db.Decimal(14, 4)
+  monthlyRate             Decimal?          @db.Decimal(14, 4)
+  securityDepositRequired Decimal?          @db.Decimal(14, 2)
+
+  version                Int       @default(0)
+  notes                  String?
+  activatedAt            DateTime? @db.Timestamptz(3)
+  closedAt               DateTime? @db.Timestamptz(3)
+  finalOutstandingAmount Decimal?  @db.Decimal(14, 2)
+  finalDepositBalance    Decimal?  @db.Decimal(14, 2)
+
+  createdById String?
+  createdBy   User?           @relation("RentalCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  closedById  String?
+  closedBy    User?           @relation("RentalClosedBy", fields: [closedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  contractId  String?
+  contract    ClientContract? @relation(fields: [contractId], references: [id], onDelete: SetNull, onUpdate: Cascade)
 
   assignments                         VehicleDeployment[]
   deposits                            Deposit[]
   collections                         Collection[]
   collectionDues                      RentalCollectionDue[]
-  rentalLedgerEntries                 RentalLedger[]
+  ledgerEntries                       LedgerEntry[]
   invoices                            Invoice[]
   invoiceLines                        InvoiceLine[]
   services                            Service[]
   settlementLines                     RiderSettlementLine[]
-  ledgerEntries                       EarningsLedger[]
   pauses                              RentalPause[]
   replacementAssignmentsForOriginal   ReplacementAssignment[] @relation("ReplacementOriginalRental")
   replacementAssignmentsAsReplacement ReplacementAssignment[] @relation("ReplacementRental")
@@ -730,6 +715,7 @@ model Rental {
   @@map("rentals")
 }
 
+//p
 model VehicleDeployment {
   id               String              @id @default(uuid(7))
   vehicleId        String
@@ -744,8 +730,8 @@ model VehicleDeployment {
   assignedBy       User?               @relation("AssignmentCreatedBy", fields: [assignedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
   startDate        DateTime            @db.Timestamptz(3)
   endDate          DateTime?           @db.Timestamptz(3)
-  startOdometer  Int?
-  endOdometer    Int?
+  startOdometer    Int?
+  endOdometer      Int?
   status           AssignmentStatus    @default(ACTIVE)
   reason           String?
   replacementForId String?
@@ -813,9 +799,7 @@ model DepositTransaction {
   @@map("deposit_transactions")
 }
 
-// ============================================================
-// INVOICING (canonical receivable)
-// ============================================================
+// invoice not yet implemented
 model Invoice {
   id                 String           @id @default(uuid(7))
   invoiceNumber      String           @unique
@@ -892,7 +876,6 @@ model Collection {
   rentalDueId     String?
   rentalDue       RentalCollectionDue? @relation(fields: [rentalDueId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   amount          Decimal              @db.Decimal(14, 2)
-  currency        String               @default("INR") @db.Char(3)
   paymentMethod   PaymentMethod
   referenceNumber String?
   receivedAt      DateTime             @default(now()) @db.Timestamptz(3)
@@ -941,31 +924,53 @@ model RentalCollectionDue {
   @@index([status, dueDate])
   @@map("rental_collection_dues")
 }
+/*
+ALTER TABLE ledger_entries ADD CONSTRAINT ledger_entries_party_chk
+  CHECK (rental_id IS NOT NULL OR rider_id IS NOT NULL);
+ Append-only money journal. One row per movement, never edited:
+ - rental side (client/rider owes AML): rentalId set
+ - rider side (AML owes rider): riderId set, settlementId when closed out
+ One economic event can still be two rows. 
+ When rent is deducted from rider earnings, 
+ settlement code writes RENT_DEDUCTION (rider, DEBIT) 
+ and COLLECTION_RECEIVED (rental, CREDIT) for the same amount. 
+ Correct, but nothing enforces the pair balances — only idempotencyKey stops duplicates.
+*/
+model LedgerEntry {
+  id          String          @id @default(uuid(7))
+  entryType   LedgerEntryType
+  direction   LedgerDirection
+  amount      Decimal         @db.Decimal(14, 2)
+  currency    String          @default("INR") @db.Char(3)
+  occurredAt  DateTime        @db.Timestamptz(3)
+  description String
 
-//client/rider owns money to aml
-model RentalLedger {
-  id              String                @id @default(uuid(7))
-  rentalId        String
-  rental          Rental                @relation(fields: [rentalId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  entryType       RentalLedgerEntryType
-  direction       LedgerDirection
-  amount          Decimal               @db.Decimal(14, 2)
-  currency        String                @default("INR") @db.Char(3)
-  occurredAt      DateTime              @db.Timestamptz(3)
-  description     String
+  rentalId     String?
+  rental       Rental?          @relation(fields: [rentalId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  riderId      String?
+  rider        Rider?           @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  settlementId String?
+  settlement   RiderSettlement? @relation(fields: [settlementId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
   sourceType      String?
   sourceId        String?
-  reversesEntryId String?               @unique
-  reversesEntry   RentalLedger?    @relation("RentalLedgerReversal", fields: [reversesEntryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  reversedBy      RentalLedger?    @relation("RentalLedgerReversal")
-  idempotencyKey  String                @unique
-  createdById     String?
-  createdBy       User?                 @relation("RentalLedgerCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  createdAt       DateTime              @default(now()) @db.Timestamptz(3)
+  reversesEntryId String?      @unique
+  reversesEntry   LedgerEntry? @relation("LedgerEntryReversal", fields: [reversesEntryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  reversedBy      LedgerEntry? @relation("LedgerEntryReversal")
+
+  idempotencyKey String   @unique
+  metadata       Json?    @db.JsonB
+  createdById    String?
+  createdBy      User?    @relation("LedgerCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+
+  settlementLines RiderSettlementLine[]
 
   @@index([rentalId, occurredAt])
+  @@index([riderId, occurredAt])
+  @@index([settlementId])
   @@index([sourceType, sourceId])
-  @@map("rental_ledger_entries")
+  @@map("ledger_entries")
 }
 
 model PaymentAllocation {
@@ -981,7 +986,6 @@ model PaymentAllocation {
   @@index([invoiceId])
   @@map("payment_allocations")
 }
-
 
 model RiderSettlement {
   id                   String           @id @default(uuid(7))
@@ -1009,7 +1013,7 @@ model RiderSettlement {
 
   lines         RiderSettlementLine[]
   payouts       Payout[]
-  ledgerEntries EarningsLedger[]
+  ledgerEntries LedgerEntry[]
 
   @@index([riderId, periodStart, periodEnd])
   @@index([status])
@@ -1027,7 +1031,7 @@ model RiderSettlementLine {
   rentalId      String?
   rental        Rental?            @relation(fields: [rentalId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   ledgerEntryId String?            @unique
-  ledgerEntry   EarningsLedger?    @relation(fields: [ledgerEntryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  ledgerEntry   LedgerEntry?       @relation(fields: [ledgerEntryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   referenceType String?
   referenceId   String?
   snapshot      Json?              @db.JsonB
@@ -1039,92 +1043,46 @@ model RiderSettlementLine {
   @@map("rider_settlement_lines")
 }
 
-// money aml owns to rider
-model EarningsLedger {
+model Payout {
   id              String           @id @default(uuid(7))
-  riderId         String
-  rider           Rider            @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  entryType       LedgerEntryType
-  direction       LedgerDirection
-  amount          Decimal          @db.Decimal(14, 2)
-  currency        String           @default("INR") @db.Char(3)
-  occurredAt      DateTime         @db.Timestamptz(3)
-  description     String
-  sourceType      String?
-  sourceId        String?
+  riderId         String?
+  rider           Rider?           @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   settlementId    String?
   settlement      RiderSettlement? @relation(fields: [settlementId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  rentalId        String?
-  rental          Rental?          @relation(fields: [rentalId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  reversesEntryId String?          @unique
-  reversesEntry   EarningsLedger?  @relation("LedgerReversal", fields: [reversesEntryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  reversedBy      EarningsLedger?  @relation("LedgerReversal")
-  createdById     String?
-  createdBy       User?            @relation("LedgerCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  idempotencyKey  String           @unique
-  metadata        Json?            @db.JsonB
-  createdAt       DateTime         @default(now()) @db.Timestamptz(3)
-
-  settlementLines RiderSettlementLine[]
-
-  @@index([riderId, occurredAt])
-  @@index([settlementId])
-  @@index([rentalId])
-  @@map("earnings_ledger")
-}
-
-model Payout {
-  id              String              @id @default(uuid(7))
-  recipientType   PayoutRecipientType
-  riderId         String?
-  rider           Rider?              @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  staffId         String?
-  staff           Staff?              @relation(fields: [staffId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  vendorId        String?
-  vendor          Vendor?             @relation(fields: [vendorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  clientId        String?
-  client          Client?             @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  settlementId    String?
-  settlement      RiderSettlement?    @relation(fields: [settlementId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  amount          Decimal             @db.Decimal(14, 2)
-  status          PayoutStatus        @default(PENDING)
+  amount          Decimal          @db.Decimal(14, 2)
+  status          PayoutStatus     @default(PENDING)
   approvedById    String?
-  approvedBy      User?               @relation("PayoutApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  approvedAt      DateTime?           @db.Timestamptz(3)
-  paidAt          DateTime?           @db.Timestamptz(3)
+  approvedBy      User?            @relation("PayoutApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  approvedAt      DateTime?        @db.Timestamptz(3)
+  paidAt          DateTime?        @db.Timestamptz(3)
   paymentMethod   PaymentMethod?
   referenceNumber String?
-  idempotencyKey  String              @unique
+  idempotencyKey  String           @unique
   notes           String?
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
   @@index([riderId, status])
-  @@index([staffId])
-  @@index([vendorId])
-  @@index([clientId])
   @@index([settlementId])
   @@map("payouts")
 }
 
-model Vendor {
-  id            String   @id @default(uuid(7))
-  name          String   @unique
-  contactPerson String?
-  phoneNumber   String?
-  email         String?
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+// model Vendor {
+//   id            String   @id @default(uuid(7))
+//   name          String   @unique
+//   contactPerson String?
+//   phoneNumber   String?
+//   email         String?
+//   isActive      Boolean  @default(true)
+//   createdAt     DateTime @default(now())
+//   updatedAt     DateTime @updatedAt
 
-  payouts Payout[]
+//   payouts Payout[]
 
-  @@map("vendors")
-}
+//   @@map("vendors")
+// }
 
-// ============================================================
-// SERVICE + MAINTENANCE
-// ============================================================
+// do this later. pure ops
 model Service {
   id                               String           @id @default(uuid(7))
   serviceNumber                    String           @unique
@@ -1164,13 +1122,13 @@ model Service {
   createdAt                        DateTime         @default(now())
   updatedAt                        DateTime         @updatedAt
 
-  charges                 ServiceCharge[]
-  spares                  ServiceSpare[]
-  inventoryMovements      InventoryMovement[]
+  charges                ServiceCharge[]
+  spares                 ServiceSpare[]
+  inventoryMovements     InventoryMovement[]
   // statusHistory           ServiceStatusHistory[]
   // responsibilityApprovals ServiceResponsibilityApproval[]
-  replacementAssignments  ReplacementAssignment[]
-  rentalPause             RentalPause?
+  replacementAssignments ReplacementAssignment[]
+  rentalPause            RentalPause?
 
   @@index([vehicleId, status])
   @@index([rentalId])
@@ -1206,7 +1164,6 @@ model ServiceCharge {
   @@map("service_charges")
 }
 
-
 model ServiceSpare {
   id                  String             @id @default(uuid(7))
   serviceId           String
@@ -1227,7 +1184,6 @@ model ServiceSpare {
   @@index([spareId])
   @@map("service_spares")
 }
-
 
 model RentalPause {
   id                   String            @id @default(uuid(7))
@@ -1288,9 +1244,6 @@ model ReplacementAssignment {
   @@map("replacement_assignments")
 }
 
-// ============================================================
-// INVENTORY
-// ============================================================
 model Spare {
   id            String   @id @default(uuid(7))
   partNumber    String   @unique
@@ -1370,34 +1323,35 @@ model InventoryMovement {
   @@map("inventory_movements")
 }
 
+//p
 model Document {
-  id            String         @id @default(uuid(7))
-  documentType  DocumentType
-  title         String
-  fileName      String?
-  mimeType      String?
-  fileSize      Int?
-  storageKey    String
-  storageBucket String?
-  issueDate     DateTime?      @db.Timestamptz(3)
-  expiryDate    DateTime?      @db.Timestamptz(3)
-  documentNumber String? 
+  id             String       @id @default(uuid(7))
+  documentType   DocumentType
+  title          String
+  fileName       String?
+  mimeType       String?
+  fileSize       Int?
+  storageKey     String
+  storageBucket  String?
+  issueDate      DateTime?    @db.Timestamptz(3)
+  expiryDate     DateTime?    @db.Timestamptz(3)
+  documentNumber String?
 
-  riderId        String?
-  rider          Rider?             @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
- 
-  staffId        String?
-  staff          Staff?             @relation(fields: [staffId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  
-  vehicleId      String?
-  vehicle        Vehicle?           @relation(fields: [vehicleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  
-  notes         String?
-  metadata      Json?               @db.JsonB
+  riderId String?
+  rider   Rider?  @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
-  deletedAt     DateTime?
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
+  staffId String?
+  staff   Staff?  @relation(fields: [staffId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  vehicleId String?
+  vehicle   Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  notes    String?
+  metadata Json?   @db.JsonB
+
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   @@index([riderId])
   @@index([staffId])
@@ -1408,6 +1362,7 @@ model Document {
   @@map("documents")
 }
 
+//done
 model AuditLog {
   id         String   @id @default(uuid(7))
   createdAt  DateTime @default(now())

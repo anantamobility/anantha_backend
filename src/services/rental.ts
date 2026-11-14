@@ -129,7 +129,6 @@ export const rentalDetailSelect = {
   ...rentalListSelect,
   createdById: true,
   closedById: true,
-  rateSnapshot: true,
   settlementSnapshot: true,
   createdBy: { select: { id: true, name: true } },
   closedBy: { select: { id: true, name: true } },
@@ -336,7 +335,7 @@ async function assignVehicleWithinTransaction(
   // A B2B agreement may cover multiple vehicles. B2C rentals remain limited
   // to one active vehicle at a time.
   if (input.rental.rentalType !== "B2B") {
-    const activeForRental = await tx.vehicleAssignment.count({
+    const activeForRental = await tx.vehicleDeployment.count({
       where: { rentalId: input.rental.id, status: "ACTIVE" },
     });
     if (activeForRental > 0) {
@@ -378,7 +377,7 @@ async function assignVehicleWithinTransaction(
     );
   }
 
-  const activeForVehicle = await tx.vehicleAssignment.count({
+  const activeForVehicle = await tx.vehicleDeployment.count({
     where: { vehicleId: vehicle.id, status: "ACTIVE" },
   });
   if (activeForVehicle > 0) {
@@ -390,7 +389,7 @@ async function assignVehicleWithinTransaction(
   }
 
   const startDate = input.startDate ?? new Date();
-  const assignment = await tx.vehicleAssignment.create({
+  const assignment = await tx.vehicleDeployment.create({
     data: {
       vehicleId: vehicle.id,
       riderId: input.rental.riderId,
@@ -549,7 +548,6 @@ export async function createRental(
         fortnightlyRate: pricing.rates.fortnightlyRate,
         monthlyRate: pricing.rates.monthlyRate,
         securityDepositRequired: input.securityDepositAmount,
-        rateSnapshot: pricing.rateSnapshot as Prisma.InputJsonValue,
         createdById: actor.userId,
         notes: input.notes ?? null,
       };
@@ -742,7 +740,7 @@ export async function activateRental(
         );
       }
 
-      const activeAssignments = await tx.vehicleAssignment.count({
+      const activeAssignments = await tx.vehicleDeployment.count({
         where: { rentalId: id, status: "ACTIVE" },
       });
       if (activeAssignments === 0) {
@@ -905,7 +903,7 @@ export async function closeRental(
       const financialSummary = await getRentalFinancialSummary(tx, rental.id);
       const depositTotals = await getDepositBalanceByRental(tx, rental.id);
 
-      const activeAssignments = await tx.vehicleAssignment.findMany({
+      const activeAssignments = await tx.vehicleDeployment.findMany({
         where: { rentalId: rental.id, status: "ACTIVE" },
         select: {
           id: true,
@@ -944,7 +942,7 @@ export async function closeRental(
           returnStatus = openServices > 0 ? "IN_SERVICE" : "IDLE";
         }
 
-        await tx.vehicleAssignment.update({
+        await tx.vehicleDeployment.update({
           where: { id: assignment.id },
           data: { status: "COMPLETED", endDate },
         });

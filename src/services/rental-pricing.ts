@@ -104,16 +104,6 @@ function manualPricing(
     currency,
     rates,
     securityDepositRequired: securityDeposit,
-    rateSnapshot: {
-      source: "MANUAL",
-      capturedAt: capturedAt.toISOString(),
-      clientId,
-      rateCardId: null,
-      currency,
-      rates,
-      securityDeposit,
-      notes: input.notes ?? null,
-    },
   };
 }
 
@@ -210,20 +200,5 @@ export async function resolveRentalPricing(
     currency: rateCard.currency,
     rates,
     securityDepositRequired: securityDeposit,
-    rateSnapshot: {
-      source: "RATE_CARD",
-      capturedAt: effectiveAt.toISOString(),
-      clientId: input.clientId,
-      rateCardId: rateCard.id,
-      rateCardCode: rateCard.code,
-      rateCardName: rateCard.name,
-      vehicleCategory: rateCard.vehicleCategory,
-      billingFrequency: rateCard.billingFrequency,
-      currency: rateCard.currency,
-      rateCardEffectiveFrom: rateCard.effectiveFrom.toISOString(),
-      rateCardEffectiveTo: rateCard.effectiveTo?.toISOString() ?? null,
-      rates,
-      securityDeposit,
-    },
   };
 }
