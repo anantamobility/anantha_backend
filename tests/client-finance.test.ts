@@ -78,8 +78,8 @@ beforeEach(() => {
     }
   });
   prismaMock.rental.findMany.mockResolvedValue([]);
-  prismaMock.rentalCollectionDue.findMany.mockResolvedValue([]);
-  prismaMock.rentalCollectionDue.count.mockResolvedValue(0);
+  prismaMock.rentalDue.findMany.mockResolvedValue([]);
+  prismaMock.rentalDue.count.mockResolvedValue(0);
   prismaMock.collection.findMany.mockResolvedValue([]);
   prismaMock.collection.count.mockResolvedValue(0);
   prismaMock.auditLog.create.mockResolvedValue({});
@@ -97,7 +97,7 @@ describe("GET /clients/:id/financials", () => {
         status: "COMPLETED",
       }),
     ]);
-    prismaMock.rentalCollectionDue.findMany.mockResolvedValue([
+    prismaMock.rentalDue.findMany.mockResolvedValue([
       due(),
       due({
         id: "due-2",
@@ -149,8 +149,8 @@ describe("GET /clients/:id/dues", () => {
   it("lists client dues scoped to B2B rentals", async () => {
     authenticate([{ resource: "collection", action: "client:read" }]);
     prismaMock.client.findUnique.mockResolvedValue(client());
-    prismaMock.rentalCollectionDue.findMany.mockResolvedValue([due()]);
-    prismaMock.rentalCollectionDue.count.mockResolvedValue(1);
+    prismaMock.rentalDue.findMany.mockResolvedValue([due()]);
+    prismaMock.rentalDue.count.mockResolvedValue(1);
 
     const res = await request(app)
       .get(`/clients/${CLIENT_ID}/dues`)
@@ -158,7 +158,7 @@ describe("GET /clients/:id/dues", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.pagination.total).toBe(1);
-    expect(prismaMock.rentalCollectionDue.findMany).toHaveBeenCalledWith(
+    expect(prismaMock.rentalDue.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
           rental: { clientId: CLIENT_ID, rentalType: "B2B" },
@@ -182,12 +182,12 @@ describe("POST /clients/:id/dues/generate", () => {
       fortnightlyRate: null,
       monthlyRate: "12000.0000",
     });
-    prismaMock.rentalCollectionDue.findMany
+    prismaMock.rentalDue.findMany
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([due()]);
-    prismaMock.rentalCollectionDue.upsert.mockResolvedValue({ id: DUE_ID });
+    prismaMock.rentalDue.upsert.mockResolvedValue({ id: DUE_ID });
     prismaMock.ledgerEntry.upsert.mockResolvedValue({});
-    prismaMock.rentalCollectionDue.updateMany.mockResolvedValue({ count: 0 });
+    prismaMock.rentalDue.updateMany.mockResolvedValue({ count: 0 });
 
     const res = await request(app)
       .post(`/clients/${CLIENT_ID}/dues/generate`)
@@ -216,11 +216,17 @@ describe("POST /clients/:id/payments", () => {
       rentalType: "B2B",
     });
     prismaMock.rental.findMany.mockResolvedValue([rental()]);
-    prismaMock.rentalCollectionDue.findMany.mockResolvedValue([due()]);
-    prismaMock.rentalCollectionDue.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.rentalDue.findMany.mockResolvedValue([
+      { ...due(), rental: { rentalNumber: "RN-ABC12345" } },
+    ]);
+    prismaMock.rentalDue.findUnique.mockResolvedValue({
+      ...due(),
+      rental: { ...rental(), rentalType: "B2B", clientId: CLIENT_ID },
+    });
+    prismaMock.rentalDue.updateMany.mockResolvedValue({ count: 1 });
     prismaMock.collection.create.mockResolvedValue({
       id: COLLECTION_ID,
-      rentalId: RENTAL_ID,
+      rentalDueId: DUE_ID,
       amount: overrides.amount ?? "100.00",
       status: "CLEARED",
     });
@@ -253,9 +259,10 @@ describe("POST /clients/:id/payments", () => {
     expect(prismaMock.collection.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
+          purpose: "RENT",
           payerType: "CLIENT",
           clientId: CLIENT_ID,
-          rentalId: RENTAL_ID,
+          rentalDueId: DUE_ID,
           status: "CLEARED",
         }),
       })

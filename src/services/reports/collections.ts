@@ -43,8 +43,10 @@ export async function collectionsReport(
   if (query.paymentMethod) where.paymentMethod = query.paymentMethod;
   if (query.clientId) where.clientId = query.clientId;
   if (query.riderId) where.riderId = query.riderId;
-  if (query.rentalId) where.rentalId = query.rentalId;
-  if (query.hubId) where.rental = { hubId: query.hubId };
+  if (query.rentalId) where.rentalDue = { rentalId: query.rentalId };
+  if (query.hubId) {
+    where.rentalDue = { rental: { hubId: query.hubId } };
+  }
   if (query.search) {
     where.OR = [
       { referenceNumber: { contains: query.search, mode: "insensitive" } },
@@ -54,7 +56,13 @@ export async function collectionsReport(
       { client: { clientCode: { contains: query.search, mode: "insensitive" } } },
       { rider: { fullName: { contains: query.search, mode: "insensitive" } } },
       { rider: { riderCode: { contains: query.search, mode: "insensitive" } } },
-      { rental: { rentalNumber: { contains: query.search, mode: "insensitive" } } },
+      {
+        rentalDue: {
+          rental: {
+            rentalNumber: { contains: query.search, mode: "insensitive" },
+          },
+        },
+      },
     ];
   }
 
@@ -66,7 +74,6 @@ export async function collectionsReport(
         receivedAt: true,
         payerType: true,
         amount: true,
-        currency: true,
         paymentMethod: true,
         referenceNumber: true,
         status: true,
@@ -74,11 +81,16 @@ export async function collectionsReport(
         reconciledAt: true,
         client: { select: { clientCode: true, name: true } },
         rider: { select: { riderCode: true, fullName: true } },
-        rental: {
+        rentalDue: {
           select: {
-            rentalNumber: true,
-            rentalType: true,
-            hub: { select: { code: true, name: true } },
+            rental: {
+              select: {
+                rentalNumber: true,
+                rentalType: true,
+                currency: true,
+                hub: { select: { hubCode: true, name: true } },
+              },
+            },
           },
         },
         receivedBy: { select: { name: true } },
@@ -113,12 +125,12 @@ export async function collectionsReport(
       clientName: row.client?.name ?? "",
       riderCode: row.rider?.riderCode ?? "",
       riderName: row.rider?.fullName ?? "",
-      rentalNumber: row.rental?.rentalNumber ?? "",
-      rentalType: row.rental?.rentalType ?? "",
-      hubCode: row.rental?.hub?.code ?? "",
-      hubName: row.rental?.hub?.name ?? "",
+      rentalNumber: row.rentalDue?.rental?.rentalNumber ?? "",
+      rentalType: row.rentalDue?.rental?.rentalType ?? "",
+      hubCode: row.rentalDue?.rental?.hub?.hubCode ?? "",
+      hubName: row.rentalDue?.rental?.hub?.name ?? "",
       amount: moneyString(row.amount),
-      currency: row.currency,
+      currency: row.rentalDue?.rental?.currency ?? "",
       paymentMethod: row.paymentMethod,
       referenceNumber: row.referenceNumber ?? "",
       status: row.status,

@@ -36,7 +36,7 @@ export const rentalDueSelect = {
 
 export async function refreshOverdueDues(tx: Tx, rentalId?: string) {
   const now = new Date();
-  return tx.rentalCollectionDue.updateMany({
+  return tx.rentalDue.updateMany({
     where: {
       ...(rentalId ? { rentalId } : {}),
       status: { in: ["PENDING", "PARTIALLY_PAID"] },
@@ -102,7 +102,7 @@ export async function generateRentalDues(
     throughDate: input.throughDate,
   });
 
-  const existing = await tx.rentalCollectionDue.findMany({
+  const existing = await tx.rentalDue.findMany({
     where: {
       rentalId: rental.id,
       OR: periods.map((period) => ({
@@ -136,7 +136,7 @@ export async function generateRentalDues(
       },
     });
 
-    const due = await tx.rentalCollectionDue.upsert({
+    const due = await tx.rentalDue.upsert({
       where: {
         rentalId_periodStart_periodEnd: {
           rentalId: rental.id,
@@ -179,7 +179,7 @@ export async function generateRentalDues(
         description: `Rent charged for ${period.periodStart
           .toISOString()
           .slice(0, 10)} to ${period.periodEnd.toISOString().slice(0, 10)}`,
-        sourceType: "RentalCollectionDue",
+        sourceType: "RentalDue",
         sourceId: due.id,
         idempotencyKey: `rental-due:${due.id}`,
         createdById: input.actor?.userId ?? null,
@@ -190,7 +190,7 @@ export async function generateRentalDues(
 
   await refreshOverdueDues(tx, rental.id);
 
-  const dues = await tx.rentalCollectionDue.findMany({
+  const dues = await tx.rentalDue.findMany({
     where: { rentalId: rental.id },
     select: rentalDueSelect,
     orderBy: [{ dueDate: "asc" }, { id: "asc" }],
@@ -200,7 +200,7 @@ export async function generateRentalDues(
     await logAudit({
       ...input.actor,
       action: "GENERATE",
-      resource: "RentalCollectionDue",
+      resource: "RentalDue",
       resourceId: rental.id,
       newData: {
         rentalNumber: rental.rentalNumber,
@@ -227,7 +227,7 @@ export async function generateRentalDues(
 
 export async function getRentalFinancialSummary(tx: Tx, rentalId: string) {
   const [dues, collections] = await Promise.all([
-    tx.rentalCollectionDue.findMany({
+    tx.rentalDue.findMany({
       where: { rentalId },
       select: {
         amountDue: true,
@@ -277,7 +277,7 @@ async function applyCreditToDues(
   rentalId: string,
   amount: Prisma.Decimal
 ) {
-  const dues = await tx.rentalCollectionDue.findMany({
+  const dues = await tx.rentalDue.findMany({
     where: {
       rentalId,
       status: { in: [...OPEN_DUE_STATUSES] },
@@ -316,7 +316,7 @@ async function applyCreditToDues(
     const nextAmountDue = toDecimal(due.amountDue).sub(applied);
     const amountCollected = toDecimal(due.amountCollected);
 
-    const updated = await tx.rentalCollectionDue.updateMany({
+    const updated = await tx.rentalDue.updateMany({
       where: {
         id: due.id,
         outstandingAmount: { gte: applied },
@@ -351,7 +351,7 @@ async function applyDebitToDues(
   rentalId: string,
   amount: Prisma.Decimal
 ) {
-  const due = await tx.rentalCollectionDue.findFirst({
+  const due = await tx.rentalDue.findFirst({
     where: { rentalId },
     orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }, { id: "asc" }],
     select: {
@@ -374,7 +374,7 @@ async function applyDebitToDues(
   const nextOutstanding = toDecimal(due.outstandingAmount).add(amount);
   const nextAmountDue = toDecimal(due.amountDue).add(amount);
 
-  const updated = await tx.rentalCollectionDue.updateMany({
+  const updated = await tx.rentalDue.updateMany({
     where: { id: due.id },
     data: {
       amountDue: nextAmountDue,

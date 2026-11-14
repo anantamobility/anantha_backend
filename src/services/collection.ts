@@ -26,17 +26,15 @@ import type {
 type Tx = Prisma.TransactionClient;
 
 const COLLECTIBLE_RENTAL_STATUSES = ["ACTIVE", "ON_HOLD"] as const;
-const OPEN_DUE_STATUSES = ["PENDING", "PARTIALLY_PAID", "OVERDUE"] as const;
 
 export const collectionSelect = {
   id: true,
+  purpose: true,
   payerType: true,
   clientId: true,
   riderId: true,
-  rentalId: true,
   rentalDueId: true,
   amount: true,
-  currency: true,
   paymentMethod: true,
   referenceNumber: true,
   receivedAt: true,
@@ -48,7 +46,9 @@ export const collectionSelect = {
   notes: true,
   createdAt: true,
   updatedAt: true,
-  rental: { select: { id: true, rentalNumber: true, status: true } },
+  rentalDue: {
+    select: { id: true, rentalId: true, periodStart: true, periodEnd: true },
+  },
 } as const;
 
 export const collectionDetailSelect = {
@@ -58,94 +58,6 @@ export const collectionDetailSelect = {
   receivedBy: { select: { id: true, name: true } },
   rentalDue: { select: rentalDueSelect },
 } as const;
-
-export async function allocateToDues(
-  tx: Tx,
-  rentalId: string,
-  amount: Prisma.Decimal
-) {
-  const dues = await tx.rentalCollectionDue.findMany({
-    where: {
-      rentalId,
-      status: { in: [...OPEN_DUE_STATUSES] },
-      outstandingAmount: { gt: 0 },
-    },
-    orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }, { id: "asc" }],
-    select: {
-      id: true,
-      amountCollected: true,
-      outstandingAmount: true,
-      dueDate: true,
-    },
-  });
-
-  const totalOutstanding = dues.reduce(
-    (total, due) => total.add(toDecimal(due.outstandingAmount)),
-    new Prisma.Decimal(0)
-  );
-
-  if (totalOutstanding.lte(0)) {
-    throw new AppError(
-      "Rental has no outstanding collection dues",
-      409,
-      ErrorCode.CONFLICT
-    );
-  }
-
-  if (amount.gt(totalOutstanding)) {
-    throw new AppError(
-      "Collection amount exceeds the rental outstanding balance",
-      409,
-      ErrorCode.CONFLICT
-    );
-  }
-
-  let remaining = amount;
-  const allocations: { dueId: string; amount: Prisma.Decimal }[] = [];
-
-  for (const due of dues) {
-    if (remaining.lte(0)) break;
-
-    const outstanding = toDecimal(due.outstandingAmount);
-    const applied = Prisma.Decimal.min(outstanding, remaining);
-    const nextOutstanding = outstanding.sub(applied);
-    const nextCollected = toDecimal(due.amountCollected).add(applied);
-
-    const updated = await tx.rentalCollectionDue.updateMany({
-      where: {
-        id: due.id,
-        outstandingAmount: { gte: applied },
-      },
-      data: {
-        amountCollected: { increment: applied },
-        outstandingAmount: { decrement: applied },
-        status: deriveDueStatus({
-          amountCollected: nextCollected,
-          outstandingAmount: nextOutstanding,
-          dueDate: due.dueDate,
-        }),
-      },
-    });
-
-    if (updated.count === 0) {
-      throw new AppError(
-        "Collection due was modified concurrently; please retry",
-        409,
-        ErrorCode.CONFLICT
-      );
-    }
-
-    allocations.push({ dueId: due.id, amount: applied });
-    remaining = remaining.sub(applied);
-  }
-
-  return {
-    allocations,
-    primaryDueId: allocations[0]?.dueId ?? null,
-    outstandingBefore: totalOutstanding,
-    outstandingAfter: totalOutstanding.sub(amount),
-  };
-}
 
 export async function createCollectionLedgerEntry(
   tx: Tx,
@@ -178,38 +90,93 @@ export async function createCollectionLedgerEntry(
   });
 }
 
-async function assertEligibleRental(tx: Tx, rentalId: string) {
-  const rental = await tx.rental.findUnique({
-    where: { id: rentalId },
+async function assertCollectibleDue(tx: Tx, rentalDueId: string) {
+  const due = await tx.rentalDue.findUnique({
+    where: { id: rentalDueId },
     select: {
       id: true,
-      rentalNumber: true,
-      rentalType: true,
-      clientId: true,
-      riderId: true,
-      status: true,
-      currency: true,
-      startDate: true,
+      rentalId: true,
+      amountDue: true,
+      amountCollected: true,
+      outstandingAmount: true,
+      dueDate: true,
+      rental: {
+        select: {
+          id: true,
+          rentalNumber: true,
+          rentalType: true,
+          clientId: true,
+          riderId: true,
+          status: true,
+          currency: true,
+        },
+      },
     },
   });
 
-  if (!rental) {
-    throw new AppError("Rental not found", 404, ErrorCode.NOT_FOUND);
+  if (!due) {
+    throw new AppError("Rental due not found", 404, ErrorCode.NOT_FOUND);
   }
 
   if (
     !COLLECTIBLE_RENTAL_STATUSES.includes(
-      rental.status as (typeof COLLECTIBLE_RENTAL_STATUSES)[number]
+      due.rental.status as (typeof COLLECTIBLE_RENTAL_STATUSES)[number]
     )
   ) {
     throw new AppError(
-      `Collections can only be recorded against an ACTIVE or ON_HOLD rental (current status: ${rental.status})`,
+      `Collections can only be recorded against an ACTIVE or ON_HOLD rental (current status: ${due.rental.status})`,
       409,
       ErrorCode.CONFLICT
     );
   }
 
-  return rental;
+  return due;
+}
+
+async function applyCollectionToDue(
+  tx: Tx,
+  due: {
+    id: string;
+    amountCollected: Prisma.Decimal;
+    outstandingAmount: Prisma.Decimal;
+    dueDate: Date;
+  },
+  amount: Prisma.Decimal
+) {
+  const outstanding = toDecimal(due.outstandingAmount);
+  if (amount.gt(outstanding)) {
+    throw new AppError(
+      "Collection amount exceeds the due outstanding balance",
+      409,
+      ErrorCode.CONFLICT
+    );
+  }
+
+  const nextOutstanding = outstanding.sub(amount);
+  const nextCollected = toDecimal(due.amountCollected).add(amount);
+
+  const updated = await tx.rentalDue.updateMany({
+    where: { id: due.id, outstandingAmount: { gte: amount } },
+    data: {
+      amountCollected: { increment: amount },
+      outstandingAmount: { decrement: amount },
+      status: deriveDueStatus({
+        amountCollected: nextCollected,
+        outstandingAmount: nextOutstanding,
+        dueDate: due.dueDate,
+      }),
+    },
+  });
+
+  if (updated.count === 0) {
+    throw new AppError(
+      "Collection due was modified concurrently; please retry",
+      409,
+      ErrorCode.CONFLICT
+    );
+  }
+
+  return { outstandingBefore: outstanding, outstandingAfter: nextOutstanding };
 }
 
 export async function createCollection(
@@ -217,108 +184,113 @@ export async function createCollection(
   actor: AuditActor
 ) {
   try {
-    return await prisma.$transaction(async (tx) => {
-      const rental = await assertEligibleRental(tx, input.rentalId);
-      const amount = new Prisma.Decimal(input.amount);
-      const status = input.status ?? "CLEARED";
-      const receivedAt = input.receivedAt ?? new Date();
-      const idempotencyKey =
-        input.idempotencyKey ??
-        (input.referenceNumber
-          ? `collection:${input.rentalId}:${input.referenceNumber}`
-          : `collection:${input.rentalId}:${uuidv4()}`);
-
-      const existing = await tx.collection.findUnique({
-        where: { idempotencyKey },
-        select: collectionDetailSelect,
-      });
-
-      if (existing) {
-        const summary = await getRentalFinancialSummary(tx, input.rentalId);
-        return { collection: existing, summary, allocations: [], duplicate: true };
-      }
-
-      let allocation: Awaited<ReturnType<typeof allocateToDues>> | null = null;
-
-      if (status === "CLEARED") {
-        await refreshOverdueDues(tx, input.rentalId);
-        allocation = await allocateToDues(tx, input.rentalId, amount);
-      }
-
-      const isRiderPayer = rental.rentalType === "B2C";
-
-      const collection = await tx.collection.create({
-        data: {
-          payerType: isRiderPayer ? "RIDER" : "CLIENT",
-          clientId: isRiderPayer ? null : rental.clientId,
-          riderId: isRiderPayer ? rental.riderId : null,
-          rentalId: rental.id,
-          rentalDueId: allocation?.primaryDueId ?? null,
-          amount,
-          currency: rental.currency,
-          paymentMethod: input.paymentMethod,
-          referenceNumber: input.referenceNumber ?? null,
-          receivedAt,
-          status,
-          receivedById: actor.userId,
-          reconciledAt: status === "CLEARED" ? receivedAt : null,
-          reconciledById: status === "CLEARED" ? actor.userId : null,
-          idempotencyKey,
-          notes: input.notes ?? null,
-        },
-        select: collectionDetailSelect,
-      });
-
-      if (status === "CLEARED") {
-        await createCollectionLedgerEntry(tx, {
-          rentalId: rental.id,
-          collectionId: collection.id,
-          amount,
-          currency: rental.currency,
-          occurredAt: receivedAt,
-          actor,
-          description: input.notes
-            ? `Collection received: ${input.notes}`
-            : `Collection received for rental ${rental.rentalNumber}`,
-        });
-      }
-
-      const summary = await getRentalFinancialSummary(tx, rental.id);
-
-      await logAudit({
-        ...actor,
-        action: "COLLECTION_RECEIVED",
-        resource: "Collection",
-        resourceId: collection.id,
-        newData: {
-          rentalId: rental.id,
-          rentalNumber: rental.rentalNumber,
-          amount,
-          paymentMethod: input.paymentMethod,
-          referenceNumber: input.referenceNumber ?? null,
-          status,
-          allocations: allocation?.allocations ?? [],
-        },
-        summary: `${actor.userName} recorded a ${status.toLowerCase()} collection of ${amount} for rental ${rental.rentalNumber}.`,
-        db: tx,
-        throwOnError: true,
-      });
-
-      return {
-        collection,
-        summary,
-        allocations: allocation?.allocations ?? [],
-        outstandingBefore: allocation?.outstandingBefore ?? null,
-        outstandingAfter: allocation?.outstandingAfter ?? null,
-        duplicate: false,
-      };
-    });
+    return await prisma.$transaction(async (tx) =>
+      createCollectionWithinTransaction(tx, input, actor)
+    );
   } catch (err) {
     rethrowPrismaError(
       err,
       "A collection with this reference or idempotency key already exists"
     );
   }
+}
+
+export async function createCollectionWithinTransaction(
+  tx: Tx,
+  input: CreateCollectionInput,
+  actor: AuditActor
+) {
+  const due = await assertCollectibleDue(tx, input.rentalDueId);
+  const rental = due.rental;
+  const amount = new Prisma.Decimal(input.amount);
+  const status = input.status ?? "CLEARED";
+  const receivedAt = input.receivedAt ?? new Date();
+  const idempotencyKey =
+    input.idempotencyKey ??
+    (input.referenceNumber
+      ? `collection:${due.id}:${input.referenceNumber}`
+      : `collection:${due.id}:${uuidv4()}`);
+
+  const existing = await tx.collection.findUnique({
+    where: { idempotencyKey },
+    select: collectionDetailSelect,
+  });
+
+  if (existing) {
+    const summary = await getRentalFinancialSummary(tx, rental.id);
+    return { collection: existing, summary, duplicate: true };
+  }
+
+  const applied =
+    status === "CLEARED"
+      ? await applyCollectionToDue(tx, due, amount)
+      : null;
+
+  const isRiderPayer = rental.rentalType === "B2C";
+
+  const collection = await tx.collection.create({
+    data: {
+      purpose: "RENT",
+      payerType: isRiderPayer ? "RIDER" : "CLIENT",
+      clientId: isRiderPayer ? null : rental.clientId,
+      riderId: isRiderPayer ? rental.riderId : null,
+      rentalDueId: due.id,
+      amount,
+      paymentMethod: input.paymentMethod,
+      referenceNumber: input.referenceNumber ?? null,
+      receivedAt,
+      status,
+      receivedById: actor.userId,
+      reconciledAt: status === "CLEARED" ? receivedAt : null,
+      reconciledById: status === "CLEARED" ? actor.userId : null,
+      idempotencyKey,
+      notes: input.notes ?? null,
+    },
+    select: collectionDetailSelect,
+  });
+
+  if (status === "CLEARED") {
+    await createCollectionLedgerEntry(tx, {
+      rentalId: rental.id,
+      collectionId: collection.id,
+      amount,
+      currency: rental.currency,
+      occurredAt: receivedAt,
+      actor,
+      description: input.notes
+        ? `Collection received: ${input.notes}`
+        : `Collection received for rental ${rental.rentalNumber}`,
+    });
+  }
+
+  const summary = await getRentalFinancialSummary(tx, rental.id);
+
+  await logAudit({
+    ...actor,
+    action: "COLLECTION_RECEIVED",
+    resource: "Collection",
+    resourceId: collection.id,
+    newData: {
+      rentalId: rental.id,
+      rentalNumber: rental.rentalNumber,
+      rentalDueId: due.id,
+      amount,
+      paymentMethod: input.paymentMethod,
+      referenceNumber: input.referenceNumber ?? null,
+      status,
+    },
+    summary: `${actor.userName} recorded a ${status.toLowerCase()} collection of ${amount} for rental ${rental.rentalNumber}.`,
+    db: tx,
+    throwOnError: true,
+  });
+
+  return {
+    collection,
+    summary,
+    outstandingBefore: applied?.outstandingBefore ?? null,
+    outstandingAfter: applied?.outstandingAfter ?? null,
+    duplicate: false,
+  };
 }
 
 export async function clearCollection(
@@ -332,11 +304,9 @@ export async function clearCollection(
         where: { id },
         select: {
           id: true,
-          rentalId: true,
+          rentalDueId: true,
           amount: true,
-          currency: true,
           status: true,
-          referenceNumber: true,
           notes: true,
         },
       });
@@ -345,9 +315,9 @@ export async function clearCollection(
         throw new AppError("Collection not found", 404, ErrorCode.NOT_FOUND);
       }
 
-      if (!collection.rentalId) {
+      if (!collection.rentalDueId) {
         throw new AppError(
-          "Collection is not linked to a rental",
+          "Collection is not linked to a rental due",
           409,
           ErrorCode.CONFLICT
         );
@@ -361,20 +331,16 @@ export async function clearCollection(
         );
       }
 
-      const rental = await assertEligibleRental(tx, collection.rentalId);
-      await refreshOverdueDues(tx, rental.id);
-      const allocation = await allocateToDues(
-        tx,
-        rental.id,
-        toDecimal(collection.amount)
-      );
+      const due = await assertCollectibleDue(tx, collection.rentalDueId);
+      const rental = due.rental;
+      const amount = toDecimal(collection.amount);
+      const applied = await applyCollectionToDue(tx, due, amount);
 
       const reconciledAt = input.reconciledAt ?? new Date();
       const updated = await tx.collection.update({
         where: { id },
         data: {
           status: "CLEARED",
-          rentalDueId: allocation.primaryDueId,
           reconciledAt,
           reconciledById: actor.userId,
         },
@@ -384,8 +350,8 @@ export async function clearCollection(
       await createCollectionLedgerEntry(tx, {
         rentalId: rental.id,
         collectionId: collection.id,
-        amount: toDecimal(collection.amount),
-        currency: collection.currency,
+        amount,
+        currency: rental.currency,
         occurredAt: reconciledAt,
         actor,
         description: collection.notes
@@ -404,7 +370,7 @@ export async function clearCollection(
         newData: {
           status: "CLEARED",
           rentalId: rental.id,
-          allocations: allocation.allocations,
+          rentalDueId: due.id,
         },
         summary: `${actor.userName} cleared collection ${collection.id} for rental ${rental.rentalNumber}.`,
         db: tx,
@@ -414,7 +380,8 @@ export async function clearCollection(
       return {
         collection: updated,
         summary,
-        allocations: allocation.allocations,
+        outstandingBefore: applied.outstandingBefore,
+        outstandingAfter: applied.outstandingAfter,
       };
     });
   } catch (err) {
@@ -425,8 +392,8 @@ export async function clearCollection(
 export async function listCollections(query: ListCollectionsQuery) {
   const { page, limit, search } = query;
 
-  const where: Prisma.CollectionWhereInput = {};
-  if (query.rentalId) where.rentalId = query.rentalId;
+  const where: Prisma.CollectionWhereInput = { purpose: "RENT" };
+  if (query.rentalId) where.rentalDue = { rentalId: query.rentalId };
   if (query.clientId) where.clientId = query.clientId;
   if (query.riderId) where.riderId = query.riderId;
   if (query.status) where.status = query.status;
@@ -441,7 +408,13 @@ export async function listCollections(query: ListCollectionsQuery) {
       { referenceNumber: { contains: search, mode: "insensitive" } },
       { notes: { contains: search, mode: "insensitive" } },
       { idempotencyKey: { contains: search, mode: "insensitive" } },
-      { rental: { rentalNumber: { contains: search, mode: "insensitive" } } },
+      {
+        rentalDue: {
+          rental: {
+            rentalNumber: { contains: search, mode: "insensitive" },
+          },
+        },
+      },
     ];
   }
 
@@ -502,7 +475,7 @@ export async function listRentalCollections(
   const rental = await assertRentalExists(rentalId);
   const { page, limit } = query;
 
-  const where: Prisma.CollectionWhereInput = { rentalId };
+  const where: Prisma.CollectionWhereInput = { rentalDue: { rentalId } };
   if (query.status) where.status = query.status;
 
   const orderBy: Prisma.CollectionOrderByWithRelationInput = {
@@ -545,22 +518,22 @@ export async function listRentalDues(
     await refreshOverdueDues(tx, rentalId);
   });
 
-  const where: Prisma.RentalCollectionDueWhereInput = { rentalId };
+  const where: Prisma.RentalDueWhereInput = { rentalId };
   if (query.status) where.status = query.status;
 
-  const orderBy: Prisma.RentalCollectionDueOrderByWithRelationInput = {
+  const orderBy: Prisma.RentalDueOrderByWithRelationInput = {
     [query.sortBy]: query.sortOrder,
   };
 
   const [dues, total, summary] = await Promise.all([
-    prisma.rentalCollectionDue.findMany({
+    prisma.rentalDue.findMany({
       where,
       select: rentalDueSelect,
       orderBy,
       skip: (page - 1) * limit,
       take: limit,
     }),
-    prisma.rentalCollectionDue.count({ where }),
+    prisma.rentalDue.count({ where }),
     prisma.$transaction(async (tx) => getRentalFinancialSummary(tx, rentalId)),
   ]);
 

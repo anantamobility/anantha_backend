@@ -14,9 +14,8 @@ import {
   rentalDueSelect,
 } from "./rental-dues.js";
 import {
-  allocateToDues,
   collectionSelect,
-  createCollectionLedgerEntry,
+  createCollectionWithinTransaction,
 } from "./collection.js";
 import type {
   GenerateClientDuesInput,
@@ -29,7 +28,7 @@ type Tx = Prisma.TransactionClient;
 type ClientDb = Pick<Tx, "client">;
 type FinanceDb = Pick<
   Tx,
-  "rental" | "rentalCollectionDue" | "collection"
+  "rental" | "rentalDue" | "collection"
 >;
 
 const OPEN_DUE_STATUSES = ["PENDING", "PARTIALLY_PAID", "OVERDUE"] as const;
@@ -108,7 +107,7 @@ export async function buildClientFinancialSummary(
   const rentalIds = rentals.map((rental) => rental.id);
 
   const dues = rentalIds.length
-    ? await db.rentalCollectionDue.findMany({
+    ? await db.rentalDue.findMany({
         where: { rentalId: { in: rentalIds } },
         select: {
           rentalId: true,
@@ -431,14 +430,19 @@ export async function recordClientPayment(
         await refreshOverdueDues(tx, rental.id);
       }
 
-      const dues = await tx.rentalCollectionDue.findMany({
+      const dues = await tx.rentalDue.findMany({
         where: {
           rentalId: { in: rentals.map((rental) => rental.id) },
           status: { in: [...OPEN_DUE_STATUSES] },
           outstandingAmount: { gt: 0 },
         },
         orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }, { id: "asc" }],
-        select: { rentalId: true, outstandingAmount: true },
+        select: {
+          id: true,
+          rentalId: true,
+          outstandingAmount: true,
+          rental: { select: { rentalNumber: true } },
+        },
       });
 
       const totalOutstanding = dues.reduce(
@@ -461,75 +465,44 @@ export async function recordClientPayment(
         );
       }
 
-      const outstandingByRental = new Map<string, Prisma.Decimal>();
-      for (const due of dues) {
-        const current =
-          outstandingByRental.get(due.rentalId) ?? new Prisma.Decimal(0);
-        outstandingByRental.set(
-          due.rentalId,
-          current.add(toDecimal(due.outstandingAmount))
-        );
-      }
-
       let remaining = amount;
       const collections: unknown[] = [];
       const allocations: Array<{
+        dueId: string;
         rentalId: string;
         rentalNumber: string;
         amount: string;
-        dueAllocations: Array<{ dueId: string; amount: Prisma.Decimal }>;
       }> = [];
 
-      for (const rental of rentals) {
+      // One collection per due, oldest dues first.
+      for (const due of dues) {
         if (remaining.lte(0)) break;
 
-        const rentalOutstanding =
-          outstandingByRental.get(rental.id) ?? new Prisma.Decimal(0);
-        if (rentalOutstanding.lte(0)) continue;
+        const outstanding = toDecimal(due.outstandingAmount);
+        const applied = Prisma.Decimal.min(outstanding, remaining);
+        if (applied.lte(0)) continue;
 
-        const applied = Prisma.Decimal.min(rentalOutstanding, remaining);
-        const allocation = await allocateToDues(tx, rental.id, applied);
-
-        const collection = await tx.collection.create({
-          data: {
-            payerType: "CLIENT",
-            clientId: client.id,
-            riderId: null,
-            rentalId: rental.id,
-            rentalDueId: allocation.primaryDueId,
-            amount: applied,
-            currency: rental.currency,
+        const result = await createCollectionWithinTransaction(
+          tx,
+          {
+            rentalDueId: due.id,
+            amount: applied.toString(),
             paymentMethod: input.paymentMethod,
             referenceNumber: input.referenceNumber ?? null,
             receivedAt,
             status: "CLEARED",
-            receivedById: actor.userId,
-            reconciledAt: receivedAt,
-            reconciledById: actor.userId,
-            idempotencyKey: `${baseKey}:${rental.id}`,
+            idempotencyKey: `${baseKey}:${due.id}`,
             notes: input.notes ?? null,
           },
-          select: collectionSelect,
-        });
+          actor
+        );
 
-        await createCollectionLedgerEntry(tx, {
-          rentalId: rental.id,
-          collectionId: collection.id,
-          amount: applied,
-          currency: rental.currency,
-          occurredAt: receivedAt,
-          actor,
-          description: input.notes
-            ? `Client payment: ${input.notes}`
-            : `Client payment for rental ${rental.rentalNumber}`,
-        });
-
-        collections.push(collection);
+        collections.push(result.collection);
         allocations.push({
-          rentalId: rental.id,
-          rentalNumber: rental.rentalNumber,
+          dueId: due.id,
+          rentalId: due.rentalId,
+          rentalNumber: due.rental.rentalNumber,
           amount: applied.toString(),
-          dueAllocations: allocation.allocations,
         });
 
         remaining = remaining.sub(applied);
@@ -576,18 +549,18 @@ export async function listClientDues(
   const client = await assertClient(prisma, clientId);
   const { page, limit } = query;
 
-  const where: Prisma.RentalCollectionDueWhereInput = {
+  const where: Prisma.RentalDueWhereInput = {
     rental: { clientId: client.id, rentalType: "B2B" },
   };
   if (query.status) where.status = query.status;
   if (query.rentalId) where.rentalId = query.rentalId;
 
-  const orderBy: Prisma.RentalCollectionDueOrderByWithRelationInput = {
+  const orderBy: Prisma.RentalDueOrderByWithRelationInput = {
     [query.sortBy]: query.sortOrder,
   };
 
   const [dues, total] = await Promise.all([
-    prisma.rentalCollectionDue.findMany({
+    prisma.rentalDue.findMany({
       where,
       select: {
         ...rentalDueSelect,
@@ -599,7 +572,7 @@ export async function listClientDues(
       skip: (page - 1) * limit,
       take: limit,
     }),
-    prisma.rentalCollectionDue.count({ where }),
+    prisma.rentalDue.count({ where }),
   ]);
 
   return {
@@ -627,7 +600,7 @@ export async function listClientCollections(
   };
   if (query.status) where.status = query.status;
   if (query.paymentMethod) where.paymentMethod = query.paymentMethod;
-  if (query.rentalId) where.rentalId = query.rentalId;
+  if (query.rentalId) where.rentalDue = { rentalId: query.rentalId };
   if (query.from || query.to) {
     where.receivedAt = {};
     if (query.from) where.receivedAt.gte = query.from;

@@ -43,9 +43,10 @@ enum B2BRiderMgmt {
   AML_MANAGED
 }
 
+//how often this client is billed, per the signed agreement
 enum BillingFrequency {
   WEEKLY
-  FORTNIGHTLY
+  FORTNIGHTLY //14 days
   MONTHLY
 }
 
@@ -53,7 +54,7 @@ enum BillingFrequency {
 // may be billed daily but collected every 15 days, for example.
 enum CollectionPeriod {
   WEEKLY
-  EVERY_15_DAYS
+  FORTNIGHTLY
   MONTHLY
 }
 
@@ -161,6 +162,12 @@ enum CollectionPayerType {
   RIDER
 }
 
+// What a receipt settles. A deposit receipt has no rental due.
+enum CollectionPurpose {
+  RENT
+  DEPOSIT
+}
+
 enum CollectionStatus {
   PENDING
   CLEARED
@@ -222,7 +229,11 @@ enum LedgerEntryType {
   OTHER
 }
 
-// need to work on this later
+
+/*
+- rental side: DEBIT increases what the customer owes, CREDIT reduces it
+- rider side: CREDIT increases what AML owes, DEBIT reduces it
+*/
 enum LedgerDirection {
   CREDIT // rental side: amonut recieved. rider side: AML owes more
   DEBIT // rental side: cutomer owns more. rider side: paid/deducted
@@ -300,9 +311,6 @@ enum DocumentType {
   OTHER
 }
 
-// ============================================================
-// RBAC
-// ============================================================
 model Permission {
   id          String  @id @default(uuid(7))
   resource    String
@@ -597,31 +605,27 @@ model Client {
 
 //p
 model RateCard {
-  id               String            @id @default(uuid(7))
-  code             String            @unique
-  name             String
-  description      String?
-  vehicleCategory  String?
-  rentalType       RentalType?
-  billingFrequency BillingFrequency?
-  dailyRate        Decimal           @db.Decimal(14, 4)
-  weeklyRate       Decimal?          @db.Decimal(14, 4)
-  fortnightlyRate  Decimal?          @db.Decimal(14, 4)
-  monthlyRate      Decimal?          @db.Decimal(14, 4)
-  securityDeposit  Decimal?          @db.Decimal(14, 2)
-  currency         String            @default("INR") @db.Char(3)
-  effectiveFrom    DateTime          @db.Timestamptz(3)
-  effectiveTo      DateTime?         @db.Timestamptz(3)
-  isActive         Boolean           @default(true)
-  terms            Json?             @db.JsonB
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  deletedAt        DateTime?
-
-  rentals Rental[]
+  id              String      @id @default(uuid(7))
+  code            String      @unique
+  name            String
+  description     String?
+  vehicleCategory String?
+  rentalType      RentalType?
+  dailyRate       Decimal     @db.Decimal(14, 4)
+  weeklyRate      Decimal?    @db.Decimal(14, 4)
+  fortnightlyRate Decimal?    @db.Decimal(14, 4)
+  monthlyRate     Decimal?    @db.Decimal(14, 4)
+  securityDeposit Decimal?    @db.Decimal(14, 2)
+  effectiveFrom   DateTime    @db.Timestamptz(3)
+  effectiveTo     DateTime?   @db.Timestamptz(3)
+  isActive        Boolean     @default(true)
+  terms           Json?       @db.JsonB
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  deletedAt       DateTime?
 
   @@index([vehicleCategory])
-  @@index([rentalType, billingFrequency])
+  @@index([rentalType])
   @@index([isActive])
   @@index([deletedAt])
   @@map("rate_cards")
@@ -629,33 +633,29 @@ model RateCard {
 
 //p
 model Rental {
-  id                      String            @id @default(uuid(7))
-  rentalNumber            String            @unique
+  id                      String           @id @default(uuid(7))
+  rentalNumber            String           @unique
   rentalType              RentalType
   b2cMode                 B2CMode?
   b2bRiderMgmt            B2BRiderMgmt?
   clientId                String?
-  client                  Client?           @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  client                  Client?          @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   riderId                 String?
-  rider                   Rider?            @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  hubId                   String?
-  hub                     Hub?              @relation(fields: [hubId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  rateCardId              String?
-  rateCard                RateCard?         @relation(fields: [rateCardId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  startDate               DateTime          @db.Timestamptz(3)
-  endDate                 DateTime?         @db.Timestamptz(3)
-  expectedEndDate         DateTime?         @db.Timestamptz(3)
-  status                  RentalStatus      @default(DRAFT)
-  statusChangedAt         DateTime?         @db.Timestamptz(3)
-  agreementRef            String?
-  billingFrequency        BillingFrequency?
-  collectionPeriod        CollectionPeriod  @default(MONTHLY)
-  currency                String            @default("INR") @db.Char(3)
-  dailyRate               Decimal?          @db.Decimal(14, 4)
-  weeklyRate              Decimal?          @db.Decimal(14, 4)
-  fortnightlyRate         Decimal?          @db.Decimal(14, 4)
-  monthlyRate             Decimal?          @db.Decimal(14, 4)
-  securityDepositRequired Decimal?          @db.Decimal(14, 2)
+  rider                   Rider?           @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  hubId                   String
+  hub                     Hub              @relation(fields: [hubId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  startDate               DateTime         @db.Timestamptz(3)
+  endDate                 DateTime?        @db.Timestamptz(3)
+  expectedEndDate         DateTime?        @db.Timestamptz(3)
+  status                  RentalStatus     @default(DRAFT)
+  statusChangedAt         DateTime?        @db.Timestamptz(3)
+  // agreementRef            String?
+  collectionPeriod        CollectionPeriod @default(MONTHLY)
+  dailyRate               Decimal?         @db.Decimal(14, 4)
+  weeklyRate              Decimal?         @db.Decimal(14, 4)
+  fortnightlyRate         Decimal?         @db.Decimal(14, 4)
+  monthlyRate             Decimal?         @db.Decimal(14, 4)
+  securityDepositRequired Decimal?         @db.Decimal(14, 2)
 
   version                Int       @default(0)
   notes                  String?
@@ -675,8 +675,7 @@ model Rental {
 
   assignments                         VehicleDeployment[]
   deposits                            Deposit[]
-  collections                         Collection[]
-  collectionDues                      RentalCollectionDue[]
+  dues                                RentalDue[]
   ledgerEntries                       LedgerEntry[]
   invoices                            Invoice[]
   invoiceLines                        InvoiceLine[]
@@ -726,7 +725,7 @@ model VehicleDeployment {
   @@map("vehicle_assignments")
 }
 
-//not considered as revenue. only held
+//not considered as revenue. only held p
 model Deposit {
   id             String           @id @default(uuid(7))
   payerType      DepositPayerType
@@ -753,12 +752,13 @@ model Deposit {
   @@map("deposits")
 }
 
-//deposit ledger
+//deposit ledger p
 model DepositTransaction {
   id                    String                 @id @default(uuid(7))
   depositId             String
   deposit               Deposit                @relation(fields: [depositId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   type                  DepositTransactionType
+  direction             LedgerDirection
   amount                Decimal                @db.Decimal(14, 2)
   reference             String?
   reason                String?
@@ -779,110 +779,48 @@ model DepositTransaction {
   @@map("deposit_transactions")
 }
 
-// invoice not yet implemented
-model Invoice {
-  id                 String           @id @default(uuid(7))
-  invoiceNumber      String           @unique
-  kind               InvoiceKind      @default(CONSOLIDATED)
-  clientId           String
-  client             Client           @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  rentalId           String?
-  rental             Rental?          @relation(fields: [rentalId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  billingPeriodStart DateTime         @db.Timestamptz(3)
-  billingPeriodEnd   DateTime         @db.Timestamptz(3)
-  billingFrequency   BillingFrequency
-  issueDate          DateTime         @default(now()) @db.Timestamptz(3)
-  issuedAt           DateTime?        @db.Timestamptz(3)
-  dueDate            DateTime         @db.Timestamptz(3)
-  status             InvoiceStatus    @default(DRAFT)
-  currency           String           @default("INR") @db.Char(3)
-  subtotal           Decimal          @default(0) @db.Decimal(14, 2)
-  discountAmount     Decimal          @default(0) @db.Decimal(14, 2)
-  taxAmount          Decimal          @default(0) @db.Decimal(14, 2)
-  totalAmount        Decimal          @default(0) @db.Decimal(14, 2)
-  version            Int              @default(0)
-  notes              String?
-  approvedById       String?
-  approvedBy         User?            @relation("InvoiceApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  approvedAt         DateTime?        @db.Timestamptz(3)
-  voidedById         String?
-  voidedBy           User?            @relation("InvoiceVoidedBy", fields: [voidedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  voidedAt           DateTime?        @db.Timestamptz(3)
-  voidReason         String?
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
-
-  lines       InvoiceLine[]
-  allocations PaymentAllocation[]
-
-  @@index([clientId, status, dueDate])
-  @@index([rentalId])
-  @@index([issueDate])
-  @@map("invoices")
-}
-
-model InvoiceLine {
-  id              String         @id @default(uuid(7))
-  invoiceId       String
-  invoice         Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  rentalId        String?
-  rental          Rental?        @relation(fields: [rentalId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  serviceChargeId String?        @unique
-  serviceCharge   ServiceCharge? @relation(fields: [serviceChargeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  chargeType      ChargeType
-  description     String
-  quantity        Decimal?       @db.Decimal(14, 3)
-  unitPrice       Decimal?       @db.Decimal(14, 4)
-  lineAmount      Decimal        @db.Decimal(14, 2)
-  periodStart     DateTime?      @db.Timestamptz(3)
-  periodEnd       DateTime?      @db.Timestamptz(3)
-  pricingSnapshot Json?          @db.JsonB
-  createdAt       DateTime       @default(now())
-
-  @@index([invoiceId])
-  @@index([rentalId])
-  @@map("invoice_lines")
-}
-
+//p
+/**
+ * One collection per rental due. deposits amount given by rider/client is also a collection row.
+ * CHECK ( (purpose = 'RENT' AND rental_due_id IS NOT NULL)
+ * OR (purpose = 'DEPOSIT' AND rental_due_id IS NULL) )
+ */
 model Collection {
-  id              String               @id @default(uuid(7))
+  id              String              @id @default(uuid(7))
+  purpose         CollectionPurpose   @default(RENT)
   payerType       CollectionPayerType
   clientId        String?
-  client          Client?              @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  client          Client?             @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   riderId         String?
-  rider           Rider?               @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  rentalId        String?
-  rental          Rental?              @relation(fields: [rentalId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  rider           Rider?              @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   rentalDueId     String?
-  rentalDue       RentalCollectionDue? @relation(fields: [rentalDueId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  amount          Decimal              @db.Decimal(14, 2)
+  rentalDue       RentalDue?          @relation(fields: [rentalDueId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  amount          Decimal             @db.Decimal(14, 2)
   paymentMethod   PaymentMethod
   referenceNumber String?
-  receivedAt      DateTime             @default(now()) @db.Timestamptz(3)
-  status          CollectionStatus     @default(PENDING)
+  receivedAt      DateTime            @default(now()) @db.Timestamptz(3)
+  status          CollectionStatus    @default(PENDING)
   receivedById    String?
-  receivedBy      User?                @relation("CollectionReceivedBy", fields: [receivedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  reconciledAt    DateTime?            @db.Timestamptz(3)
+  receivedBy      User?               @relation("CollectionReceivedBy", fields: [receivedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  reconciledAt    DateTime?           @db.Timestamptz(3)
   reconciledById  String?
-  reconciledBy    User?                @relation("CollectionReconciledBy", fields: [reconciledById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  idempotencyKey  String               @unique
+  reconciledBy    User?               @relation("CollectionReconciledBy", fields: [reconciledById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  idempotencyKey  String              @unique
   notes           String?
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
 
-  allocations         PaymentAllocation[]
   depositTransactions DepositTransaction[]
 
-  @@unique([rentalId, referenceNumber])
   @@index([clientId, receivedAt])
   @@index([riderId, receivedAt])
-  @@index([rentalId, receivedAt])
   @@index([rentalDueId])
   @@index([status])
   @@map("collections")
 }
 
-model RentalCollectionDue {
+//p
+model RentalDue {
   id                String          @id @default(uuid(7))
   rentalId          String
   rental            Rental          @relation(fields: [rentalId], references: [id], onDelete: Restrict, onUpdate: Cascade)
@@ -891,7 +829,7 @@ model RentalCollectionDue {
   dueDate           DateTime        @db.Timestamptz(3)
   amountDue         Decimal         @db.Decimal(14, 2)
   amountCollected   Decimal         @default(0) @db.Decimal(14, 2)
-  outstandingAmount Decimal         @db.Decimal(14, 2)
+  outstandingAmount Decimal         @db.Decimal(14, 2) //amount to be collected
   status            RentalDueStatus @default(PENDING)
   generatedAt       DateTime        @default(now()) @db.Timestamptz(3)
   createdAt         DateTime        @default(now())
@@ -902,7 +840,7 @@ model RentalCollectionDue {
   @@unique([rentalId, periodStart, periodEnd])
   @@index([rentalId, status, dueDate])
   @@index([status, dueDate])
-  @@map("rental_collection_dues")
+  @@map("rental_dues")
 }
 
 /**
@@ -916,13 +854,14 @@ model RentalCollectionDue {
  * payStatement code writes RENT_DEDUCTION (rider, DEBIT)
  * and COLLECTION_RECEIVED (rental, CREDIT) for the same amount.
  * Correct, but nothing enforces the pair balances — only idempotencyKey stops duplicates.
+ * penalties, incentives, reimbursements are all just entries with a type 
+ * and direction until a statement claims them. 
  */
 model LedgerEntry {
   id          String          @id @default(uuid(7))
   entryType   LedgerEntryType
   direction   LedgerDirection
   amount      Decimal         @db.Decimal(14, 2)
-  currency    String          @default("INR") @db.Char(3)
   occurredAt  DateTime        @db.Timestamptz(3)
   description String
 
@@ -933,7 +872,7 @@ model LedgerEntry {
   payStatementId String?
   payStatement   RiderPayStatement? @relation(fields: [payStatementId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
-  sourceType      String?
+  sourceType      String? //add enum 
   sourceId        String?
   reversesEntryId String?      @unique
   reversesEntry   LedgerEntry? @relation("LedgerEntryReversal", fields: [reversesEntryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
@@ -953,20 +892,21 @@ model LedgerEntry {
   @@index([sourceType, sourceId])
   @@map("ledger_entries")
 }
+//p
 
-model PaymentAllocation {
-  id           String     @id @default(uuid(7))
-  collectionId String
-  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  invoiceId    String
-  invoice      Invoice    @relation(fields: [invoiceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  amount       Decimal    @db.Decimal(14, 2)
-  createdAt    DateTime   @default(now())
+// model PaymentAllocation {
+//   id           String     @id @default(uuid(7))
+//   collectionId String
+//   collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+//   invoiceId    String
+//   invoice      Invoice    @relation(fields: [invoiceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+//   amount       Decimal    @db.Decimal(14, 2)
+//   createdAt    DateTime   @default(now())
 
-  @@unique([collectionId, invoiceId])
-  @@index([invoiceId])
-  @@map("payment_allocations")
-}
+//   @@unique([collectionId, invoiceId])
+//   @@index([invoiceId])
+//   @@map("payment_allocations")
+// }
 
 model RiderPayStatement {
   id                   String             @id @default(uuid(7))
@@ -999,7 +939,7 @@ model RiderPayStatement {
   @@index([riderId, periodStart, periodEnd])
   @@index([status])
   @@map("rider_pay_statements")
-}
+} //p
 
 model RiderPayStatementLine {
   id             String               @id @default(uuid(7))
@@ -1013,7 +953,7 @@ model RiderPayStatementLine {
   rental         Rental?              @relation(fields: [rentalId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   ledgerEntryId  String?              @unique
   ledgerEntry    LedgerEntry?         @relation(fields: [ledgerEntryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  referenceType  String?
+  referenceType  String? //add enum
   referenceId    String?
   snapshot       Json?                @db.JsonB
   createdAt      DateTime             @default(now())
@@ -1022,7 +962,7 @@ model RiderPayStatementLine {
   @@index([rentalId])
   @@index([ledgerEntryId])
   @@map("rider_pay_statement_lines")
-}
+}//p
 
 model Payout {
   id              String             @id @default(uuid(7))
@@ -1046,6 +986,74 @@ model Payout {
   @@index([riderId, status])
   @@index([payStatementId])
   @@map("payouts")
+}//p
+
+/**
+ * invoice not yet implemented
+ * invoice should take a list of collection ids to build multi line invoice
+ */
+model Invoice {
+  id                 String           @id @default(uuid(7))
+  invoiceNumber      String           @unique
+  kind               InvoiceKind      @default(CONSOLIDATED)
+  clientId           String
+  client             Client           @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  rentalId           String?
+  rental             Rental?          @relation(fields: [rentalId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  billingPeriodStart DateTime         @db.Timestamptz(3)
+  billingPeriodEnd   DateTime         @db.Timestamptz(3)
+  billingFrequency   BillingFrequency
+  issueDate          DateTime         @default(now()) @db.Timestamptz(3)
+  issuedAt           DateTime?        @db.Timestamptz(3)
+  dueDate            DateTime         @db.Timestamptz(3)
+  status             InvoiceStatus    @default(DRAFT)
+  currency           String           @default("INR") @db.Char(3)
+  subtotal           Decimal          @default(0) @db.Decimal(14, 2)
+  discountAmount     Decimal          @default(0) @db.Decimal(14, 2)
+  taxAmount          Decimal          @default(0) @db.Decimal(14, 2)
+  totalAmount        Decimal          @default(0) @db.Decimal(14, 2)
+  version            Int              @default(0)
+  notes              String?
+  approvedById       String?
+  approvedBy         User?            @relation("InvoiceApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  approvedAt         DateTime?        @db.Timestamptz(3)
+  voidedById         String?
+  voidedBy           User?            @relation("InvoiceVoidedBy", fields: [voidedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  voidedAt           DateTime?        @db.Timestamptz(3)
+  voidReason         String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  lines InvoiceLine[]
+  // allocations PaymentAllocation[]
+
+  @@index([clientId, status, dueDate])
+  @@index([rentalId])
+  @@index([issueDate])
+  @@map("invoices")
+}
+
+model InvoiceLine {
+  id              String         @id @default(uuid(7))
+  invoiceId       String
+  invoice         Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  rentalId        String?
+  rental          Rental?        @relation(fields: [rentalId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  serviceChargeId String?        @unique
+  serviceCharge   ServiceCharge? @relation(fields: [serviceChargeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  chargeType      ChargeType
+  description     String
+  quantity        Decimal?       @db.Decimal(14, 3)
+  unitPrice       Decimal?       @db.Decimal(14, 4)
+  lineAmount      Decimal        @db.Decimal(14, 2)
+  periodStart     DateTime?      @db.Timestamptz(3)
+  periodEnd       DateTime?      @db.Timestamptz(3)
+  pricingSnapshot Json?          @db.JsonB
+  createdAt       DateTime       @default(now())
+
+  @@index([invoiceId])
+  @@index([rentalId])
+  @@map("invoice_lines")
 }
 
 // model Vendor {

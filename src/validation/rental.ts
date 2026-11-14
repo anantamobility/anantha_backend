@@ -6,11 +6,6 @@ export const b2cModeSchema = z.enum(["AML_RIDER", "INDIVIDUAL_RIDER"]);
 export const b2bRiderMgmtSchema = z.enum(["CLIENT_MANAGED", "AML_MANAGED"]);
 export const collectionPeriodSchema = z.enum([
   "WEEKLY",
-  "EVERY_15_DAYS",
-  "MONTHLY",
-]);
-export const billingFrequencySchema = z.enum([
-  "WEEKLY",
   "FORTNIGHTLY",
   "MONTHLY",
 ]);
@@ -91,7 +86,6 @@ const createRentalBaseSchema = z
     rateCardId: optionalNullableUuid("rateCardId"),
     startDate: z.coerce.date(),
     expectedEndDate: z.coerce.date().nullable().optional(),
-    billingFrequency: billingFrequencySchema.nullable().optional(),
     collectionPeriod: collectionPeriodSchema,
     currency: currencySchema.optional(),
     securityDepositAmount: moneySchema(2, "securityDepositAmount"),

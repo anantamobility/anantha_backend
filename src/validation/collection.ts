@@ -48,7 +48,7 @@ export const rentalDueStatusSchema = z.enum([
 
 export const createCollectionSchema = z
   .object({
-    rentalId: z.string().uuid("rentalId must be a valid UUID"),
+    rentalDueId: z.string().uuid("rentalDueId must be a valid UUID"),
     amount: moneySchema(2, "amount"),
     paymentMethod: paymentMethodSchema,
     referenceNumber: z.string().trim().min(1).max(200).nullable().optional(),

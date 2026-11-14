@@ -339,7 +339,7 @@ export async function getDashboard(query: DashboardQuery) {
       _sum: { amount: true },
       _count: { _all: true },
     }),
-    prisma.rentalCollectionDue.groupBy({
+    prisma.rentalDue.groupBy({
       by: ["status"],
       where: {
         dueDate: dateFilter,
@@ -352,7 +352,7 @@ export async function getDashboard(query: DashboardQuery) {
       },
       _count: { _all: true },
     }),
-    prisma.rentalCollectionDue.groupBy({
+    prisma.rentalDue.groupBy({
       by: ["status"],
       where: {
         dueDate: dateFilter,

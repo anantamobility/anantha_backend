@@ -67,7 +67,7 @@ describe("calculateDueAmount", () => {
 
   it("uses the fortnightly rate for a full 15-day period", () => {
     const amount = calculateDueAmount({
-      period: "EVERY_15_DAYS",
+      period: "FORTNIGHTLY",
       periodStart: new Date("2026-01-01T00:00:00.000Z"),
       periodEnd: new Date("2026-01-16T00:00:00.000Z"),
       rates,

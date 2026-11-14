@@ -78,7 +78,7 @@ beforeEach(() => {
   prismaMock.riderPayStatement.findMany.mockResolvedValue([]);
   prismaMock.riderPayStatement.count.mockResolvedValue(0);
   prismaMock.ledgerEntry.findMany.mockResolvedValue([]);
-  prismaMock.rentalCollectionDue.findMany.mockResolvedValue([]);
+  prismaMock.rentalDue.findMany.mockResolvedValue([]);
   prismaMock.auditLog.create.mockResolvedValue({});
 });
 
@@ -111,7 +111,7 @@ describe("POST /pay-statements/generate", () => {
     });
     prismaMock.riderPayStatementLine.create.mockResolvedValue({});
     prismaMock.ledgerEntry.updateMany.mockResolvedValue({ count: 1 });
-    prismaMock.rentalCollectionDue.findMany.mockResolvedValue(
+    prismaMock.rentalDue.findMany.mockResolvedValue(
       overrides.dues ?? [
         {
           id: DUE_ID,
@@ -125,7 +125,7 @@ describe("POST /pay-statements/generate", () => {
         },
       ]
     );
-    prismaMock.rentalCollectionDue.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.rentalDue.updateMany.mockResolvedValue({ count: 1 });
     prismaMock.collection.create.mockResolvedValue({ id: COLLECTION_ID });
     prismaMock.ledgerEntry.create.mockResolvedValue({});
     prismaMock.ledgerEntry.create.mockResolvedValue({ id: "deduction-1" });

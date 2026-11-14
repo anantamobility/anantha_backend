@@ -61,13 +61,16 @@ function due(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function collectibleDue(overrides: Record<string, unknown> = {}) {
+  return due({ rental: rental(), ...overrides });
+}
+
 function collection(overrides: Record<string, unknown> = {}) {
   return {
     id: COLLECTION_ID,
-    rentalId: RENTAL_ID,
+    purpose: "RENT",
     rentalDueId: DUE_ID,
     amount: "1000.00",
-    currency: "INR",
     paymentMethod: "UPI",
     referenceNumber: "PAY-1",
     status: "CLEARED",
@@ -84,7 +87,7 @@ beforeEach(() => {
       });
     }
   });
-  prismaMock.rentalCollectionDue.findMany.mockResolvedValue([]);
+  prismaMock.rentalDue.findMany.mockResolvedValue([]);
   prismaMock.collection.findMany.mockResolvedValue([]);
   prismaMock.collection.count.mockResolvedValue(0);
   prismaMock.ledgerEntry.upsert.mockResolvedValue({});
@@ -94,17 +97,16 @@ beforeEach(() => {
 describe("POST /collections", () => {
   it("records a CLEARED collection and allocates it to open dues", async () => {
     authenticate([{ resource: "collection", action: "create" }]);
-    prismaMock.rental.findUnique.mockResolvedValue(rental());
+    prismaMock.rentalDue.findUnique.mockResolvedValue(collectibleDue());
     prismaMock.collection.findUnique.mockResolvedValue(null);
-    prismaMock.rentalCollectionDue.findMany.mockResolvedValue([due()]);
-    prismaMock.rentalCollectionDue.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.rentalDue.updateMany.mockResolvedValue({ count: 1 });
     prismaMock.collection.create.mockResolvedValue(collection());
 
     const res = await request(app)
       .post("/collections")
       .set("Authorization", `Bearer ${accessToken()}`)
       .send({
-        rentalId: RENTAL_ID,
+        rentalDueId: DUE_ID,
         amount: "1000",
         paymentMethod: "UPI",
         referenceNumber: "PAY-1",
@@ -112,13 +114,10 @@ describe("POST /collections", () => {
 
     expect(res.status).toBe(201);
     expect(res.body.data.collection.id).toBe(COLLECTION_ID);
-    expect(res.body.data.allocations).toEqual([
-      { dueId: DUE_ID, amount: expect.anything() },
-    ]);
     expect(prismaMock.collection.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          rentalId: RENTAL_ID,
+          purpose: "RENT",
           status: "CLEARED",
           payerType: "RIDER",
           clientId: null,
@@ -138,8 +137,8 @@ describe("POST /collections", () => {
 
   it("records a CLIENT-funded collection for a B2B rental", async () => {
     authenticate([{ resource: "collection", action: "create" }]);
-    prismaMock.rental.findUnique.mockResolvedValue(
-      rental({ rentalType: "B2B", riderId: null })
+    prismaMock.rentalDue.findUnique.mockResolvedValue(
+      collectibleDue({ rental: rental({ rentalType: "B2B", riderId: null }) })
     );
     prismaMock.collection.findUnique.mockResolvedValue(null);
     prismaMock.collection.create.mockResolvedValue(collection());
@@ -148,7 +147,7 @@ describe("POST /collections", () => {
       .post("/collections")
       .set("Authorization", `Bearer ${accessToken()}`)
       .send({
-        rentalId: RENTAL_ID,
+        rentalDueId: DUE_ID,
         amount: "1000",
         paymentMethod: "BANK_TRANSFER",
         status: "PENDING",
@@ -169,17 +168,16 @@ describe("POST /collections", () => {
 
   it("rejects an overpayment beyond the outstanding dues", async () => {
     authenticate([{ resource: "collection", action: "create" }]);
-    prismaMock.rental.findUnique.mockResolvedValue(rental());
     prismaMock.collection.findUnique.mockResolvedValue(null);
-    prismaMock.rentalCollectionDue.findMany.mockResolvedValue([
-      due({ outstandingAmount: "100.00", amountDue: "100.00" }),
-    ]);
+    prismaMock.rentalDue.findUnique.mockResolvedValue(
+      collectibleDue({ outstandingAmount: "100.00", amountDue: "100.00" })
+    );
 
     const res = await request(app)
       .post("/collections")
       .set("Authorization", `Bearer ${accessToken()}`)
       .send({
-        rentalId: RENTAL_ID,
+        rentalDueId: DUE_ID,
         amount: "500",
         paymentMethod: "CASH",
       });
@@ -191,13 +189,15 @@ describe("POST /collections", () => {
 
   it("rejects collections for a rental that is not ACTIVE or ON_HOLD", async () => {
     authenticate([{ resource: "collection", action: "create" }]);
-    prismaMock.rental.findUnique.mockResolvedValue(rental({ status: "DRAFT" }));
+    prismaMock.rentalDue.findUnique.mockResolvedValue(
+      collectibleDue({ rental: rental({ status: "DRAFT" }) })
+    );
 
     const res = await request(app)
       .post("/collections")
       .set("Authorization", `Bearer ${accessToken()}`)
       .send({
-        rentalId: RENTAL_ID,
+        rentalDueId: DUE_ID,
         amount: "100",
         paymentMethod: "CASH",
       });
@@ -229,7 +229,8 @@ describe("GET /collections", () => {
     });
     const args = prismaMock.collection.findMany.mock.calls[0][0];
     expect(args.where).toMatchObject({
-      rentalId: RENTAL_ID,
+      purpose: "RENT",
+      rentalDue: { rentalId: RENTAL_ID },
       status: "CLEARED",
       paymentMethod: "UPI",
     });
@@ -272,9 +273,8 @@ describe("PATCH /collections/:id/clear", () => {
     prismaMock.collection.findUnique.mockResolvedValue(
       collection({ status: "PENDING" })
     );
-    prismaMock.rental.findUnique.mockResolvedValue(rental());
-    prismaMock.rentalCollectionDue.findMany.mockResolvedValue([due()]);
-    prismaMock.rentalCollectionDue.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.rentalDue.findUnique.mockResolvedValue(collectibleDue());
+    prismaMock.rentalDue.updateMany.mockResolvedValue({ count: 1 });
     prismaMock.collection.update.mockResolvedValue(collection());
 
     const res = await request(app)
@@ -316,9 +316,9 @@ describe("GET /rentals/:id/dues", () => {
   it("lists dues with the financial summary", async () => {
     authenticate([{ resource: "collection", action: "read" }]);
     prismaMock.rental.findUnique.mockResolvedValue(rental());
-    prismaMock.rentalCollectionDue.findMany.mockResolvedValue([due()]);
-    prismaMock.rentalCollectionDue.count.mockResolvedValue(1);
-    prismaMock.rentalCollectionDue.updateMany.mockResolvedValue({ count: 0 });
+    prismaMock.rentalDue.findMany.mockResolvedValue([due()]);
+    prismaMock.rentalDue.count.mockResolvedValue(1);
+    prismaMock.rentalDue.updateMany.mockResolvedValue({ count: 0 });
 
     const res = await request(app)
       .get(`/rentals/${RENTAL_ID}/dues`)
@@ -335,11 +335,11 @@ describe("POST /rentals/:id/dues/generate", () => {
   it("generates one due per elapsed collection period", async () => {
     authenticate([{ resource: "collection", action: "due:generate" }]);
     prismaMock.rental.findUnique.mockResolvedValue(rental());
-    prismaMock.rentalCollectionDue.findMany.mockResolvedValue([]);
-    prismaMock.rentalCollectionDue.upsert
+    prismaMock.rentalDue.findMany.mockResolvedValue([]);
+    prismaMock.rentalDue.upsert
       .mockResolvedValueOnce({ id: "due-1" })
       .mockResolvedValueOnce({ id: "due-2" });
-    prismaMock.rentalCollectionDue.updateMany.mockResolvedValue({ count: 0 });
+    prismaMock.rentalDue.updateMany.mockResolvedValue({ count: 0 });
 
     const res = await request(app)
       .post(`/rentals/${RENTAL_ID}/dues/generate`)
@@ -349,8 +349,8 @@ describe("POST /rentals/:id/dues/generate", () => {
     expect(res.status).toBe(201);
     expect(res.body.data.periodsProcessed).toBe(2);
     expect(res.body.data.generated).toBe(2);
-    expect(prismaMock.rentalCollectionDue.upsert).toHaveBeenCalledTimes(2);
-    const first = prismaMock.rentalCollectionDue.upsert.mock.calls[0][0];
+    expect(prismaMock.rentalDue.upsert).toHaveBeenCalledTimes(2);
+    const first = prismaMock.rentalDue.upsert.mock.calls[0][0];
     expect(first.create).toMatchObject({
       rentalId: RENTAL_ID,
       amountDue: expect.anything(),

@@ -33,7 +33,7 @@ export function periodStartFor(
   index: number
 ): Date {
   if (period === "WEEKLY") return addDaysUtc(rentalStartDate, index * 7);
-  if (period === "EVERY_15_DAYS") {
+  if (period === "FORTNIGHTLY") {
     return addDaysUtc(rentalStartDate, index * 15);
   }
   return addMonthsUtc(rentalStartDate, index);
@@ -89,7 +89,7 @@ export type RentalRateFields = {
  *
  * Convention:
  * - WEEKLY uses weeklyRate for a full 7-day period.
- * - EVERY_15_DAYS uses fortnightlyRate for a full 15-day period.
+ * - FORTNIGHTLY uses fortnightlyRate for a full 15-day period.
  * - MONTHLY uses monthlyRate for a full calendar-month period.
  * - Anything else falls back to dailyRate * number of days in the period.
  *
@@ -111,7 +111,7 @@ export function calculateDueAmount(input: {
   }
 
   if (
-    period === "EVERY_15_DAYS" &&
+    period === "FORTNIGHTLY" &&
     rates.fortnightlyRate != null &&
     days === 15
   ) {

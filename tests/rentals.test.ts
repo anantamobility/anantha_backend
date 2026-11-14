@@ -83,7 +83,7 @@ beforeEach(() => {
   });
   prismaMock.rental.findMany.mockResolvedValue([]);
   prismaMock.rental.count.mockResolvedValue(0);
-  prismaMock.rentalCollectionDue.findMany.mockResolvedValue([]);
+  prismaMock.rentalDue.findMany.mockResolvedValue([]);
   prismaMock.collection.findMany.mockResolvedValue([]);
   prismaMock.vehicleDeployment.findMany.mockResolvedValue([]);
   prismaMock.ledgerEntry.upsert.mockResolvedValue({});
@@ -437,11 +437,11 @@ describe("PATCH /rentals/:id/close", () => {
     prismaMock.rental.update.mockResolvedValue(
       rentalDetail({ status: "COMPLETED" })
     );
-    prismaMock.rentalCollectionDue.findMany.mockResolvedValue([]);
-    prismaMock.rentalCollectionDue.upsert.mockResolvedValue({
+    prismaMock.rentalDue.findMany.mockResolvedValue([]);
+    prismaMock.rentalDue.upsert.mockResolvedValue({
       id: "due-1",
     });
-    prismaMock.rentalCollectionDue.updateMany.mockResolvedValue({ count: 0 });
+    prismaMock.rentalDue.updateMany.mockResolvedValue({ count: 0 });
     prismaMock.deposit.findUnique.mockResolvedValue(null);
 
     const res = await request(app)
@@ -465,7 +465,7 @@ describe("PATCH /rentals/:id/close", () => {
         }),
       })
     );
-    expect(prismaMock.rentalCollectionDue.upsert).toHaveBeenCalled();
+    expect(prismaMock.rentalDue.upsert).toHaveBeenCalled();
   });
 
   it("rejects closing a DRAFT rental", async () => {

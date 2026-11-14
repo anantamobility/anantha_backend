@@ -20,7 +20,7 @@ beforeEach(() => {
     "vehicle",
     "rider",
     "collection",
-    "rentalCollectionDue",
+    "rentalDue",
     "deposit",
     "user",
   ]) {
@@ -40,7 +40,8 @@ describe("GET /dashboard", () => {
     ]);
     prismaMock.rider.groupBy.mockResolvedValue([
       { status: "ACTIVE", _count: { _all: 1 } },
-    ]);
+    ]);
+
     prismaMock.collection.groupBy.mockResolvedValue([
       {
         status: "CLEARED",
@@ -49,7 +50,7 @@ describe("GET /dashboard", () => {
         _count: { _all: 1 },
       },
     ]);
-    prismaMock.rentalCollectionDue.groupBy.mockImplementation(
+    prismaMock.rentalDue.groupBy.mockImplementation(
       async (args: any) =>
         args.where?.rental?.rentalType === "B2C"
           ? [
@@ -101,7 +102,8 @@ describe("GET /dashboard", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.dashboard.live.vehicles.total).toBe(3);
-    expect(res.body.data.dashboard.live.vehicles.byStatus.RETIRED).toBe(0);
+    expect(res.body.data.dashboard.live.vehicles.byStatus.RETIRED).toBe(0);
+
     expect(res.body.data.dashboard.collectionDue).toMatchObject({
       totalCollections: 1,
       totalCollectedAmount: "100",

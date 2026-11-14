@@ -309,7 +309,7 @@ export async function generatePayStatement(
         data: { payStatementId: payStatement.id },
       });
 
-      const dues = await tx.rentalCollectionDue.findMany({
+      const dues = await tx.rentalDue.findMany({
         where: {
           status: { in: [...OPEN_DUE_STATUSES] },
           outstandingAmount: { gt: 0 },
@@ -353,7 +353,7 @@ export async function generatePayStatement(
         const nextOutstanding = outstanding.sub(applied);
         const nextCollected = toDecimal(due.amountCollected).add(applied);
 
-        const updated = await tx.rentalCollectionDue.updateMany({
+        const updated = await tx.rentalDue.updateMany({
           where: { id: due.id, outstandingAmount: { gte: applied } },
           data: {
             amountCollected: { increment: applied },
@@ -439,7 +439,7 @@ export async function generatePayStatement(
             description: `Rent deducted for rental ${due.rental.rentalNumber}`,
             rentalId: due.rentalId,
             ledgerEntryId: deduction.id,
-            referenceType: "RentalCollectionDue",
+            referenceType: "RentalDue",
             referenceId: due.id,
             snapshot: {
               dueId: due.id,
