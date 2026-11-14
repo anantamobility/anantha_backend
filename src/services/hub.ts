@@ -20,7 +20,6 @@ const hubDependencySelect = {
   riders: true,
   rentals: true,
   assignments: true,
-  vehicleHubHistory: true,
   inventoryBalances: true,
   movementsFrom: true,
   movementsTo: true,

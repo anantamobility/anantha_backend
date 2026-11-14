@@ -21,7 +21,6 @@ const storageMock = storage as any;
 const RIDER_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b";
 const MISSING_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a6c";
 const DOCUMENT_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a7d";
-const VERIFICATION_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a8e";
 
 function authUser(permissions: { resource: string; action: string }[]) {
   return {
@@ -50,7 +49,6 @@ function existingDocument(overrides: Record<string, unknown> = {}) {
   return {
     id: DOCUMENT_ID,
     documentType: "PVC",
-    status: "PENDING",
     title: "PVC certificate",
     fileName: "pvc.pdf",
     mimeType: "application/pdf",
@@ -59,15 +57,10 @@ function existingDocument(overrides: Record<string, unknown> = {}) {
     storageBucket: null,
     issueDate: null,
     expiryDate: null,
+    documentNumber: null,
     riderId: RIDER_ID,
-    verificationId: VERIFICATION_ID,
     staffId: null,
     vehicleId: null,
-    clientId: null,
-    userId: null,
-    verifiedById: null,
-    verifiedAt: null,
-    uploadedById: "u1",
     notes: null,
     metadata: null,
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -81,7 +74,6 @@ beforeEach(() => {
   prismaMock.user.findUnique.mockReset();
   prismaMock.rider.findUnique.mockReset();
   prismaMock.rider.findFirst.mockReset();
-  prismaMock.riderVerification.findUnique.mockReset();
   prismaMock.document.findFirst.mockReset();
   prismaMock.document.findMany.mockReset();
   prismaMock.document.count.mockReset();
@@ -99,9 +91,6 @@ describe("POST /riders/:id/documents", () => {
     authenticate([{ resource: "rider", action: "document:upload" }]);
     prismaMock.rider.findFirst.mockResolvedValue(existingRider());
     prismaMock.rider.findUnique.mockResolvedValue(existingRider());
-    prismaMock.riderVerification.findUnique.mockResolvedValue({
-      id: VERIFICATION_ID,
-    });
     prismaMock.document.create.mockResolvedValue(
       existingDocument({ fileName: "pvc.pdf" })
     );
@@ -111,7 +100,6 @@ describe("POST /riders/:id/documents", () => {
       .set("Authorization", `Bearer ${accessToken()}`)
       .field("documentType", "PVC")
       .field("title", "PVC certificate")
-      .field("verificationType", "PVC")
       .attach("file", Buffer.from("%PDF"), {
         filename: "my pvc certificate.pdf",
         contentType: "application/pdf",
@@ -132,13 +120,10 @@ describe("POST /riders/:id/documents", () => {
     expect(prismaMock.document.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         documentType: "PVC",
-        status: "PENDING",
         title: "PVC certificate",
         fileName: "my pvc certificate.pdf",
         mimeType: "application/pdf",
         riderId: RIDER_ID,
-        verificationId: VERIFICATION_ID,
-        uploadedById: "u1",
       }),
       select: expect.any(Object),
     });
@@ -205,27 +190,6 @@ describe("POST /riders/:id/documents", () => {
       .field("title", "PVC certificate")
       .attach("file", oversized, {
         filename: "pvc.pdf",
-        contentType: "application/pdf",
-      });
-
-    expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe("VALIDATION_ERROR");
-    expect(storageMock.put).not.toHaveBeenCalled();
-  });
-
-  it("rejects metadata that does not match the linked verification type", async () => {
-    authenticate([{ resource: "rider", action: "document:upload" }]);
-    prismaMock.rider.findFirst.mockResolvedValue(existingRider());
-    prismaMock.rider.findUnique.mockResolvedValue(existingRider());
-
-    const res = await request(app)
-      .post(`/riders/${RIDER_ID}/documents`)
-      .set("Authorization", `Bearer ${accessToken()}`)
-      .field("documentType", "BGV")
-      .field("title", "BGV certificate")
-      .field("verificationType", "PVC")
-      .attach("file", Buffer.from("%PDF"), {
-        filename: "bgv.pdf",
         contentType: "application/pdf",
       });
 

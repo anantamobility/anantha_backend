@@ -80,31 +80,9 @@ export const changeVehicleStatusSchema = z
   })
   .strict();
 
-export const listVehicleStatusHistoryQuerySchema = paginationQuerySchema
-  .extend({
-    status: vehicleStatusSchema.optional(),
-    startDate: z.coerce.date().optional(),
-    endDate: z.coerce.date().optional(),
-    sortBy: z.enum(["changedAt", "status"]).default("changedAt"),
-    sortOrder: z.enum(["asc", "desc"]).default("desc"),
-  })
-  .refine(
-    (query) =>
-      !query.startDate ||
-      !query.endDate ||
-      query.startDate.getTime() <= query.endDate.getTime(),
-    {
-      message: "startDate must be before or equal to endDate",
-      path: ["startDate"],
-    }
-  );
-
 export type CreateVehicleInput = z.infer<typeof createVehicleSchema>;
 export type UpdateVehicleInput = z.infer<typeof updateVehicleSchema>;
 export type ListVehiclesQuery = z.infer<typeof listVehiclesQuerySchema>;
 export type ChangeVehicleStatusInput = z.infer<
   typeof changeVehicleStatusSchema
->;
-export type ListVehicleStatusHistoryQuery = z.infer<
-  typeof listVehicleStatusHistoryQuerySchema
 >;

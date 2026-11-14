@@ -314,16 +314,6 @@ enum DocumentType {
   OTHER
 }
 
-enum VerificationStatus {
-  PENDING
-  SUBMITTED
-  VERIFIED
-  REJECTED
-  EXPIRED
-  NOT_SUBMITTED
-  UNDER_REVIEW
-}
-
 // ============================================================
 // RBAC
 // ============================================================
@@ -458,9 +448,6 @@ model Rider {
   hub      Hub?    @relation(fields: [hubId], references: [id], onDelete: SetNull, onUpdate: Cascade)
 
   status      RiderStatus @default(ONBOARDING)
-  pvcStatus VerificationStatus? @default(NOT_SUBMITTED)
-  bgvStatus VerificationStatus? @default(NOT_SUBMITTED)   
-  // add pvc and bgv status fields.
   onboardedAt DateTime?   @db.Timestamptz(3)
   statusChangedAt DateTime? @db.Timestamptz(3)
   version     Int         @default(0) //? remove this maybe
@@ -1134,6 +1121,7 @@ model Service {
   rental                           Rental?          @relation(fields: [rentalId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   serviceType                      ServiceType
   status                           ServiceStatus    @default(REPORTED)
+  statusChangedAt                  DateTime?        @db.Timestamptz(3)
   responsibleParty                 ResponsibleParty @default(UNKNOWN)
   reportedById                     String?
   reportedBy                       User?            @relation("ServiceReportedBy", fields: [reportedById], references: [id], onDelete: SetNull, onUpdate: Cascade)

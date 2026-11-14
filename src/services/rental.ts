@@ -413,6 +413,7 @@ async function assignVehicleWithinTransaction(
     },
     data: {
       status: "DEPLOYED",
+      statusChangedAt: new Date(),
       version: { increment: 1 },
     },
   });
@@ -424,16 +425,6 @@ async function assignVehicleWithinTransaction(
       ErrorCode.CONFLICT
     );
   }
-
-  await tx.vehicleStatusHistory.create({
-    data: {
-      vehicleId: vehicle.id,
-      previousStatus: "IDLE",
-      status: "DEPLOYED",
-      changedById: actor.userId,
-      reason: input.reason ?? `Assigned to rental ${input.rental.rentalNumber}`,
-    },
-  });
 
   await logAudit({
     ...actor,
@@ -959,6 +950,7 @@ export async function closeRental(
             },
             data: {
               status: returnStatus,
+              statusChangedAt: new Date(),
               version: { increment: 1 },
             },
           });
@@ -970,17 +962,6 @@ export async function closeRental(
               ErrorCode.CONFLICT
             );
           }
-
-          await tx.vehicleStatusHistory.create({
-            data: {
-              vehicleId: vehicle.id,
-              previousStatus: vehicle.status,
-              status: returnStatus,
-              changedById: actor.userId,
-              reason: `Rental ${rental.rentalNumber} closed`,
-              notes: input.notes ?? null,
-            },
-          });
 
           await logAudit({
             ...actor,

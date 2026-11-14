@@ -26,5 +26,6 @@ export const UserPolicies: ResourcePolicies = {
   "role:assign": (user) => isAdmin(user),
   "status:update": (user) => isAdmin(user),
   "session:revoke": (user) => isAdmin(user),
+  resetPassword: (user) => isAdmin(user),
   delete: (user) => isAdmin(user),
 };

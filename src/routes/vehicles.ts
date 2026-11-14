@@ -6,7 +6,6 @@ import { idParamSchema } from "../validation/common.js";
 import {
   changeVehicleStatusSchema,
   createVehicleSchema,
-  listVehicleStatusHistoryQuerySchema,
   listVehiclesQuerySchema,
   updateVehicleSchema,
 } from "../validation/vehicle.js";
@@ -15,7 +14,6 @@ import {
   createVehicle,
   deleteVehicle,
   getVehicleById,
-  getVehicleStatusHistory,
   getVehicles,
   updateVehicle,
 } from "../controllers/vehicle/vehicles.js";
@@ -35,14 +33,6 @@ r.get(
   authorize("vehicle", "read", { policy: false }),
   validate(listVehiclesQuerySchema, "query"),
   getVehicles
-);
-r.get(
-  "/:id/status-history",
-  verifyToken,
-  validate(idParamSchema, "params"),
-  authorize("vehicle", "history:read"),
-  validate(listVehicleStatusHistoryQuerySchema, "query"),
-  getVehicleStatusHistory
 );
 r.patch(
   "/:id/status",

@@ -72,11 +72,7 @@ beforeEach(() => {
   prismaMock.vehicle.create.mockReset();
   prismaMock.vehicle.update.mockReset();
   prismaMock.vehicle.updateMany.mockReset();
-  prismaMock.vehicle.delete.mockReset();
-  prismaMock.vehicleStatusHistory.findMany.mockReset();
-  prismaMock.vehicleStatusHistory.count.mockReset();
-  prismaMock.vehicleStatusHistory.create.mockReset();
-  prismaMock.vehicleAssignment.count.mockReset();
+  prismaMock.vehicle.delete.mockReset();  prismaMock.vehicleAssignment.count.mockReset();
   prismaMock.service.count.mockReset();
   prismaMock.auditLog.create.mockReset();
 });
@@ -117,6 +113,7 @@ describe("POST /vehicles", () => {
         color: "White",
         vin: "VIN-0001",
         status: "IDLE",
+        statusChangedAt: expect.any(Date),
         isActive: true,
       }),
       select: expect.any(Object),
@@ -306,7 +303,7 @@ describe("GET /vehicles/:id", () => {
       existingVehicle({
         hubId: HUB_ID,
         hub: { id: HUB_ID, name: "Main Hub", code: "MAIN", isActive: true },
-        _count: { assignments: 1, services: 0, documents: 2, statusHistory: 3 },
+        _count: { assignments: 1, services: 0, documents: 2 },
       })
     );
 
@@ -321,7 +318,6 @@ describe("GET /vehicles/:id", () => {
       code: "MAIN",
       isActive: true,
     });
-    expect(res.body.data.vehicle._count.statusHistory).toBe(3);
     expect(res.body.data.vehicle).not.toHaveProperty("deletedAt");
   });
 
@@ -567,15 +563,12 @@ describe("DELETE /vehicles/:id", () => {
 });
 
 describe("PATCH /vehicles/:id/status", () => {
-  it("changes status and writes history in the same transaction", async () => {
+  it("changes status and stamps statusChangedAt", async () => {
     authenticate([{ resource: "vehicle", action: "status:update" }]);
     prismaMock.vehicle.findFirst.mockResolvedValue(existingVehicle());
     prismaMock.vehicle.findUnique.mockResolvedValue(existingVehicle());
     prismaMock.vehicleAssignment.count.mockResolvedValue(0);
     prismaMock.vehicle.updateMany.mockResolvedValue({ count: 1 });
-    prismaMock.vehicleStatusHistory.create.mockResolvedValue(
-      existingHistory({ reason: "Allocated to rider" })
-    );
 
     const res = await request(app)
       .patch(`/vehicles/${VEHICLE_ID}/status`)
@@ -584,12 +577,7 @@ describe("PATCH /vehicles/:id/status", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.vehicle.status).toBe("DEPLOYED");
-    expect(res.body.data.statusHistory).toMatchObject({
-      previousStatus: "IDLE",
-      status: "DEPLOYED",
-      changedById: "u1",
-      reason: "Allocated to rider",
-    });
+    expect(res.body.data).not.toHaveProperty("statusHistory");
 
     expect(prismaMock.vehicle.updateMany).toHaveBeenCalledWith({
       where: {
@@ -598,18 +586,11 @@ describe("PATCH /vehicles/:id/status", () => {
         version: 0,
         deletedAt: null,
       },
-      data: { status: "DEPLOYED", version: { increment: 1 } },
-    });
-    expect(prismaMock.vehicleStatusHistory.create).toHaveBeenCalledWith({
       data: {
-        vehicleId: VEHICLE_ID,
-        previousStatus: "IDLE",
         status: "DEPLOYED",
-        changedById: "u1",
-        reason: "Allocated to rider",
-        notes: null,
+        statusChangedAt: expect.any(Date),
+        version: { increment: 1 },
       },
-      include: { changedBy: { select: expect.any(Object) } },
     });
     expect(prismaMock.auditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -651,7 +632,6 @@ describe("PATCH /vehicles/:id/status", () => {
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("CONFLICT");
     expect(prismaMock.vehicle.updateMany).not.toHaveBeenCalled();
-    expect(prismaMock.vehicleStatusHistory.create).not.toHaveBeenCalled();
   });
 
   it("rejects a repeated transition to the current status", async () => {
@@ -666,7 +646,6 @@ describe("PATCH /vehicles/:id/status", () => {
 
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("CONFLICT");
-    expect(prismaMock.vehicleStatusHistory.create).not.toHaveBeenCalled();
   });
 
   it("returns 404 when the vehicle does not exist", async () => {
@@ -701,7 +680,6 @@ describe("PATCH /vehicles/:id/status", () => {
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("CONFLICT");
     expect(prismaMock.vehicle.updateMany).not.toHaveBeenCalled();
-    expect(prismaMock.vehicleStatusHistory.create).not.toHaveBeenCalled();
   });
 
   it("returns 403 when the role lacks vehicle:status:update", async () => {
@@ -716,27 +694,7 @@ describe("PATCH /vehicles/:id/status", () => {
     expect(prismaMock.vehicle.updateMany).not.toHaveBeenCalled();
   });
 
-  it("does not write history or an audit row when history insertion fails", async () => {
-    authenticate([{ resource: "vehicle", action: "status:update" }]);
-    prismaMock.vehicle.findFirst.mockResolvedValue(existingVehicle());
-    prismaMock.vehicle.findUnique.mockResolvedValue(existingVehicle());
-    prismaMock.vehicleAssignment.count.mockResolvedValue(0);
-    prismaMock.vehicle.updateMany.mockResolvedValue({ count: 1 });
-    prismaMock.vehicleStatusHistory.create.mockRejectedValue(
-      new Error("history insert failed")
-    );
-
-    const res = await request(app)
-      .patch(`/vehicles/${VEHICLE_ID}/status`)
-      .set("Authorization", `Bearer ${accessToken()}`)
-      .send({ status: "IN_SERVICE" });
-
-    expect(res.status).toBe(500);
-    expect(res.body.error.code).toBe("INTERNAL_ERROR");
-    expect(prismaMock.auditLog.create).not.toHaveBeenCalled();
-  });
-
-  it("rejects a stale concurrent update without writing history", async () => {
+  it("rejects a stale concurrent update", async () => {
     authenticate([{ resource: "vehicle", action: "status:update" }]);
     prismaMock.vehicle.findFirst.mockResolvedValue(existingVehicle());
     prismaMock.vehicle.findUnique.mockResolvedValue(existingVehicle());
@@ -750,89 +708,6 @@ describe("PATCH /vehicles/:id/status", () => {
 
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("CONFLICT");
-    expect(prismaMock.vehicleStatusHistory.create).not.toHaveBeenCalled();
     expect(prismaMock.auditLog.create).not.toHaveBeenCalled();
-  });
-});
-
-describe("GET /vehicles/:id/status-history", () => {
-  it("returns newest-first history for the requested vehicle", async () => {
-    authenticate([{ resource: "vehicle", action: "history:read" }]);
-    prismaMock.vehicle.findFirst.mockResolvedValue(existingVehicle());
-    prismaMock.vehicle.findUnique.mockResolvedValue({
-      id: VEHICLE_ID,
-      deletedAt: null,
-    });
-    prismaMock.vehicleStatusHistory.findMany.mockResolvedValue([
-      existingHistory(),
-    ]);
-    prismaMock.vehicleStatusHistory.count.mockResolvedValue(1);
-
-    const res = await request(app)
-      .get(`/vehicles/${VEHICLE_ID}/status-history`)
-      .set("Authorization", `Bearer ${accessToken()}`);
-
-    expect(res.status).toBe(200);
-    expect(res.body.data.statusHistory).toHaveLength(1);
-    expect(res.body.data.statusHistory[0]).toMatchObject({
-      previousStatus: "IDLE",
-      status: "DEPLOYED",
-      changedBy: { id: "u1", name: "Tester" },
-    });
-    expect(res.body.data.pagination).toEqual({
-      page: 1,
-      limit: 20,
-      total: 1,
-      totalPages: 1,
-    });
-
-    const args = prismaMock.vehicleStatusHistory.findMany.mock.calls[0][0];
-    expect(args.where).toEqual({ vehicleId: VEHICLE_ID });
-    expect(args.orderBy).toEqual([{ changedAt: "desc" }, { id: "desc" }]);
-    expect(args.include.changedBy.select).toEqual({ id: true, name: true });
-  });
-
-  it("returns an empty collection when no history exists", async () => {
-    authenticate([{ resource: "vehicle", action: "history:read" }]);
-    prismaMock.vehicle.findFirst.mockResolvedValue(existingVehicle());
-    prismaMock.vehicle.findUnique.mockResolvedValue({
-      id: VEHICLE_ID,
-      deletedAt: null,
-    });
-    prismaMock.vehicleStatusHistory.findMany.mockResolvedValue([]);
-    prismaMock.vehicleStatusHistory.count.mockResolvedValue(0);
-
-    const res = await request(app)
-      .get(`/vehicles/${VEHICLE_ID}/status-history`)
-      .set("Authorization", `Bearer ${accessToken()}`);
-
-    expect(res.status).toBe(200);
-    expect(res.body.data.statusHistory).toEqual([]);
-    expect(res.body.data.pagination.total).toBe(0);
-  });
-
-  it("returns 404 when the vehicle does not exist", async () => {
-    authenticate([{ resource: "vehicle", action: "history:read" }]);
-    prismaMock.vehicle.findFirst.mockResolvedValue(existingVehicle());
-    prismaMock.vehicle.findUnique.mockResolvedValue(null);
-
-    const res = await request(app)
-      .get(`/vehicles/${MISSING_ID}/status-history`)
-      .set("Authorization", `Bearer ${accessToken()}`);
-
-    expect(res.status).toBe(404);
-    expect(res.body.error.code).toBe("NOT_FOUND");
-    expect(prismaMock.vehicleStatusHistory.findMany).not.toHaveBeenCalled();
-  });
-
-  it("returns 403 when the role lacks vehicle:history:read", async () => {
-    authenticate([{ resource: "vehicle", action: "read" }]);
-
-    const res = await request(app)
-      .get(`/vehicles/${VEHICLE_ID}/status-history`)
-      .set("Authorization", `Bearer ${accessToken()}`);
-
-    expect(res.status).toBe(403);
-    expect(prismaMock.vehicleStatusHistory.findMany).not.toHaveBeenCalled();
   });
 });

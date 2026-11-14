@@ -189,13 +189,13 @@ export const serviceListSelect = {
       charges: true,
       spares: true,
       replacementAssignments: true,
-      responsibilityApprovals: true,
     },
   },
 } as const;
 
 export const serviceDetailSelect = {
   ...serviceListSelect,
+  statusChangedAt: true,
   responsibilityEvidence: true,
   charges: {
     select: serviceChargeSelect,
@@ -204,30 +204,6 @@ export const serviceDetailSelect = {
   spares: {
     select: serviceSpareLineSelect,
     orderBy: { createdAt: "asc" as const },
-  },
-  statusHistory: {
-    select: {
-      id: true,
-      status: true,
-      changedById: true,
-      reason: true,
-      changedAt: true,
-      changedBy: { select: serviceUserSelect },
-    },
-    orderBy: { changedAt: "asc" as const },
-  },
-  responsibilityApprovals: {
-    select: {
-      id: true,
-      responsibility: true,
-      previousResponsibility: true,
-      investigationNotes: true,
-      evidence: true,
-      approvedById: true,
-      approvedAt: true,
-      approvedBy: { select: serviceUserSelect },
-    },
-    orderBy: { approvedAt: "asc" as const },
   },
   replacementAssignments: {
     select: replacementAssignmentSelect,
@@ -329,30 +305,6 @@ async function assertNoOtherActiveDowntime(
       ErrorCode.CONFLICT
     );
   }
-}
-
-async function recordStatusHistory(
-  tx: Tx,
-  serviceId: string,
-  status:
-    | "REPORTED"
-    | "APPROVED"
-    | "IN_PROGRESS"
-    | "AWAITING_PARTS"
-    | "COMPLETED"
-    | "CLOSED"
-    | "CANCELLED",
-  actor: AuditActor,
-  reason?: string | null
-) {
-  await tx.serviceStatusHistory.create({
-    data: {
-      serviceId,
-      status,
-      changedById: actor.userId,
-      reason: reason ?? null,
-    },
-  });
 }
 
 async function pauseRentalForService(
@@ -543,7 +495,11 @@ async function moveVehicleForService(
       version: input.expectedVersion ?? vehicle.version,
       deletedAt: null,
     },
-    data: { status: target, version: { increment: 1 } },
+    data: {
+      status: target,
+      statusChangedAt: new Date(),
+      version: { increment: 1 },
+    },
   });
 
   if (updated.count === 0) {
@@ -553,28 +509,6 @@ async function moveVehicleForService(
       ErrorCode.CONFLICT
     );
   }
-
-  await tx.vehicleStatusHistory.create({
-    data: {
-      vehicleId: vehicle.id,
-      previousStatus: vehicle.status as
-        | "IDLE"
-        | "DEPLOYED"
-        | "IN_SERVICE"
-        | "UNDER_REPAIR"
-        | "OUT_OF_SERVICE"
-        | "RETIRED",
-      status: target as
-        | "IDLE"
-        | "DEPLOYED"
-        | "IN_SERVICE"
-        | "UNDER_REPAIR"
-        | "OUT_OF_SERVICE"
-        | "RETIRED",
-      changedById: input.actor.userId,
-      reason: input.reason,
-    },
-  });
 
   await logAudit({
     ...input.actor,
@@ -676,13 +610,12 @@ export async function createService(
           assignedToId: input.assignedToId ?? null,
           reportedById: actor.userId,
           reportedAt,
+          statusChangedAt: reportedAt,
           downtimeReason: input.downtimeReason ?? null,
           previousVehicleStatus: vehicle.status,
         },
         select: serviceDetailSelect,
       });
-
-      await recordStatusHistory(tx, service.id, "REPORTED", actor, "Service reported");
 
       await logAudit({
         ...actor,
@@ -971,6 +904,7 @@ export async function startService(
         where: { id, version: service.version },
         data: {
           status: "IN_PROGRESS",
+          statusChangedAt: startedAt,
           startedAt,
           downtimeStart: startedAt,
           downtimeReason: input.reason ?? undefined,
@@ -1004,14 +938,6 @@ export async function startService(
         startedAt,
         actor,
         input.reason ?? `Vehicle downtime for service ${service.serviceNumber}`
-      );
-
-      await recordStatusHistory(
-        tx,
-        service.id,
-        "IN_PROGRESS",
-        actor,
-        input.reason ?? input.notes ?? "Service started"
       );
 
       await logAudit({
@@ -1071,7 +997,11 @@ export async function markServiceAwaitingParts(
 
     const updated = await tx.service.updateMany({
       where: { id, version: service.version },
-      data: { status: "AWAITING_PARTS", version: { increment: 1 } },
+      data: {
+        status: "AWAITING_PARTS",
+        statusChangedAt: new Date(),
+        version: { increment: 1 },
+      },
     });
     if (updated.count === 0) {
       throw new AppError(
@@ -1080,14 +1010,6 @@ export async function markServiceAwaitingParts(
         ErrorCode.CONFLICT
       );
     }
-
-    await recordStatusHistory(
-      tx,
-      service.id,
-      "AWAITING_PARTS",
-      actor,
-      input.reason ?? "Awaiting spare parts"
-    );
 
     await logAudit({
       ...actor,
@@ -1139,7 +1061,11 @@ export async function resumeServiceWork(
 
     const updated = await tx.service.updateMany({
       where: { id, version: service.version },
-      data: { status: "IN_PROGRESS", version: { increment: 1 } },
+      data: {
+        status: "IN_PROGRESS",
+        statusChangedAt: new Date(),
+        version: { increment: 1 },
+      },
     });
     if (updated.count === 0) {
       throw new AppError(
@@ -1148,14 +1074,6 @@ export async function resumeServiceWork(
         ErrorCode.CONFLICT
       );
     }
-
-    await recordStatusHistory(
-      tx,
-      service.id,
-      "IN_PROGRESS",
-      actor,
-      input.reason ?? "Service work resumed"
-    );
 
     await logAudit({
       ...actor,
@@ -1226,6 +1144,7 @@ export async function completeService(
       where: { id, version: service.version },
       data: {
         status: "COMPLETED",
+        statusChangedAt: completedAt,
         completedAt,
         downtimeEnd: completedAt,
         ...(input.repairNotes !== undefined
@@ -1258,14 +1177,6 @@ export async function completeService(
       service,
       actor,
       `Service ${service.serviceNumber} completed`
-    );
-
-    await recordStatusHistory(
-      tx,
-      service.id,
-      "COMPLETED",
-      actor,
-      input.reason ?? "Service completed"
     );
 
     await logAudit({
@@ -1321,6 +1232,7 @@ export async function closeService(
       where: { id, version: service.version },
       data: {
         status: "CLOSED",
+        statusChangedAt: closedAt,
         closedAt,
         version: { increment: 1 },
       },
@@ -1332,14 +1244,6 @@ export async function closeService(
         ErrorCode.CONFLICT
       );
     }
-
-    await recordStatusHistory(
-      tx,
-      service.id,
-      "CLOSED",
-      actor,
-      input.notes ?? "Service closed"
-    );
 
     await logAudit({
       ...actor,
@@ -1398,6 +1302,7 @@ export async function cancelService(
       where: { id, version: service.version },
       data: {
         status: "CANCELLED",
+        statusChangedAt: cancelledAt,
         cancelledAt,
         cancellationReason: input.reason,
         downtimeEnd: service.downtimeStart ? cancelledAt : null,
@@ -1428,14 +1333,6 @@ export async function cancelService(
         `Service ${service.serviceNumber} cancelled`
       );
     }
-
-    await recordStatusHistory(
-      tx,
-      service.id,
-      "CANCELLED",
-      actor,
-      input.reason
-    );
 
     await logAudit({
       ...actor,
@@ -1518,21 +1415,6 @@ export async function approveServiceResponsibility(
         ErrorCode.CONFLICT
       );
     }
-
-    await tx.serviceResponsibilityApproval.create({
-      data: {
-        serviceId: service.id,
-        responsibility: input.responsibility,
-        previousResponsibility: service.responsibleParty,
-        investigationNotes: input.investigationNotes,
-        evidence:
-          input.evidence === undefined || input.evidence === null
-            ? Prisma.JsonNull
-            : (input.evidence as Prisma.InputJsonValue),
-        approvedById: actor.userId,
-        approvedAt,
-      },
-    });
 
     const charges = await tx.serviceCharge.findMany({
       where: {
@@ -1833,7 +1715,11 @@ export async function returnReplacement(
           version: vehicle.version,
           deletedAt: null,
         },
-        data: { status: "IDLE", version: { increment: 1 } },
+        data: {
+          status: "IDLE",
+          statusChangedAt: new Date(),
+          version: { increment: 1 },
+        },
       });
       if (vehicleUpdated.count === 0) {
         throw new AppError(
@@ -1842,15 +1728,6 @@ export async function returnReplacement(
           ErrorCode.CONFLICT
         );
       }
-      await tx.vehicleStatusHistory.create({
-        data: {
-          vehicleId: vehicle.id,
-          previousStatus: "DEPLOYED",
-          status: "IDLE",
-          changedById: actor.userId,
-          reason: input.reason ?? `Replacement returned for service ${service.serviceNumber}`,
-        },
-      });
     }
 
     let replacementCharge = null;

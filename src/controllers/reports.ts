@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { success } from "../utils/http.js";
-import { resolveTrendRange } from "../services/trends.js";
+import { resolveTrendRange } from "../utils/date-range.js";
 import {
   startCsv,
   writeCsvRows,

@@ -5,7 +5,6 @@ import * as vehicleService from "../../services/vehicle.js";
 import type {
   ChangeVehicleStatusInput,
   CreateVehicleInput,
-  ListVehicleStatusHistoryQuery,
   ListVehiclesQuery,
   UpdateVehicleInput,
 } from "../../validation/vehicle.js";
@@ -101,23 +100,6 @@ export const changeVehicleStatus = async (
       req.params.id as string,
       req.body as ChangeVehicleStatusInput,
       getAuditActor(req)
-    );
-    return success(res, result);
-  } catch (err) {
-    next(err);
-  }
-};
-
-export const getVehicleStatusHistory = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const result = await vehicleService.getVehicleStatusHistory(
-      req.params.id as string,
-      req.query as unknown as ListVehicleStatusHistoryQuery,
-      req.user
     );
     return success(res, result);
   } catch (err) {

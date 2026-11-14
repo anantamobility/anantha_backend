@@ -10,8 +10,6 @@ const RIDER_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b";
 const MISSING_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a6c";
 const HUB_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a7d";
 const CLIENT_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a8e";
-const HISTORY_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a9f";
-
 function authUser(permissions: { resource: string; action: string }[]) {
   return {
     id: "u1",
@@ -45,30 +43,14 @@ function existingRider(overrides: Record<string, unknown> = {}) {
     hubId: null,
     status: "ONBOARDING",
     onboardedAt: new Date("2026-01-01T00:00:00.000Z"),
+    statusChangedAt: new Date("2026-01-01T00:00:00.000Z"),
     version: 0,
-    createdById: "u1",
-    updatedById: "u1",
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
     updatedAt: new Date("2026-01-01T00:00:00.000Z"),
     deletedAt: null,
     user: null,
     client: null,
     hub: null,
-    ...overrides,
-  };
-}
-
-function existingHistory(overrides: Record<string, unknown> = {}) {
-  return {
-    id: HISTORY_ID,
-    riderId: RIDER_ID,
-    previousStatus: "ONBOARDING",
-    status: "ACTIVE",
-    changedById: "u1",
-    reason: "Documents complete",
-    notes: null,
-    changedAt: new Date("2026-01-02T00:00:00.000Z"),
-    changedBy: { id: "u1", name: "Tester" },
     ...overrides,
   };
 }
@@ -84,24 +66,16 @@ beforeEach(() => {
   prismaMock.rider.create.mockReset();
   prismaMock.rider.update.mockReset();
   prismaMock.rider.updateMany.mockReset();
-  prismaMock.riderStatusHistory.create.mockReset();
-  prismaMock.riderStatusHistory.findMany.mockReset();
-  prismaMock.riderStatusHistory.count.mockReset();
-  prismaMock.riderVerification.create.mockReset();
-  prismaMock.riderVerificationHistory.create.mockReset();
   prismaMock.auditLog.create.mockReset();
 });
 
 describe("POST /riders", () => {
-  it("onboards a B2C rider, initialises PVC/BGV and records initial history", async () => {
+  it("onboards a B2C rider", async () => {
     authenticate([{ resource: "rider", action: "create" }]);
     prismaMock.hub.findUnique.mockResolvedValue({ id: HUB_ID });
     prismaMock.rider.create.mockResolvedValue(
       existingRider({ hubId: HUB_ID })
     );
-    prismaMock.riderVerification.create
-      .mockResolvedValueOnce({ id: "ver-pvc" })
-      .mockResolvedValueOnce({ id: "ver-bgv" });
 
     const res = await request(app)
       .post("/riders")
@@ -127,26 +101,10 @@ describe("POST /riders", () => {
         rentalType: "B2C",
         b2cMode: "INDIVIDUAL_RIDER",
         status: "ONBOARDING",
-        createdById: "u1",
-        updatedById: "u1",
+        statusChangedAt: expect.any(Date),
       }),
       select: expect.any(Object),
     });
-    expect(prismaMock.riderStatusHistory.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        riderId: RIDER_ID,
-        previousStatus: null,
-        status: "ONBOARDING",
-        changedById: "u1",
-      }),
-    });
-    expect(prismaMock.riderVerification.create).toHaveBeenCalledTimes(2);
-    expect(
-      prismaMock.riderVerification.create.mock.calls.map(
-        (call: any[]) => call[0].data.type
-      )
-    ).toEqual(["PVC", "BGV"]);
-    expect(prismaMock.riderVerificationHistory.create).toHaveBeenCalledTimes(2);
     expect(prismaMock.auditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         action: "CREATE",
@@ -167,9 +125,6 @@ describe("POST /riders", () => {
         clientId: CLIENT_ID,
       })
     );
-    prismaMock.riderVerification.create
-      .mockResolvedValueOnce({ id: "ver-pvc" })
-      .mockResolvedValueOnce({ id: "ver-bgv" });
 
     const res = await request(app)
       .post("/riders")
@@ -427,7 +382,7 @@ describe("GET /riders/:id", () => {
           companyName: "Acme Pvt Ltd",
           isActive: true,
         },
-        _count: { verifications: 2, documents: 1, statusHistory: 1 },
+        _count: { documents: 1 },
       })
     );
 
@@ -437,7 +392,7 @@ describe("GET /riders/:id", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.rider.client.companyName).toBe("Acme Pvt Ltd");
-    expect(res.body.data.rider._count.verifications).toBe(2);
+    expect(res.body.data.rider._count.documents).toBe(1);
     expect(res.body.data.rider).not.toHaveProperty("deletedAt");
   });
 
@@ -500,7 +455,6 @@ describe("PATCH /riders/:id", () => {
       data: expect.objectContaining({
         fullName: "Ravi K",
         email: "ravi.k@example.com",
-        updatedById: "u1",
       }),
       select: expect.any(Object),
     });
@@ -591,14 +545,11 @@ describe("PATCH /riders/:id", () => {
 });
 
 describe("PATCH /riders/:id/status", () => {
-  it("changes status and writes history atomically", async () => {
+  it("changes status and stamps statusChangedAt", async () => {
     authenticate([{ resource: "rider", action: "status:update" }]);
     prismaMock.rider.findFirst.mockResolvedValue(existingRider());
     prismaMock.rider.findUnique.mockResolvedValue(existingRider());
     prismaMock.rider.updateMany.mockResolvedValue({ count: 1 });
-    prismaMock.riderStatusHistory.create.mockResolvedValue(
-      existingHistory({ reason: "Documents complete" })
-    );
 
     const res = await request(app)
       .patch(`/riders/${RIDER_ID}/status`)
@@ -607,11 +558,7 @@ describe("PATCH /riders/:id/status", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.rider.status).toBe("ACTIVE");
-    expect(res.body.data.statusHistory).toMatchObject({
-      previousStatus: "ONBOARDING",
-      status: "ACTIVE",
-      changedById: "u1",
-    });
+    expect(res.body.data).not.toHaveProperty("statusHistory");
 
     expect(prismaMock.rider.updateMany).toHaveBeenCalledWith({
       where: {
@@ -620,18 +567,11 @@ describe("PATCH /riders/:id/status", () => {
         version: 0,
         deletedAt: null,
       },
-      data: { status: "ACTIVE", version: { increment: 1 } },
-    });
-    expect(prismaMock.riderStatusHistory.create).toHaveBeenCalledWith({
       data: {
-        riderId: RIDER_ID,
-        previousStatus: "ONBOARDING",
         status: "ACTIVE",
-        changedById: "u1",
-        reason: "Documents complete",
-        notes: null,
+        statusChangedAt: expect.any(Date),
+        version: { increment: 1 },
       },
-      include: { changedBy: { select: expect.any(Object) } },
     });
     expect(prismaMock.auditLog.create).toHaveBeenCalled();
   });
@@ -674,10 +614,9 @@ describe("PATCH /riders/:id/status", () => {
       .send({ status: "ONBOARDING" });
     expect(repeated.status).toBe(409);
     expect(prismaMock.rider.updateMany).not.toHaveBeenCalled();
-    expect(prismaMock.riderStatusHistory.create).not.toHaveBeenCalled();
   });
 
-  it("rejects a stale concurrent update without writing history", async () => {
+  it("rejects a stale concurrent update", async () => {
     authenticate([{ resource: "rider", action: "status:update" }]);
     prismaMock.rider.findFirst.mockResolvedValue(existingRider());
     prismaMock.rider.findUnique.mockResolvedValue(existingRider());
@@ -689,27 +628,6 @@ describe("PATCH /riders/:id/status", () => {
       .send({ status: "ACTIVE" });
 
     expect(res.status).toBe(409);
-    expect(res.body.error.code).toBe("CONFLICT");
-    expect(prismaMock.riderStatusHistory.create).not.toHaveBeenCalled();
-    expect(prismaMock.auditLog.create).not.toHaveBeenCalled();
-  });
-
-  it("does not write audit when history insertion fails", async () => {
-    authenticate([{ resource: "rider", action: "status:update" }]);
-    prismaMock.rider.findFirst.mockResolvedValue(existingRider());
-    prismaMock.rider.findUnique.mockResolvedValue(existingRider());
-    prismaMock.rider.updateMany.mockResolvedValue({ count: 1 });
-    prismaMock.riderStatusHistory.create.mockRejectedValue(
-      new Error("history insert failed")
-    );
-
-    const res = await request(app)
-      .patch(`/riders/${RIDER_ID}/status`)
-      .set("Authorization", `Bearer ${accessToken()}`)
-      .send({ status: "ACTIVE" });
-
-    expect(res.status).toBe(500);
-    expect(res.body.error.code).toBe("INTERNAL_ERROR");
     expect(prismaMock.auditLog.create).not.toHaveBeenCalled();
   });
 
@@ -730,55 +648,5 @@ describe("PATCH /riders/:id/status", () => {
       .set("Authorization", `Bearer ${accessToken()}`)
       .send({ status: "ACTIVE" });
     expect(forbidden.status).toBe(403);
-  });
-});
-
-describe("GET /riders/:id/status-history", () => {
-  it("returns newest-first history with pagination", async () => {
-    authenticate([{ resource: "rider", action: "history:read" }]);
-    prismaMock.rider.findFirst.mockResolvedValue(existingRider());
-    prismaMock.rider.findUnique.mockResolvedValue({
-      id: RIDER_ID,
-      deletedAt: null,
-    });
-    prismaMock.riderStatusHistory.findMany.mockResolvedValue([
-      existingHistory(),
-    ]);
-    prismaMock.riderStatusHistory.count.mockResolvedValue(1);
-
-    const res = await request(app)
-      .get(`/riders/${RIDER_ID}/status-history`)
-      .set("Authorization", `Bearer ${accessToken()}`);
-
-    expect(res.status).toBe(200);
-    expect(res.body.data.statusHistory).toHaveLength(1);
-    expect(res.body.data.statusHistory[0]).toMatchObject({
-      previousStatus: "ONBOARDING",
-      status: "ACTIVE",
-      changedBy: { id: "u1", name: "Tester" },
-    });
-    expect(res.body.data.pagination.total).toBe(1);
-
-    const args = prismaMock.riderStatusHistory.findMany.mock.calls[0][0];
-    expect(args.where).toEqual({ riderId: RIDER_ID });
-    expect(args.orderBy).toEqual([{ changedAt: "desc" }, { id: "desc" }]);
-  });
-
-  it("returns 404 for a missing rider and 403 without history permission", async () => {
-    authenticate([{ resource: "rider", action: "history:read" }]);
-    prismaMock.rider.findFirst.mockResolvedValue(existingRider());
-    prismaMock.rider.findUnique.mockResolvedValue(null);
-
-    const missing = await request(app)
-      .get(`/riders/${MISSING_ID}/status-history`)
-      .set("Authorization", `Bearer ${accessToken()}`);
-    expect(missing.status).toBe(404);
-
-    authenticate([{ resource: "rider", action: "read" }]);
-    const forbidden = await request(app)
-      .get(`/riders/${RIDER_ID}/status-history`)
-      .set("Authorization", `Bearer ${accessToken()}`);
-    expect(forbidden.status).toBe(403);
-    expect(prismaMock.riderStatusHistory.findMany).not.toHaveBeenCalled();
   });
 });

@@ -20,8 +20,6 @@ const columns = [
   { key: "clientName", header: "Client" },
   { key: "hubCode", header: "Hub Code" },
   { key: "hubName", header: "Hub" },
-  { key: "pvcStatus", header: "PVC Status" },
-  { key: "bgvStatus", header: "BGV Status" },
   { key: "rentalCount", header: "Rentals" },
   { key: "depositCount", header: "Deposits" },
   { key: "collectionCount", header: "Collections" },
@@ -67,7 +65,6 @@ export async function riderReport(
         createdAt: true,
         client: { select: { clientCode: true, name: true } },
         hub: { select: { code: true, name: true } },
-        verifications: { select: { type: true, status: true } },
         _count: {
           select: {
             rentals: true,
@@ -108,12 +105,6 @@ export async function riderReport(
       clientName: row.client?.name ?? "",
       hubCode: row.hub?.code ?? "",
       hubName: row.hub?.name ?? "",
-      pvcStatus:
-        row.verifications.find((verification) => verification.type === "PVC")
-          ?.status ?? "",
-      bgvStatus:
-        row.verifications.find((verification) => verification.type === "BGV")
-          ?.status ?? "",
       rentalCount: row._count.rentals,
       depositCount: row._count.deposits,
       collectionCount: row._count.collections,
