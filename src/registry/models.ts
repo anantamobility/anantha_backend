@@ -16,7 +16,6 @@ export const MODEL_REGISTRY = {
   hub: prisma.hub,
   client: prisma.client,
   ratecard: prisma.rateCard,
-  ratecardAssignment: prisma.rateCardAssignment,
   rental: prisma.rental,
   deposit: prisma.deposit,
   collection: prisma.collection,

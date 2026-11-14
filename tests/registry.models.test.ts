@@ -20,7 +20,6 @@ describe("MODEL_REGISTRY", () => {
     for (const resource of approvedResources) {
       const delegate = {
         ratecard: prismaMock.rateCard,
-        ratecardAssignment: prismaMock.rateCardAssignment,
         earning: prismaMock.earningsLedger,
         settlement: prismaMock.riderSettlement,
         payout: prismaMock.payout,
@@ -34,9 +33,6 @@ describe("MODEL_REGISTRY", () => {
 
   it("maps ratecard resources to their Prisma delegates", () => {
     expect(getModelDelegate("ratecard")).toBe(prismaMock.rateCard);
-    expect(getModelDelegate("ratecardAssignment")).toBe(
-      prismaMock.rateCardAssignment
-    );
   });
 });
 

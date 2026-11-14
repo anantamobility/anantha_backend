@@ -43,13 +43,12 @@ export function getRolePermissionBuckets(
         buckets.SUPERVISOR.push(key);
       }
 
-      // SUPERVISOR may manage B2B clients, commercial ratecards and their
-      // assignments, plus the full rental/financial workflow.
+      // SUPERVISOR may manage B2B clients and commercial ratecards,
+      // plus the full rental/financial workflow.
       if (
         [
           'client',
           'ratecard',
-          'ratecardAssignment',
           'rental',
           'deposit',
           'collection',

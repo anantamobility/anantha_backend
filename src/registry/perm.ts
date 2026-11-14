@@ -55,10 +55,6 @@ export const PERMISSION_REGISTRY = [
     actions: ['create', 'read', 'update', 'delete', 'status:update']
   },
   {
-    resource: 'ratecardAssignment',
-    actions: ['create', 'read', 'update', 'delete']
-  },
-  {
     resource: 'rental',
     actions: ['create', 'read', 'update', 'assign', 'activate', 'close']
   },

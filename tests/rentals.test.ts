@@ -37,7 +37,6 @@ function rentalDetail(overrides: Record<string, unknown> = {}) {
     riderId: RIDER_ID,
     hubId: null,
     rateCardId: null,
-    rateCardAssignmentId: null,
     startDate: new Date("2026-01-01T00:00:00.000Z"),
     endDate: null,
     expectedEndDate: null,

@@ -1,11 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import prisma from "../database/prismaClient.js";
-import {
-  InvoiceStatus,
-  Prisma,
-  RateCardAssignmentStatus,
-  RentalStatus,
-} from "../generated/prisma/client.js";
+import { InvoiceStatus, Prisma, RentalStatus } from "../generated/prisma/client.js";
 import {
   AppError,
   ErrorCode,
@@ -40,7 +35,6 @@ export const clientDetailSelect = {
   ...clientListSelect,
   _count: {
     select: {
-      rateCardAssignments: true,
       rentals: true,
       riders: true,
       invoices: true,
@@ -348,17 +342,6 @@ export async function deleteClient(id: string, actor: AuditActor) {
       if (activeRentals > 0) {
         throw new AppError(
           "Client cannot be deleted while it has open rentals",
-          409,
-          ErrorCode.CONFLICT
-        );
-      }
-
-      const activeAssignments = await tx.rateCardAssignment.count({
-        where: { clientId: id, status: RateCardAssignmentStatus.ACTIVE },
-      });
-      if (activeAssignments > 0) {
-        throw new AppError(
-          "Client cannot be deleted while it has active ratecard assignments",
           409,
           ErrorCode.CONFLICT
         );

@@ -129,23 +129,29 @@ describe("soft deletes", () => {
     const clientId = await createClient("Assigned Client", "ASSIGNED-CLIENT");
     const rateCardId = await createRateCard("Assigned Ratecard", "ASSIGNED-RATE", "SUV");
 
-    const assignment = await request(app)
-      .post("/ratecard-assignments")
+    const rental = await request(app)
+      .post("/rentals")
       .set(auth(adminToken))
-      .send({ clientId, rateCardId, status: "ACTIVE" });
-    expect(assignment.status).toBe(201);
+      .send({
+        rentalType: "B2B",
+        clientId,
+        rateCardId,
+        billingFrequency: "MONTHLY",
+        startDate: "2026-02-01",
+      });
+    expect(rental.status).toBe(201);
 
     const clientDelete = await request(app)
       .delete(`/clients/${clientId}`)
       .set(auth(adminToken));
     expect(clientDelete.status).toBe(409);
-    expect(clientDelete.body.error.message).toMatch(/active ratecard assignments/i);
+    expect(clientDelete.body.error.message).toMatch(/open rentals/i);
 
     const rateCardDelete = await request(app)
       .delete(`/ratecards/${rateCardId}`)
       .set(auth(adminToken));
     expect(rateCardDelete.status).toBe(409);
-    expect(rateCardDelete.body.error.message).toMatch(/assignments/i);
+    expect(rateCardDelete.body.error.message).toMatch(/rentals/i);
 
     const clientRow = await prisma.client.findUniqueOrThrow({ where: { id: clientId } });
     expect(clientRow.deletedAt).toBeNull();

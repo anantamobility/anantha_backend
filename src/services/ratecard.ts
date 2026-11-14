@@ -40,7 +40,6 @@ export const rateCardDetailSelect = {
   ...rateCardListSelect,
   _count: {
     select: {
-      assignments: true,
       rentals: true,
     },
   },
@@ -431,17 +430,6 @@ export async function deleteRateCard(id: string, actor: AuditActor) {
       if (rentalReferences > 0) {
         throw new AppError(
           "Ratecard cannot be deleted because it is referenced by existing rentals",
-          409,
-          ErrorCode.CONFLICT
-        );
-      }
-
-      const assignmentReferences = await tx.rateCardAssignment.count({
-        where: { rateCardId: id },
-      });
-      if (assignmentReferences > 0) {
-        throw new AppError(
-          "Ratecard cannot be deleted because it has assignments",
           409,
           ErrorCode.CONFLICT
         );

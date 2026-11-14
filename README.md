@@ -62,7 +62,7 @@ Routers are mounted in `src/app.ts`:
 - `/auth` - signup, login, refresh, logout, change/forgot/reset password
 - `/users` - user CRUD, role/status changes, session revocation
 - `/audit-logs` - audit log read API
-- `/hubs`, `/staff`, `/vehicles`, `/riders`, `/clients`, `/ratecards`, `/ratecard-assignments`
+- `/hubs`, `/staff`, `/vehicles`, `/riders`, `/clients`, `/ratecards`
 - `/rentals`, `/deposits`, `/collections`, `/earnings`, `/settlements`, `/payouts`
 - `/services`, `/spares`, `/inventory`, `/dashboard`, `/reports`
 

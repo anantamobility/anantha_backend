@@ -147,7 +147,7 @@ async function main() {
       isActive: true,
     },
   });
-  const b2bRate = await prisma.rateCard.upsert({
+  await prisma.rateCard.upsert({
     where: { code: "DEMO-SCOOTER-B2B" },
     update: { isActive: true, deletedAt: null },
     create: {
@@ -164,21 +164,6 @@ async function main() {
       isActive: true,
     },
   });
-
-  const existingAssignment = await prisma.rateCardAssignment.findFirst({
-    where: { clientId: acme.id, rateCardId: b2bRate.id },
-  });
-  if (!existingAssignment) {
-    await prisma.rateCardAssignment.create({
-      data: {
-        clientId: acme.id,
-        rateCardId: b2bRate.id,
-        status: "ACTIVE",
-        assignedById: admin.id,
-        validFrom: new Date("2026-01-01T00:00:00.000Z"),
-      },
-    });
-  }
 
   await prisma.rider.upsert({
     where: { riderCode: "RDR-DEMO-001" },

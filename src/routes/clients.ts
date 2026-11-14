@@ -9,7 +9,6 @@ import {
   listClientsQuerySchema,
   updateClientSchema,
 } from "../validation/client.js";
-import { listClientRateCardsQuerySchema } from "../validation/ratecardAssignment.js";
 import {
   generateClientDuesSchema,
   listClientCollectionsQuerySchema,
@@ -31,7 +30,6 @@ import {
   getClientFinancials,
   recordClientPayment,
 } from "../controllers/client/client-finance.controller.js";
-import { getClientRateCards } from "../controllers/ratecard/ratecard-assignment.controller.js";
 
 const r = Router();
 
@@ -48,14 +46,6 @@ r.get(
   authorize("client", "read", { policy: false }),
   validate(listClientsQuerySchema, "query"),
   getClients
-);
-r.get(
-  "/:id/ratecards",
-  verifyToken,
-  validate(idParamSchema, "params"),
-  authorize("ratecardAssignment", "read", { policy: false }),
-  validate(listClientRateCardsQuerySchema, "query"),
-  getClientRateCards
 );
 r.get(
   "/:id/financials",

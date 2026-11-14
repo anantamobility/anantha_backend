@@ -61,7 +61,7 @@ beforeEach(() => {
 });
 
 describe("POST /ratecards", () => {
-  it("creates a reusable ratecard without a client assignment", async () => {
+  it("creates a reusable ratecard without a client", async () => {
     authenticate([{ resource: "ratecard", action: "create" }]);
     prismaMock.rateCard.create.mockResolvedValue(existingRateCard());
 
@@ -116,7 +116,7 @@ describe("POST /ratecards", () => {
     });
   });
 
-  it("rejects a clientId because assignment is a separate operation", async () => {
+  it("rejects a clientId because ratecards are not client-owned", async () => {
     authenticate([{ resource: "ratecard", action: "create" }]);
 
     const res = await request(app)
@@ -303,12 +303,12 @@ describe("GET /ratecards", () => {
 });
 
 describe("GET /ratecards/:id", () => {
-  it("returns a reusable ratecard with assignment and rental counts", async () => {
+  it("returns a reusable ratecard with rental counts", async () => {
     authenticate([{ resource: "ratecard", action: "read" }]);
     prismaMock.rateCard.findFirst.mockResolvedValue(existingRateCard());
     prismaMock.rateCard.findUnique.mockResolvedValue(
       existingRateCard({
-        _count: { assignments: 3, rentals: 2 },
+        _count: { rentals: 2 },
       })
     );
 
@@ -318,7 +318,6 @@ describe("GET /ratecards/:id", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.rateCard.code).toBe("RC-ABC12345");
-    expect(res.body.data.rateCard._count.assignments).toBe(3);
     expect(res.body.data.rateCard._count.rentals).toBe(2);
   });
 
@@ -497,7 +496,7 @@ describe("PATCH /ratecards/:id/status", () => {
     expect(prismaMock.rateCard.update).not.toHaveBeenCalled();
   });
 
-  it("reactivates without requiring a client or assignment", async () => {
+  it("reactivates without requiring a client", async () => {
     authenticate([{ resource: "ratecard", action: "status:update" }]);
     prismaMock.rateCard.findFirst.mockResolvedValue(
       existingRateCard({ isActive: false })

@@ -100,7 +100,6 @@ function manualPricing(
     source: "MANUAL" as const,
     clientId,
     rateCardId: null,
-    rateCardAssignmentId: null,
     billingFrequency: null,
     currency,
     rates,
@@ -110,7 +109,6 @@ function manualPricing(
       capturedAt: capturedAt.toISOString(),
       clientId,
       rateCardId: null,
-      rateCardAssignmentId: null,
       currency,
       rates,
       securityDeposit,
@@ -136,7 +134,7 @@ export async function resolveRentalPricing(
 
   if (!hasRateCard && !hasManualPricing) {
     throw new AppError(
-      "A ratecard assignment or explicit manual pricing is required; a missing ratecard does not mean zero rental price",
+      "A ratecard or explicit manual pricing is required; a missing ratecard does not mean zero rental price",
       400,
       ErrorCode.VALIDATION_ERROR
     );
@@ -155,52 +153,39 @@ export async function resolveRentalPricing(
     return manualPricing(input.manualPricing, input.clientId, effectiveAt);
   }
 
-  const assignment = await prisma.rateCardAssignment.findFirst({
+  const rateCard = await prisma.rateCard.findFirst({
     where: {
-      clientId: input.clientId,
-      rateCardId: input.rateCardId as string,
-      status: "ACTIVE",
-      validFrom: { lte: effectiveAt },
-      OR: [{ validUntil: null }, { validUntil: { gte: effectiveAt } }],
-      rateCard: {
-        isActive: true,
-        effectiveFrom: { lte: effectiveAt },
-        OR: [{ effectiveTo: null }, { effectiveTo: { gte: effectiveAt } }],
-      },
+      id: input.rateCardId as string,
+      isActive: true,
+      deletedAt: null,
+      effectiveFrom: { lte: effectiveAt },
+      OR: [{ effectiveTo: null }, { effectiveTo: { gte: effectiveAt } }],
     },
     select: {
       id: true,
-      validFrom: true,
-      validUntil: true,
-      rateCard: {
-        select: {
-          id: true,
-          code: true,
-          name: true,
-          vehicleCategory: true,
-          billingFrequency: true,
-          dailyRate: true,
-          weeklyRate: true,
-          fortnightlyRate: true,
-          monthlyRate: true,
-          securityDeposit: true,
-          currency: true,
-          effectiveFrom: true,
-          effectiveTo: true,
-        },
-      },
+      code: true,
+      name: true,
+      vehicleCategory: true,
+      billingFrequency: true,
+      dailyRate: true,
+      weeklyRate: true,
+      fortnightlyRate: true,
+      monthlyRate: true,
+      securityDeposit: true,
+      currency: true,
+      effectiveFrom: true,
+      effectiveTo: true,
     },
   });
 
-  if (!assignment) {
+  if (!rateCard) {
     throw new AppError(
-      "Ratecard is not actively assigned to this client for the requested date",
+      "Ratecard is not active for the requested date",
       409,
       ErrorCode.CONFLICT
     );
   }
 
-  const { rateCard } = assignment;
   const rates: PricingRates = {
     dailyRate: String(rateCard.dailyRate),
     weeklyRate:
@@ -221,7 +206,6 @@ export async function resolveRentalPricing(
     source: "RATE_CARD" as const,
     clientId: input.clientId,
     rateCardId: rateCard.id,
-    rateCardAssignmentId: assignment.id,
     billingFrequency: rateCard.billingFrequency,
     currency: rateCard.currency,
     rates,
@@ -231,7 +215,6 @@ export async function resolveRentalPricing(
       capturedAt: effectiveAt.toISOString(),
       clientId: input.clientId,
       rateCardId: rateCard.id,
-      rateCardAssignmentId: assignment.id,
       rateCardCode: rateCard.code,
       rateCardName: rateCard.name,
       vehicleCategory: rateCard.vehicleCategory,
@@ -239,9 +222,6 @@ export async function resolveRentalPricing(
       currency: rateCard.currency,
       rateCardEffectiveFrom: rateCard.effectiveFrom.toISOString(),
       rateCardEffectiveTo: rateCard.effectiveTo?.toISOString() ?? null,
-      assignmentValidFrom: assignment.validFrom.toISOString(),
-      assignmentValidUntil:
-        assignment.validUntil?.toISOString() ?? null,
       rates,
       securityDeposit,
     },

@@ -17,8 +17,6 @@ import {
   getRateCards,
   updateRateCard,
 } from "../controllers/ratecard/ratecard.controller.js";
-import { getRateCardClients } from "../controllers/ratecard/ratecard-assignment.controller.js";
-import { listRateCardClientsQuerySchema } from "../validation/ratecardAssignment.js";
 
 const r = Router();
 
@@ -35,14 +33,6 @@ r.get(
   authorize("ratecard", "read", { policy: false }),
   validate(listRateCardsQuerySchema, "query"),
   getRateCards
-);
-r.get(
-  "/:id/clients",
-  verifyToken,
-  validate(idParamSchema, "params"),
-  authorize("ratecardAssignment", "read", { policy: false }),
-  validate(listRateCardClientsQuerySchema, "query"),
-  getRateCardClients
 );
 r.patch(
   "/:id/status",

@@ -116,7 +116,7 @@ The following records use `deletedAt` instead of hard deletion:
 | Resource | Delete endpoint | Dependency guards |
 | --- | --- | --- |
 | User | `DELETE /users/:id` | Last-admin/self guards; sets status to `SUSPENDED`. |
-| Client | `DELETE /clients/:id` | Refuses open rentals, active ratecard assignments and open invoices. |
+| Client | `DELETE /clients/:id` | Refuses open rentals and open invoices. |
 | Rider | `DELETE /riders/:id` | Refuses open rentals, open settlements and open payouts. |
 | Ratecard | `DELETE /ratecards/:id` | Refuses any rental or assignment referencing it. |
 

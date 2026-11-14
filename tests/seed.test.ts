@@ -48,10 +48,6 @@ describe("getRolePermissionBuckets", () => {
         "ratecard:read",
         "ratecard:update",
         "ratecard:status:update",
-        "ratecardAssignment:create",
-        "ratecardAssignment:read",
-        "ratecardAssignment:update",
-        "ratecardAssignment:delete",
       ])
     );
   });

@@ -53,10 +53,6 @@ beforeEach(() => {
   prismaMock.client.create.mockReset();
   prismaMock.client.update.mockReset();
   prismaMock.client.updateMany.mockReset();
-  prismaMock.rateCard.findMany.mockReset();
-  prismaMock.rateCard.count.mockReset();
-  prismaMock.rateCardAssignment.findMany.mockReset();
-  prismaMock.rateCardAssignment.count.mockReset();
   prismaMock.auditLog.create.mockReset();
 });
 
@@ -271,7 +267,6 @@ describe("GET /clients/:id", () => {
     prismaMock.client.findUnique.mockResolvedValue(
       existingClient({
         _count: {
-          rateCardAssignments: 2,
           rentals: 1,
           riders: 3,
           invoices: 0,
@@ -285,7 +280,6 @@ describe("GET /clients/:id", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.client.clientCode).toBe("CLI-ABC12345");
-    expect(res.body.data.client._count.rateCardAssignments).toBe(2);
     expect(res.body.data.client).not.toHaveProperty("deletedAt");
   });
 
@@ -482,102 +476,5 @@ describe("PATCH /clients/:id/status", () => {
 
     expect(res.status).toBe(403);
     expect(prismaMock.client.updateMany).not.toHaveBeenCalled();
-  });
-});
-
-describe("GET /clients/:id/ratecards", () => {
-  function assignmentRow(overrides: Record<string, unknown> = {}) {
-    return {
-      id: "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a8e",
-      clientId: CLIENT_ID,
-      rateCardId: RATE_CARD_ID,
-      validFrom: new Date("2026-01-01T00:00:00.000Z"),
-      validUntil: null,
-      status: "ACTIVE",
-      assignedAt: new Date("2026-01-01T00:00:00.000Z"),
-      assignedById: "u1",
-      unassignedAt: null,
-      unassignedById: null,
-      reason: null,
-      createdAt: new Date("2026-01-01T00:00:00.000Z"),
-      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
-      client: { id: CLIENT_ID, clientCode: "CLI-ABC12345" },
-      rateCard: {
-        id: RATE_CARD_ID,
-        code: "RC-ABC12345",
-        name: "Standard B2B",
-        vehicleCategory: "BIKE",
-      },
-      ...overrides,
-    };
-  }
-
-  it("lists assigned ratecards with assignment metadata for the client", async () => {
-    authenticate([{ resource: "ratecardAssignment", action: "read" }]);
-    prismaMock.client.findUnique.mockResolvedValue({
-      id: CLIENT_ID,
-      deletedAt: null,
-    });
-    prismaMock.rateCardAssignment.findMany.mockResolvedValue([
-      assignmentRow(),
-    ]);
-    prismaMock.rateCardAssignment.count.mockResolvedValue(1);
-
-    const res = await request(app)
-      .get(`/clients/${CLIENT_ID}/ratecards`)
-      .set("Authorization", `Bearer ${accessToken()}`);
-
-    expect(res.status).toBe(200);
-    expect(res.body.data.rateCards).toHaveLength(1);
-    expect(res.body.data.rateCards[0]).toMatchObject({
-      id: RATE_CARD_ID,
-      code: "RC-ABC12345",
-      assignment: { status: "ACTIVE", clientId: CLIENT_ID },
-    });
-    expect(
-      prismaMock.rateCardAssignment.findMany.mock.calls[0][0].where
-    ).toMatchObject({ clientId: CLIENT_ID });
-  });
-
-  it("returns an empty list when the client has no assignments", async () => {
-    authenticate([{ resource: "ratecardAssignment", action: "read" }]);
-    prismaMock.client.findUnique.mockResolvedValue({
-      id: CLIENT_ID,
-      deletedAt: null,
-    });
-    prismaMock.rateCardAssignment.findMany.mockResolvedValue([]);
-    prismaMock.rateCardAssignment.count.mockResolvedValue(0);
-
-    const res = await request(app)
-      .get(`/clients/${CLIENT_ID}/ratecards`)
-      .set("Authorization", `Bearer ${accessToken()}`);
-
-    expect(res.status).toBe(200);
-    expect(res.body.data.rateCards).toEqual([]);
-    expect(res.body.data.pagination.total).toBe(0);
-  });
-
-  it("returns 404 when the client does not exist", async () => {
-    authenticate([{ resource: "ratecardAssignment", action: "read" }]);
-    prismaMock.client.findUnique.mockResolvedValue(null);
-
-    const res = await request(app)
-      .get(`/clients/${MISSING_ID}/ratecards`)
-      .set("Authorization", `Bearer ${accessToken()}`);
-
-    expect(res.status).toBe(404);
-    expect(res.body.error.code).toBe("NOT_FOUND");
-    expect(prismaMock.rateCardAssignment.findMany).not.toHaveBeenCalled();
-  });
-
-  it("returns 403 when the role lacks ratecardAssignment:read", async () => {
-    authenticate([{ resource: "ratecard", action: "read" }]);
-
-    const res = await request(app)
-      .get(`/clients/${CLIENT_ID}/ratecards`)
-      .set("Authorization", `Bearer ${accessToken()}`);
-
-    expect(res.status).toBe(403);
-    expect(prismaMock.rateCardAssignment.findMany).not.toHaveBeenCalled();
   });
 });
