@@ -3,7 +3,7 @@ import multer from "multer";
 import { isAllowedDocumentMime } from "../storage/mime.js";
 import { AppError, ErrorCode } from "../utils/errors.js";
 
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 const upload = multer({
   storage: multer.memoryStorage(),

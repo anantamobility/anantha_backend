@@ -235,7 +235,7 @@ export async function getRentalFinancialSummary(tx: Tx, rentalId: string) {
       },
     }),
     tx.collection.findMany({
-      where: { rentalId, status: "CLEARED" },
+      where: { status: "CLEARED", rentalDue: { rentalId } },
       select: { amount: true },
     }),
   ]);

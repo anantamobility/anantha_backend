@@ -185,7 +185,7 @@ type DepositRow = {
   payerType: string;
   status: string;
   amountRequired: Prisma.Decimal;
-  transactions: Array<{
+  ledgerEntries: Array<{
     type: string;
     direction: string;
     amount: Prisma.Decimal;
@@ -233,13 +233,13 @@ function summarizeDeposits(deposits: DepositRow[]) {
 
   for (const deposit of deposits) {
     const required = toDecimal(deposit.amountRequired);
-    const credits = deposit.transactions
+    const credits = deposit.ledgerEntries
       .filter((transaction) => transaction.direction === "CREDIT")
       .reduce(
         (total, transaction) => total.add(toDecimal(transaction.amount)),
         new Prisma.Decimal(0)
       );
-    const refunds = deposit.transactions
+    const refunds = deposit.ledgerEntries
       .filter(
         (transaction) =>
           transaction.direction === "DEBIT" && transaction.type === "REFUND"
@@ -248,7 +248,7 @@ function summarizeDeposits(deposits: DepositRow[]) {
         (total, transaction) => total.add(toDecimal(transaction.amount)),
         new Prisma.Decimal(0)
       );
-    const deductions = deposit.transactions
+    const deductions = deposit.ledgerEntries
       .filter(
         (transaction) =>
           transaction.direction === "DEBIT" &&
@@ -372,7 +372,7 @@ export async function getDashboard(query: DashboardQuery) {
         payerType: true,
         status: true,
         amountRequired: true,
-        transactions: {
+        ledgerEntries: {
           select: { type: true, direction: true, amount: true },
         },
       },

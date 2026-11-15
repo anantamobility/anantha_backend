@@ -1,6 +1,6 @@
 import { basename } from "node:path";
 import { v4 as uuidv4 } from "uuid";
-import { MAX_UPLOAD_BYTES } from "../config/upload.js";
+import { MAX_UPLOAD_BYTES } from "../middleware/upload.js";
 import prisma from "../database/prismaClient.js";
 import {
   DocumentType,
