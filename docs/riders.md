@@ -46,7 +46,7 @@ Allowed transitions:
 Allowed MIME types: `application/pdf`, `image/jpeg`, `image/png`, `image/webp`.
 
 - Files are uploaded to Cloudinary under `anantha_file_storage/riders/<riderId>/` and the returned public URL is stored on the document row.
-- Upload size is limited by `STORAGE_MAX_FILE_BYTES` (default 10 MiB).
+- Upload size is limited to 10 MiB per file.
 - Deleting a document soft-deletes metadata (`deletedAt`) and best-effort removes the Cloudinary asset.
 - Downloads require `rider:document:read` and redirect to the stored URL.
 
@@ -57,7 +57,6 @@ Allowed MIME types: `application/pdf`, `image/jpeg`, `image/png`, `image/webp`.
 | `CLOUDINARY_CLOUD_NAME` | none | Cloudinary cloud |
 | `CLOUDINARY_API_KEY` | none | Cloudinary API key |
 | `CLOUDINARY_API_SECRET` | none | Cloudinary API secret |
-| `STORAGE_MAX_FILE_BYTES` | `10485760` | Upload size limit |
 
 Documents are public URLs by design. Do not store anything here that must not leak if a link escapes.
 

@@ -1,6 +1,6 @@
 import { basename } from "node:path";
 import { v4 as uuidv4 } from "uuid";
-import envConfig from "../config/env.js";
+import { MAX_UPLOAD_BYTES } from "../config/upload.js";
 import prisma from "../database/prismaClient.js";
 import {
   DocumentType,
@@ -115,9 +115,9 @@ export async function uploadRiderDocument(
     throw new AppError("A document file is required", 400, ErrorCode.VALIDATION_ERROR);
   }
 
-  if (file.size > envConfig.storageMaxFileBytes) {
+  if (file.size > MAX_UPLOAD_BYTES) {
     throw new AppError(
-      `File exceeds the ${envConfig.storageMaxFileBytes} byte limit`,
+      `File exceeds the ${MAX_UPLOAD_BYTES} byte limit`,
       400,
       ErrorCode.VALIDATION_ERROR
     );

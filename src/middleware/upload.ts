@@ -1,12 +1,13 @@
 import type { NextFunction, Request, Response } from "express";
 import multer from "multer";
-import envConfig from "../config/env.js";
 import { isAllowedDocumentMime } from "../storage/mime.js";
 import { AppError, ErrorCode } from "../utils/errors.js";
 
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: envConfig.storageMaxFileBytes, files: 1 },
+  limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 },
   fileFilter: (_req, file, callback) => {
     if (!isAllowedDocumentMime(file.mimetype)) {
       return callback(
@@ -32,7 +33,7 @@ export function uploadRiderDocument(
     if (err instanceof multer.MulterError) {
       const message =
         err.code === "LIMIT_FILE_SIZE"
-          ? `File exceeds the ${envConfig.storageMaxFileBytes} byte limit`
+          ? `File exceeds the ${MAX_UPLOAD_BYTES} byte limit`
           : err.message;
       return next(new AppError(message, 400, ErrorCode.VALIDATION_ERROR));
     }
