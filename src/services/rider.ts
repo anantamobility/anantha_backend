@@ -4,7 +4,6 @@ import { Prisma } from "../generated/prisma/client.js";
 import {
   B2BRiderMgmt,
   B2CMode,
-  PayoutStatus,
   RentalStatus,
   RentalType,
   RiderStatus,
@@ -43,7 +42,7 @@ export const riderClientSelect = {
 export const riderHubSelect = {
   id: true,
   name: true,
-  code: true,
+  hubCode: true,
   isActive: true,
 } as const;
 
@@ -632,21 +631,12 @@ export async function deleteRider(id: string, actor: AuditActor) {
         );
       }
 
-      const openPayouts = await tx.payout.count({
-        where: {
-          riderId: id,
-          status: {
-            in: [
-              PayoutStatus.PENDING,
-              PayoutStatus.APPROVED,
-              PayoutStatus.PROCESSING,
-            ],
-          },
-        },
+      const openPayouts = await tx.riderPayStatement.count({
+        where: { riderId: id, status: "APPROVED" },
       });
       if (openPayouts > 0) {
         throw new AppError(
-          "Rider cannot be deleted while they have open payouts",
+          "Rider cannot be deleted while they have approved pay statements awaiting payment",
           409,
           ErrorCode.CONFLICT
         );

@@ -30,13 +30,11 @@ function existingRateCard(overrides: Record<string, unknown> = {}) {
     description: "Standard corporate pricing",
     vehicleCategory: "BIKE",
     rentalType: "B2B",
-    billingFrequency: "MONTHLY",
     dailyRate: "500.0000",
     weeklyRate: "3000.0000",
     fortnightlyRate: null,
     monthlyRate: "10000.0000",
     securityDeposit: "5000.00",
-    currency: "INR",
     effectiveFrom: new Date("2026-01-01T00:00:00.000Z"),
     effectiveTo: new Date("2026-12-31T00:00:00.000Z"),
     isActive: true,
@@ -73,7 +71,6 @@ describe("POST /ratecards", () => {
         description: "Standard corporate pricing",
         vehicleCategory: "BIKE",
         rentalType: "B2B",
-        billingFrequency: "MONTHLY",
         dailyRate: "500.0000",
         weeklyRate: "3000.0000",
         monthlyRate: "10000.0000",
@@ -93,12 +90,10 @@ describe("POST /ratecards", () => {
         name: "Standard B2B",
         vehicleCategory: "BIKE",
         rentalType: "B2B",
-        billingFrequency: "MONTHLY",
         dailyRate: "500.0000",
         weeklyRate: "3000.0000",
         monthlyRate: "10000.0000",
         securityDeposit: "5000.00",
-        currency: "INR",
         isActive: true,
       }),
       select: expect.any(Object),
@@ -254,7 +249,7 @@ describe("GET /ratecards", () => {
 
     const res = await request(app)
       .get(
-        "/ratecards?page=1&limit=10&vehicleCategory=BIKE&isActive=true&rentalType=B2B&billingFrequency=MONTHLY&validOn=2026-06-01&search=standard&sortBy=effectiveFrom&sortOrder=asc"
+        "/ratecards?page=1&limit=10&vehicleCategory=BIKE&isActive=true&rentalType=B2B&validOn=2026-06-01&search=standard&sortBy=effectiveFrom&sortOrder=asc"
       )
       .set("Authorization", `Bearer ${accessToken()}`);
 
@@ -265,7 +260,6 @@ describe("GET /ratecards", () => {
       vehicleCategory: "BIKE",
       isActive: true,
       rentalType: "B2B",
-      billingFrequency: "MONTHLY",
       effectiveFrom: { lte: new Date("2026-06-01") },
     });
     expect(args.where.OR).toEqual(
@@ -303,14 +297,10 @@ describe("GET /ratecards", () => {
 });
 
 describe("GET /ratecards/:id", () => {
-  it("returns a reusable ratecard with rental counts", async () => {
+  it("returns a reusable ratecard", async () => {
     authenticate([{ resource: "ratecard", action: "read" }]);
     prismaMock.rateCard.findFirst.mockResolvedValue(existingRateCard());
-    prismaMock.rateCard.findUnique.mockResolvedValue(
-      existingRateCard({
-        _count: { rentals: 2 },
-      })
-    );
+    prismaMock.rateCard.findUnique.mockResolvedValue(existingRateCard());
 
     const res = await request(app)
       .get(`/ratecards/${RATE_CARD_ID}`)
@@ -318,7 +308,6 @@ describe("GET /ratecards/:id", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.rateCard.code).toBe("RC-ABC12345");
-    expect(res.body.data.rateCard._count.rentals).toBe(2);
   });
 
   it("returns 404 for a nonexistent ratecard", async () => {
@@ -379,28 +368,10 @@ describe("PATCH /ratecards/:id", () => {
     });
   });
 
-  it("blocks commercial changes once rentals reference the ratecard", async () => {
+  it("updates a ratecard that rentals were priced from", async () => {
     authenticate([{ resource: "ratecard", action: "update" }]);
     prismaMock.rateCard.findFirst.mockResolvedValue(existingRateCard());
     prismaMock.rateCard.findUnique.mockResolvedValue(existingRateCard());
-    prismaMock.rental.count.mockResolvedValue(1);
-
-    const res = await request(app)
-      .patch(`/ratecards/${RATE_CARD_ID}`)
-      .set("Authorization", `Bearer ${accessToken()}`)
-      .send({ dailyRate: "1.0000" });
-
-    expect(res.status).toBe(409);
-    expect(res.body.error.code).toBe("CONFLICT");
-    expect(prismaMock.rateCard.update).not.toHaveBeenCalled();
-    expect(prismaMock.auditLog.create).not.toHaveBeenCalled();
-  });
-
-  it("still allows non-commercial metadata changes on a referenced ratecard", async () => {
-    authenticate([{ resource: "ratecard", action: "update" }]);
-    prismaMock.rateCard.findFirst.mockResolvedValue(existingRateCard());
-    prismaMock.rateCard.findUnique.mockResolvedValue(existingRateCard());
-    prismaMock.rental.count.mockResolvedValue(1);
     prismaMock.rateCard.update.mockResolvedValue(
       existingRateCard({ description: "Archived description" })
     );

@@ -65,7 +65,7 @@ export async function vehicleReport(
         acquiredAt: true,
         retiredAt: true,
         createdAt: true,
-        hub: { select: { code: true, name: true } },
+        hub: { select: { hubCode: true, name: true } },
         assignments: {
           where: { status: "ACTIVE" },
           orderBy: { startDate: "desc" },
@@ -112,7 +112,7 @@ export async function vehicleReport(
         vin: row.vin ?? "",
         status: row.status,
         isActive: row.isActive,
-        hubCode: row.hub?.code ?? "",
+        hubCode: row.hub?.hubCode ?? "",
         hubName: row.hub?.name ?? "",
         currentRiderCode: assignment?.rider?.riderCode ?? "",
         currentRiderName: assignment?.rider?.fullName ?? "",

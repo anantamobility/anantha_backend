@@ -96,7 +96,7 @@ The following records use `deletedAt` instead of hard deletion:
 | --- | --- | --- |
 | User | `DELETE /users/:id` | Last-admin/self guards; sets status to `SUSPENDED`. |
 | Client | `DELETE /clients/:id` | Refuses open rentals and open invoices. |
-| Rider | `DELETE /riders/:id` | Refuses open rentals, open settlements and open payouts. |
+| Rider | `DELETE /riders/:id` | Refuses open rentals, open pay statements and approved statements awaiting payment. |
 | Ratecard | `DELETE /ratecards/:id` | Refuses any rental or assignment referencing it. |
 
 Deleted records are excluded from normal list/detail reads and return `404`. Historical foreign-key references remain intact. Hub deletion is intentionally unchanged and still requires a hub with no associated records.

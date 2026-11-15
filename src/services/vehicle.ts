@@ -19,7 +19,7 @@ import type {
 export const vehicleHubSelect = {
   id: true,
   name: true,
-  code: true,
+  hubCode: true,
   isActive: true,
 } as const;
 

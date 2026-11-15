@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { paginationQuerySchema, searchQuerySchema } from "./common.js";
+import { paymentMethodSchema } from "./collection.js";
 
 const decimalString = z
   .union([z.string(), z.number()])
@@ -108,7 +109,17 @@ export const approvePayStatementSchema = z
   .strict()
   .default({});
 
+export const payStatementPaymentSchema = z
+  .object({
+    paymentMethod: paymentMethodSchema,
+    referenceNumber: z.string().trim().min(1).max(200).nullable().optional(),
+    paidAt: z.coerce.date().optional(),
+    notes: z.string().trim().min(1).max(2000).nullable().optional(),
+  })
+  .strict();
+
 export type GeneratePayStatementInput = z.infer<typeof generatePayStatementSchema>;
 export type ListPayStatementsQuery = z.infer<typeof listPayStatementsQuerySchema>;
 export type ApprovePayStatementInput = z.infer<typeof approvePayStatementSchema>;
+export type PayStatementPaymentInput = z.infer<typeof payStatementPaymentSchema>;
 export type PayStatementStatusValue = z.infer<typeof payStatementStatusSchema>;

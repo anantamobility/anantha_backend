@@ -56,12 +56,6 @@ const optionalNullableUuid = (field: string) =>
 const optionalNullableString = (max: number) =>
   z.string().trim().min(1).max(max).nullable().optional();
 
-const currencySchema = z
-  .string()
-  .trim()
-  .regex(/^[A-Za-z]{3}$/, "currency must be a 3-letter ISO code")
-  .transform((value) => value.toUpperCase());
-
 export const manualPricingSchema = z
   .object({
     dailyRate: moneySchema(4, "dailyRate", { positive: true }),
@@ -69,7 +63,6 @@ export const manualPricingSchema = z
     fortnightlyRate: moneySchema(4, "fortnightlyRate").nullable().optional(),
     monthlyRate: moneySchema(4, "monthlyRate").nullable().optional(),
     securityDeposit: moneySchema(2, "securityDeposit").nullable().optional(),
-    currency: currencySchema.optional(),
     notes: z.string().trim().max(2000).nullable().optional(),
   })
   .strict();
@@ -81,16 +74,14 @@ const createRentalBaseSchema = z
     b2bRiderMgmt: b2bRiderMgmtSchema.nullable().optional(),
     clientId: z.string().uuid("clientId must be a valid UUID"),
     riderId: optionalNullableUuid("riderId"),
-    hubId: optionalNullableUuid("hubId"),
+    hubId: z.string().uuid("hubId must be a valid UUID"),
     vehicleId: optionalNullableUuid("vehicleId"),
     rateCardId: optionalNullableUuid("rateCardId"),
     startDate: z.coerce.date(),
     expectedEndDate: z.coerce.date().nullable().optional(),
     collectionPeriod: collectionPeriodSchema,
-    currency: currencySchema.optional(),
     securityDepositAmount: moneySchema(2, "securityDepositAmount"),
     manualPricing: manualPricingSchema.nullable().optional(),
-    agreementRef: optionalNullableString(100),
     notes: optionalNullableString(2000),
   })
   .strict();

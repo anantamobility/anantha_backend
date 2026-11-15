@@ -64,7 +64,6 @@ export async function generateRentalDues(
       startDate: true,
       endDate: true,
       collectionPeriod: true,
-      currency: true,
       dailyRate: true,
       weeklyRate: true,
       fortnightlyRate: true,
@@ -174,7 +173,6 @@ export async function generateRentalDues(
         entryType: "RENT_CHARGED",
         direction: "DEBIT",
         amount: amountDue,
-        currency: rental.currency,
         occurredAt: period.periodStart,
         description: `Rent charged for ${period.periodStart
           .toISOString()
@@ -415,7 +413,6 @@ export async function recordRentAdjustment(
     select: {
       id: true,
       rentalNumber: true,
-      currency: true,
       status: true,
     },
   });
@@ -446,7 +443,6 @@ export async function recordRentAdjustment(
       entryType: "RENT_ADJUSTMENT",
       direction: input.direction,
       amount: input.amount,
-      currency: rental.currency,
       occurredAt: input.occurredAt ?? new Date(),
       description: input.reason,
       sourceType: "RentalAdjustment",

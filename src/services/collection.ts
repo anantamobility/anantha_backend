@@ -65,7 +65,6 @@ export async function createCollectionLedgerEntry(
     rentalId: string;
     collectionId: string;
     amount: Prisma.Decimal;
-    currency: string;
     occurredAt: Date;
     actor: AuditActor;
     description: string;
@@ -78,7 +77,6 @@ export async function createCollectionLedgerEntry(
       entryType: "COLLECTION_RECEIVED",
       direction: "CREDIT",
       amount: input.amount,
-      currency: input.currency,
       occurredAt: input.occurredAt,
       description: input.description,
       sourceType: "Collection",
@@ -108,7 +106,6 @@ async function assertCollectibleDue(tx: Tx, rentalDueId: string) {
           clientId: true,
           riderId: true,
           status: true,
-          currency: true,
         },
       },
     },
@@ -254,7 +251,6 @@ export async function createCollectionWithinTransaction(
       rentalId: rental.id,
       collectionId: collection.id,
       amount,
-      currency: rental.currency,
       occurredAt: receivedAt,
       actor,
       description: input.notes
@@ -351,7 +347,6 @@ export async function clearCollection(
         rentalId: rental.id,
         collectionId: collection.id,
         amount,
-        currency: rental.currency,
         occurredAt: reconciledAt,
         actor,
         description: collection.notes

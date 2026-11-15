@@ -44,7 +44,6 @@ export const spareSelect = {
   purchasePrice: true,
   unitCost: true,
   minimumStock: true,
-  currency: true,
   isActive: true,
   createdAt: true,
   updatedAt: true,
@@ -70,7 +69,7 @@ export const inventoryMovementSelect = {
   movedAt: true,
   createdAt: true,
   spare: { select: { id: true, partNumber: true, name: true, unitOfMeasure: true } },
-  hub: { select: { id: true, name: true, code: true } },
+  hub: { select: { id: true, name: true, hubCode: true } },
   movedBy: { select: { id: true, name: true } },
 } as const;
 
@@ -90,11 +89,10 @@ export const inventoryBalanceSelect = {
       unitOfMeasure: true,
       minimumStock: true,
       unitCost: true,
-      currency: true,
       isActive: true,
     },
   },
-  hub: { select: { id: true, name: true, code: true } },
+  hub: { select: { id: true, name: true, hubCode: true } },
 } as const;
 
 function withSku<T extends { partNumber: string }>(spare: T) {
@@ -303,7 +301,6 @@ export async function createSpare(
     purchasePrice?: string | null;
     unitCost: string;
     minimumStock?: number;
-    currency?: string;
   },
   actor: AuditActor
 ) {
@@ -321,7 +318,6 @@ export async function createSpare(
             : null,
           unitCost: new Prisma.Decimal(input.unitCost),
           minimumStock: input.minimumStock ?? 0,
-          currency: input.currency ?? "INR",
         },
         select: spareSelect,
       });
@@ -415,7 +411,6 @@ export async function updateSpare(
     purchasePrice?: string | null;
     unitCost?: string;
     minimumStock?: number;
-    currency?: string;
   },
   actor: AuditActor
 ) {
@@ -446,7 +441,6 @@ export async function updateSpare(
       if (input.minimumStock !== undefined) {
         data.minimumStock = input.minimumStock;
       }
-      if (input.currency !== undefined) data.currency = input.currency;
 
       const spare = await tx.spare.update({
         where: { id },

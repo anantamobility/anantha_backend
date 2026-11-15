@@ -35,7 +35,7 @@ export async function hubReport(query: HubReportQuery): Promise<ReportResult> {
   if (query.search) {
     where.OR = [
       { name: { contains: query.search, mode: "insensitive" } },
-      { code: { contains: query.search, mode: "insensitive" } },
+      { hubCode: { contains: query.search, mode: "insensitive" } },
       { contactPhone: { contains: query.search, mode: "insensitive" } },
       { contactEmail: { contains: query.search, mode: "insensitive" } },
     ];
@@ -45,7 +45,7 @@ export async function hubReport(query: HubReportQuery): Promise<ReportResult> {
     prisma.hub.findMany({
       where,
       select: {
-        code: true,
+        hubCode: true,
         name: true,
         contactPhone: true,
         contactEmail: true,
@@ -94,7 +94,7 @@ export async function hubReport(query: HubReportQuery): Promise<ReportResult> {
       );
 
       return {
-        code: row.code,
+        code: row.hubCode,
         name: row.name,
         contactPhone: row.contactPhone ?? "",
         contactEmail: row.contactEmail ?? "",

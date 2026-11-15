@@ -24,7 +24,6 @@ export const depositSelect = {
   riderId: true,
   rentalId: true,
   amountRequired: true,
-  currency: true,
   status: true,
   dueDate: true,
   version: true,
@@ -94,7 +93,6 @@ export async function getOrCreateDepositForRental(tx: Tx, rentalId: string) {
       rentalType: true,
       clientId: true,
       riderId: true,
-      currency: true,
       startDate: true,
       securityDepositRequired: true,
     },
@@ -124,7 +122,6 @@ export async function getOrCreateDepositForRental(tx: Tx, rentalId: string) {
       riderId: isRiderPayer ? rental.riderId : null,
       rentalId: rental.id,
       amountRequired,
-      currency: rental.currency,
       status: "REQUIRED",
       dueDate: rental.startDate,
     },
@@ -219,7 +216,6 @@ export async function recordDepositLedgerEntry(
       type: input.type,
       direction: input.direction,
       amount: input.amount,
-      currency: deposit.currency,
       reference: input.reference ?? null,
       reason: input.reason ?? null,
       authorizedById: input.actor.userId,
@@ -387,7 +383,7 @@ export async function getRentalDepositLedger(
 ) {
   const deposit = await prisma.deposit.findUnique({
     where: { rentalId },
-    select: { id: true, currency: true },
+    select: { id: true },
   });
 
   if (!deposit) {
@@ -417,7 +413,6 @@ export async function getRentalDepositLedger(
 
   return {
     depositId: deposit.id,
-    currency: deposit.currency,
     balance: totals.balance,
     totalCredits: totals.credits,
     totalDebits: totals.debits,

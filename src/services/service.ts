@@ -62,7 +62,6 @@ const serviceRentalSelect = {
   hubId: true,
   startDate: true,
   endDate: true,
-  currency: true,
 } as const;
 
 const serviceUserSelect = { id: true, name: true, email: true } as const;
@@ -91,7 +90,6 @@ const serviceChargeSelect = {
   billableAmount: true,
   recoverableFrom: true,
   status: true,
-  currency: true,
   description: true,
   sourceType: true,
   sourceId: true,
@@ -173,16 +171,6 @@ export const serviceListSelect = {
   assignedTo: { select: serviceUserSelect },
   replacementVehicle: {
     select: { id: true, registrationNumber: true, make: true, model: true },
-  },
-  rentalPause: {
-    select: {
-      id: true,
-      status: true,
-      previousRentalStatus: true,
-      pausedAt: true,
-      resumedAt: true,
-      reason: true,
-    },
   },
   _count: {
     select: {
@@ -305,151 +293,6 @@ async function assertNoOtherActiveDowntime(
       ErrorCode.CONFLICT
     );
   }
-}
-
-async function pauseRentalForService(
-  tx: Tx,
-  service: { id: string; serviceNumber: string; rentalId: string | null },
-  at: Date,
-  actor: AuditActor,
-  reason: string
-) {
-  if (!service.rentalId) return null;
-
-  const rental = await tx.rental.findUnique({
-    where: { id: service.rentalId },
-    select: {
-      id: true,
-      rentalNumber: true,
-      status: true,
-      version: true,
-    },
-  });
-
-  if (!rental || TERMINAL_RENTAL_STATUSES.includes(rental.status)) return null;
-  if (rental.status !== "ACTIVE" && rental.status !== "ON_HOLD") return null;
-
-  const existing = await tx.rentalPause.findUnique({
-    where: { serviceId: service.id },
-    select: { id: true, status: true },
-  });
-  if (existing?.status === "ACTIVE") return existing;
-
-  const previousRentalStatus = rental.status;
-
-  if (rental.status === "ACTIVE") {
-    const updated = await tx.rental.updateMany({
-      where: { id: rental.id, status: "ACTIVE", version: rental.version },
-      data: { status: "ON_HOLD", version: { increment: 1 } },
-    });
-    if (updated.count === 0) {
-      throw new AppError(
-        "Rental was modified concurrently; please retry",
-        409,
-        ErrorCode.CONFLICT
-      );
-    }
-  }
-
-  const pause = await tx.rentalPause.create({
-    data: {
-      rentalId: rental.id,
-      serviceId: service.id,
-      status: "ACTIVE",
-      previousRentalStatus: previousRentalStatus as
-        | "DRAFT"
-        | "PENDING_APPROVAL"
-        | "ACTIVE"
-        | "ON_HOLD"
-        | "COMPLETED"
-        | "TERMINATED"
-        | "CANCELLED",
-      pausedAt: at,
-      reason,
-      pausedById: actor.userId,
-    },
-  });
-
-  await logAudit({
-    ...actor,
-    action: "PAUSE",
-    resource: "Rental",
-    resourceId: rental.id,
-    oldData: { status: previousRentalStatus },
-    newData: { status: rental.status === "ACTIVE" ? "ON_HOLD" : rental.status },
-    summary: `${actor.userName} paused rental ${rental.rentalNumber} for service ${service.serviceNumber}.`,
-    db: tx,
-    throwOnError: true,
-  });
-
-  return pause;
-}
-
-async function resumeRentalForService(
-  tx: Tx,
-  service: { id: string; serviceNumber: string; rentalId: string | null },
-  at: Date,
-  actor: AuditActor,
-  reason: string
-) {
-  if (!service.rentalId) return null;
-
-  const pause = await tx.rentalPause.findUnique({
-    where: { serviceId: service.id },
-    select: {
-      id: true,
-      status: true,
-      rentalId: true,
-      previousRentalStatus: true,
-    },
-  });
-  if (!pause || pause.status !== "ACTIVE") return null;
-
-  await tx.rentalPause.update({
-    where: { id: pause.id },
-    data: {
-      status: "RESUMED",
-      resumedAt: at,
-      resumedById: actor.userId,
-    },
-  });
-
-  const rental = await tx.rental.findUnique({
-    where: { id: pause.rentalId },
-    select: { id: true, rentalNumber: true, status: true, version: true },
-  });
-
-  if (
-    rental &&
-    pause.previousRentalStatus === "ACTIVE" &&
-    rental.status === "ON_HOLD"
-  ) {
-    const updated = await tx.rental.updateMany({
-      where: { id: rental.id, status: "ON_HOLD", version: rental.version },
-      data: { status: "ACTIVE", version: { increment: 1 } },
-    });
-    if (updated.count === 0) {
-      throw new AppError(
-        "Rental was modified concurrently; please retry",
-        409,
-        ErrorCode.CONFLICT
-      );
-    }
-
-    await logAudit({
-      ...actor,
-      action: "RESUME",
-      resource: "Rental",
-      resourceId: rental.id,
-      oldData: { status: "ON_HOLD" },
-      newData: { status: "ACTIVE" },
-      summary: `${actor.userName} resumed rental ${rental.rentalNumber} after service ${service.serviceNumber}.`,
-      db: tx,
-      throwOnError: true,
-    });
-  }
-
-  return pause;
 }
 
 async function moveVehicleForService(
@@ -932,14 +775,6 @@ export async function startService(
         actor,
       });
 
-      await pauseRentalForService(
-        tx,
-        service,
-        startedAt,
-        actor,
-        input.reason ?? `Vehicle downtime for service ${service.serviceNumber}`
-      );
-
       await logAudit({
         ...actor,
         action: "START",
@@ -1164,14 +999,6 @@ export async function completeService(
       );
     }
 
-    await resumeRentalForService(
-      tx,
-      service,
-      completedAt,
-      actor,
-      input.reason ?? `Service ${service.serviceNumber} completed`
-    );
-
     await restoreVehicleAfterService(
       tx,
       service,
@@ -1316,14 +1143,6 @@ export async function cancelService(
         ErrorCode.CONFLICT
       );
     }
-
-    await resumeRentalForService(
-      tx,
-      service,
-      cancelledAt,
-      actor,
-      `Service ${service.serviceNumber} cancelled`
-    );
 
     if (service.downtimeStart) {
       await restoreVehicleAfterService(
@@ -1738,7 +1557,6 @@ export async function returnReplacement(
           id: true,
           rentalNumber: true,
           collectionPeriod: true,
-          currency: true,
           dailyRate: true,
           weeklyRate: true,
           fortnightlyRate: true,
@@ -1785,7 +1603,6 @@ export async function returnReplacement(
                   | "INSURANCE"
                   | "UNKNOWN",
                 status: allocation.status,
-                currency: replacementRental.currency,
                 description: `Replacement rental ${replacementRental.rentalNumber} from ${assignment.assignedAt
                   .toISOString()
                   .slice(0, 10)} to ${returnedAt.toISOString().slice(0, 10)}`,

@@ -97,7 +97,6 @@ export async function buildClientFinancialSummary(
       rentalNumber: true,
       status: true,
       collectionPeriod: true,
-      currency: true,
       startDate: true,
       endDate: true,
     },
@@ -122,7 +121,10 @@ export async function buildClientFinancialSummary(
 
   const collections = await db.collection.findMany({
     where: { clientId: client.id, status: "CLEARED" },
-    select: { amount: true, rentalId: true },
+    select: {
+      amount: true,
+      rentalDue: { select: { rentalId: true } },
+    },
   });
 
   const now = Date.now();
@@ -178,8 +180,9 @@ export async function buildClientFinancialSummary(
   }
 
   for (const collection of collections) {
-    if (!collection.rentalId) continue;
-    const bucket = perRental.get(collection.rentalId);
+    const rentalId = collection.rentalDue?.rentalId;
+    if (!rentalId) continue;
+    const bucket = perRental.get(rentalId);
     if (!bucket) continue;
     bucket.confirmedCollections = bucket.confirmedCollections.add(
       toDecimal(collection.amount)
@@ -361,7 +364,6 @@ export async function recordClientPayment(
       let rentals: Array<{
         id: string;
         rentalNumber: string;
-        currency: string;
       }>;
 
       if (input.rentalId) {
@@ -373,7 +375,6 @@ export async function recordClientPayment(
             clientId: true,
             rentalType: true,
             status: true,
-            currency: true,
           },
         });
 
@@ -403,7 +404,6 @@ export async function recordClientPayment(
           {
             id: rental.id,
             rentalNumber: rental.rentalNumber,
-            currency: rental.currency,
           },
         ];
       } else {
@@ -413,7 +413,7 @@ export async function recordClientPayment(
             rentalType: "B2B",
             status: { in: [...COLLECTIBLE_RENTAL_STATUSES] },
           },
-          select: { id: true, rentalNumber: true, currency: true },
+          select: { id: true, rentalNumber: true },
           orderBy: { startDate: "asc" },
         });
       }

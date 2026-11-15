@@ -25,11 +25,9 @@ const columns = [
   { key: "startDate", header: "Start Date" },
   { key: "expectedEndDate", header: "Expected End Date" },
   { key: "endDate", header: "End Date" },
-  { key: "billingFrequency", header: "Billing Frequency" },
   { key: "collectionPeriod", header: "Collection Period" },
   { key: "weeklyRate", header: "Weekly Rate" },
   { key: "monthlyRate", header: "Monthly Rate" },
-  { key: "currency", header: "Currency" },
   { key: "totalDue", header: "Total Due" },
   { key: "totalCollected", header: "Total Collected" },
   { key: "totalOutstanding", header: "Total Outstanding" },
@@ -58,7 +56,6 @@ export async function rentalReport(
   if (query.search) {
     where.OR = [
       { rentalNumber: { contains: query.search, mode: "insensitive" } },
-      { agreementRef: { contains: query.search, mode: "insensitive" } },
       { client: { name: { contains: query.search, mode: "insensitive" } } },
       { client: { clientCode: { contains: query.search, mode: "insensitive" } } },
       { rider: { fullName: { contains: query.search, mode: "insensitive" } } },
@@ -77,11 +74,9 @@ export async function rentalReport(
         startDate: true,
         expectedEndDate: true,
         endDate: true,
-        billingFrequency: true,
         collectionPeriod: true,
         weeklyRate: true,
         monthlyRate: true,
-        currency: true,
         securityDepositRequired: true,
         finalOutstandingAmount: true,
         activatedAt: true,
@@ -89,8 +84,8 @@ export async function rentalReport(
         createdAt: true,
         client: { select: { clientCode: true, name: true } },
         rider: { select: { riderCode: true, fullName: true } },
-        hub: { select: { code: true, name: true } },
-        collectionDues: {
+        hub: { select: { hubCode: true, name: true } },
+        dues: {
           select: {
             status: true,
             amountDue: true,
@@ -119,19 +114,19 @@ export async function rentalReport(
       search: query.search,
     },
     rows: rows.map((row) => {
-      const totalDue = row.collectionDues.reduce(
+      const totalDue = row.dues.reduce(
         (sum, due) => sum.add(decimal(due.amountDue)),
         decimal(0)
       );
-      const totalCollected = row.collectionDues.reduce(
+      const totalCollected = row.dues.reduce(
         (sum, due) => sum.add(decimal(due.amountCollected)),
         decimal(0)
       );
-      const totalOutstanding = row.collectionDues.reduce(
+      const totalOutstanding = row.dues.reduce(
         (sum, due) => sum.add(decimal(due.outstandingAmount)),
         decimal(0)
       );
-      const overdueOutstanding = row.collectionDues.reduce(
+      const overdueOutstanding = row.dues.reduce(
         (sum, due) =>
           due.status === "OVERDUE"
             ? sum.add(decimal(due.outstandingAmount))
@@ -143,20 +138,18 @@ export async function rentalReport(
         rentalNumber: row.rentalNumber,
         rentalType: row.rentalType,
         status: row.status,
-        clientCode: row.client.clientCode,
-        clientName: row.client.name,
+        clientCode: row.client?.clientCode ?? "",
+        clientName: row.client?.name ?? "",
         riderCode: row.rider?.riderCode ?? "",
         riderName: row.rider?.fullName ?? "",
-        hubCode: row.hub?.code ?? "",
+        hubCode: row.hub?.hubCode ?? "",
         hubName: row.hub?.name ?? "",
         startDate: row.startDate,
         expectedEndDate: row.expectedEndDate,
         endDate: row.endDate,
-        billingFrequency: row.billingFrequency ?? "",
         collectionPeriod: row.collectionPeriod,
         weeklyRate: row.weeklyRate ? moneyString(row.weeklyRate) : "",
         monthlyRate: row.monthlyRate ? moneyString(row.monthlyRate) : "",
-        currency: row.currency,
         totalDue: moneyString(totalDue),
         totalCollected: moneyString(totalCollected),
         totalOutstanding: moneyString(totalOutstanding),

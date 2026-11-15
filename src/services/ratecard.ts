@@ -21,13 +21,11 @@ export const rateCardListSelect = {
   description: true,
   vehicleCategory: true,
   rentalType: true,
-  billingFrequency: true,
   dailyRate: true,
   weeklyRate: true,
   fortnightlyRate: true,
   monthlyRate: true,
   securityDeposit: true,
-  currency: true,
   effectiveFrom: true,
   effectiveTo: true,
   isActive: true,
@@ -38,11 +36,6 @@ export const rateCardListSelect = {
 
 export const rateCardDetailSelect = {
   ...rateCardListSelect,
-  _count: {
-    select: {
-      rentals: true,
-    },
-  },
 } as const;
 
 type RateCardAuditShape = {
@@ -51,13 +44,11 @@ type RateCardAuditShape = {
   description: string | null;
   vehicleCategory: string | null;
   rentalType: string | null;
-  billingFrequency: string | null;
   dailyRate: unknown;
   weeklyRate: unknown;
   fortnightlyRate: unknown;
   monthlyRate: unknown;
   securityDeposit: unknown;
-  currency: string;
   effectiveFrom: Date;
   effectiveTo: Date | null;
   isActive: boolean;
@@ -71,13 +62,11 @@ function rateCardSnapshot(rateCard: RateCardAuditShape) {
     description: rateCard.description,
     vehicleCategory: rateCard.vehicleCategory,
     rentalType: rateCard.rentalType,
-    billingFrequency: rateCard.billingFrequency,
     dailyRate: rateCard.dailyRate,
     weeklyRate: rateCard.weeklyRate,
     fortnightlyRate: rateCard.fortnightlyRate,
     monthlyRate: rateCard.monthlyRate,
     securityDeposit: rateCard.securityDeposit,
-    currency: rateCard.currency,
     effectiveFrom: rateCard.effectiveFrom,
     effectiveTo: rateCard.effectiveTo,
     isActive: rateCard.isActive,
@@ -95,25 +84,6 @@ function termsInput(
   if (value === undefined) return undefined;
   if (value === null) return Prisma.DbNull;
   return value as Prisma.InputJsonValue;
-}
-
-const COMMERCIAL_FIELDS = [
-  "vehicleCategory",
-  "rentalType",
-  "billingFrequency",
-  "dailyRate",
-  "weeklyRate",
-  "fortnightlyRate",
-  "monthlyRate",
-  "securityDeposit",
-  "currency",
-  "effectiveFrom",
-  "effectiveTo",
-  "terms",
-] as const;
-
-function hasCommercialChanges(input: UpdateRateCardInput) {
-  return COMMERCIAL_FIELDS.some((field) => input[field] !== undefined);
 }
 
 function assertDateRange(effectiveFrom: Date, effectiveTo: Date | null) {
@@ -141,13 +111,11 @@ export async function createRateCard(
         description: input.description ?? null,
         vehicleCategory: input.vehicleCategory ?? null,
         rentalType: input.rentalType ?? null,
-        billingFrequency: input.billingFrequency ?? null,
         dailyRate: input.dailyRate,
         weeklyRate: input.weeklyRate ?? null,
         fortnightlyRate: input.fortnightlyRate ?? null,
         monthlyRate: input.monthlyRate ?? null,
         securityDeposit: input.securityDeposit ?? null,
-        currency: input.currency ?? "INR",
         effectiveFrom: input.effectiveFrom,
         effectiveTo,
         isActive: input.isActive ?? true,
@@ -184,7 +152,6 @@ function listRateCardsWhere(query: ListRateCardsQuery) {
     search,
     vehicleCategory,
     rentalType,
-    billingFrequency,
     isActive,
     validOn,
   } = query;
@@ -192,7 +159,6 @@ function listRateCardsWhere(query: ListRateCardsQuery) {
   const where: Prisma.RateCardWhereInput = { deletedAt: null };
   if (vehicleCategory) where.vehicleCategory = vehicleCategory;
   if (rentalType) where.rentalType = rentalType;
-  if (billingFrequency) where.billingFrequency = billingFrequency;
   if (typeof isActive === "boolean") where.isActive = isActive;
 
   if (validOn) {
@@ -272,20 +238,6 @@ export async function updateRateCard(
         throw new AppError("Ratecard not found", 404, ErrorCode.NOT_FOUND);
       }
 
-      if (hasCommercialChanges(input)) {
-        const rentalReferences = await tx.rental.count({
-          where: { rateCardId: id },
-        });
-
-        if (rentalReferences > 0) {
-          throw new AppError(
-            "Ratecard commercial terms cannot be modified because it is referenced by existing rentals; create a new ratecard instead",
-            409,
-            ErrorCode.CONFLICT
-          );
-        }
-      }
-
       const effectiveFrom = input.effectiveFrom ?? existing.effectiveFrom;
       const effectiveTo =
         input.effectiveTo !== undefined
@@ -302,9 +254,6 @@ export async function updateRateCard(
         data.vehicleCategory = input.vehicleCategory;
       }
       if (input.rentalType !== undefined) data.rentalType = input.rentalType;
-      if (input.billingFrequency !== undefined) {
-        data.billingFrequency = input.billingFrequency;
-      }
       if (input.dailyRate !== undefined) data.dailyRate = input.dailyRate;
       if (input.weeklyRate !== undefined) data.weeklyRate = input.weeklyRate;
       if (input.fortnightlyRate !== undefined) {
@@ -316,7 +265,6 @@ export async function updateRateCard(
       if (input.securityDeposit !== undefined) {
         data.securityDeposit = input.securityDeposit;
       }
-      if (input.currency !== undefined) data.currency = input.currency;
       if (input.effectiveFrom !== undefined) {
         data.effectiveFrom = input.effectiveFrom;
       }
@@ -422,17 +370,6 @@ export async function deleteRateCard(id: string, actor: AuditActor) {
       const existing = await tx.rateCard.findUnique({ where: { id } });
       if (!existing || existing.deletedAt) {
         throw new AppError("Ratecard not found", 404, ErrorCode.NOT_FOUND);
-      }
-
-      const rentalReferences = await tx.rental.count({
-        where: { rateCardId: id },
-      });
-      if (rentalReferences > 0) {
-        throw new AppError(
-          "Ratecard cannot be deleted because it is referenced by existing rentals",
-          409,
-          ErrorCode.CONFLICT
-        );
       }
 
       const deletedAt = new Date();

@@ -37,7 +37,9 @@ function existingHub(overrides: Record<string, unknown> = {}) {
   return {
     id: HUB_ID,
     name: "Main Hub",
-    code: "MAIN",
+    hubCode: "MAIN",
+    city: "Bengaluru",
+    state: "Karnataka",
     address: null,
     contactPhone: null,
     contactEmail: null,
@@ -47,6 +49,13 @@ function existingHub(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 }
+
+const HUB_PAYLOAD = {
+  name: "Main Hub",
+  code: "MAIN",
+  city: "Bengaluru",
+  state: "Karnataka",
+};
 
 beforeEach(() => {
   prismaMock.user.findUnique.mockReset();
@@ -68,15 +77,21 @@ describe("POST /hubs", () => {
     const res = await request(app)
       .post("/hubs")
       .set("Authorization", `Bearer ${accessToken()}`)
-      .send({ name: "Main Hub", code: "MAIN" });
+      .send(HUB_PAYLOAD);
 
     expect(res.status).toBe(201);
     expect(res.body).toMatchObject({
       success: true,
-      data: { hub: { id: HUB_ID, name: "Main Hub", code: "MAIN" } },
+      data: { hub: { id: HUB_ID, name: "Main Hub", hubCode: "MAIN" } },
     });
     expect(prismaMock.hub.create).toHaveBeenCalledWith({
-      data: { name: "Main Hub", code: "MAIN", isActive: true },
+      data: {
+        name: "Main Hub",
+        hubCode: "MAIN",
+        city: "Bengaluru",
+        state: "Karnataka",
+        isActive: true,
+      },
     });
     expect(prismaMock.auditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -108,7 +123,7 @@ describe("POST /hubs", () => {
     const res = await request(app)
       .post("/hubs")
       .set("Authorization", `Bearer ${accessToken()}`)
-      .send({ name: "Main Hub", code: "MAIN" });
+      .send(HUB_PAYLOAD);
 
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("CONFLICT");
@@ -183,7 +198,7 @@ describe("GET /hubs", () => {
     expect(args.where.OR).toEqual(
       expect.arrayContaining([
         { name: { contains: "main", mode: "insensitive" } },
-        { code: { contains: "main", mode: "insensitive" } },
+        { hubCode: { contains: "main", mode: "insensitive" } },
       ])
     );
   });

@@ -21,7 +21,6 @@ export const MODEL_REGISTRY = {
   collection: prisma.collection,
   earning: prisma.ledgerEntry,
   payStatement: prisma.riderPayStatement,
-  payout: prisma.payout,
   service: prisma.service,
   spare: prisma.spare,
   inventory: prisma.inventoryMovement,

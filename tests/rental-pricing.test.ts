@@ -14,13 +14,11 @@ function rateCard(overrides: Record<string, unknown> = {}) {
     code: "RC-STD",
     name: "Standard B2B",
     vehicleCategory: "BIKE",
-    billingFrequency: "MONTHLY",
     dailyRate: "499.0000",
     weeklyRate: "2999.0000",
     fortnightlyRate: null,
     monthlyRate: "9999.0000",
     securityDeposit: "5000.00",
-    currency: "INR",
     effectiveFrom: new Date("2026-01-01T00:00:00.000Z"),
     effectiveTo: null,
     ...overrides,
@@ -47,8 +45,6 @@ describe("resolveRentalPricing", () => {
     });
 
     expect(result.source).toBe("RATE_CARD");
-    expect(result.rateCardId).toBe(RATE_CARD_ID);
-    expect(result.billingFrequency).toBe("MONTHLY");
     expect(result.rates).toEqual({
       dailyRate: "499.0000",
       weeklyRate: "2999.0000",
@@ -83,7 +79,6 @@ describe("resolveRentalPricing", () => {
         weeklyRate: 4500,
         monthlyRate: "15000.0000",
         securityDeposit: "2500",
-        currency: "inr",
         notes: "One-off corporate rate",
       },
     });
@@ -91,9 +86,6 @@ describe("resolveRentalPricing", () => {
     expect(result).toMatchObject({
       source: "MANUAL",
       clientId: CLIENT_ID,
-      rateCardId: null,
-      billingFrequency: null,
-      currency: "INR",
       rates: {
         dailyRate: "750.5",
         weeklyRate: "4500",
@@ -105,7 +97,7 @@ describe("resolveRentalPricing", () => {
     expect(prismaMock.rateCard.findFirst).not.toHaveBeenCalled();
   });
 
-  it("allows manual pricing with only a daily rate and default currency", async () => {
+  it("allows manual pricing with only a daily rate", async () => {
     prismaMock.client.findUnique.mockResolvedValue({
       id: CLIENT_ID,
       deletedAt: null,
@@ -116,7 +108,6 @@ describe("resolveRentalPricing", () => {
       manualPricing: { dailyRate: "100" },
     });
 
-    expect(result.currency).toBe("INR");
     expect(result.rates.dailyRate).toBe("100");
     expect(result.securityDepositRequired).toBeNull();
   });
@@ -182,7 +173,7 @@ describe("resolveRentalPricing", () => {
     ).rejects.toMatchObject({ statusCode: 409, code: "CONFLICT" });
   });
 
-  it("validates manual rates and currency", async () => {
+  it("validates manual rates", async () => {
     prismaMock.client.findUnique.mockResolvedValue({
       id: CLIENT_ID,
       deletedAt: null,
@@ -195,7 +186,6 @@ describe("resolveRentalPricing", () => {
       { dailyRate: "1.12345" },
       { dailyRate: "100", weeklyRate: "bad" },
       { dailyRate: "100", securityDeposit: "1.999" },
-      { dailyRate: "100", currency: "RUPEE" },
     ];
 
     for (const manualPricing of invalidCases) {

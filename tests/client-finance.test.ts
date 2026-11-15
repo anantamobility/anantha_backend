@@ -109,8 +109,8 @@ describe("GET /clients/:id/financials", () => {
       }),
     ]);
     prismaMock.collection.findMany.mockResolvedValue([
-      { amount: "0.00", rentalId: RENTAL_ID },
-      { amount: "500.00", rentalId: RENTAL_ID_2 },
+      { amount: "0.00", rentalDue: { rentalId: RENTAL_ID } },
+      { amount: "500.00", rentalDue: { rentalId: RENTAL_ID_2 } },
     ]);
 
     const res = await request(app)

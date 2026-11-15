@@ -16,7 +16,6 @@ const columns = [
   { key: "status", header: "Status" },
   { key: "hubCode", header: "Hub Code" },
   { key: "hubName", header: "Hub" },
-  { key: "payoutCount", header: "Payouts" },
   { key: "createdAt", header: "Created At" },
 ];
 
@@ -52,8 +51,7 @@ export async function staffReport(
         status: true,
         createdAt: true,
         user: { select: { email: true } },
-        hub: { select: { code: true, name: true } },
-        _count: { select: { payouts: true } },
+        hub: { select: { hubCode: true, name: true } },
       },
       orderBy: [{ fullName: "asc" }, { id: "asc" }],
       skip: (query.page - 1) * query.limit,
@@ -79,9 +77,8 @@ export async function staffReport(
       email: row.user?.email ?? "",
       jobTitle: row.jobTitle ?? "",
       status: row.status,
-      hubCode: row.hub?.code ?? "",
+      hubCode: row.hub?.hubCode ?? "",
       hubName: row.hub?.name ?? "",
-      payoutCount: row._count.payouts,
       createdAt: row.createdAt,
     })),
     pagination: reportPagination(query, total),

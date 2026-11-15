@@ -79,10 +79,6 @@ export const PERMISSION_REGISTRY = [
     actions: ['generate', 'read', 'approve', 'pay', 'reconcile']
   },
   {
-    resource: 'payout',
-    actions: ['create', 'read']
-  },
-  {
     resource: 'service',
     actions: [
       'create',

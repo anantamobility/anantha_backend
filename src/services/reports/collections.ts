@@ -21,7 +21,6 @@ const columns = [
   { key: "hubCode", header: "Hub Code" },
   { key: "hubName", header: "Hub" },
   { key: "amount", header: "Amount" },
-  { key: "currency", header: "Currency" },
   { key: "paymentMethod", header: "Payment Method" },
   { key: "referenceNumber", header: "Reference" },
   { key: "status", header: "Status" },
@@ -87,7 +86,6 @@ export async function collectionsReport(
               select: {
                 rentalNumber: true,
                 rentalType: true,
-                currency: true,
                 hub: { select: { hubCode: true, name: true } },
               },
             },
@@ -130,7 +128,6 @@ export async function collectionsReport(
       hubCode: row.rentalDue?.rental?.hub?.hubCode ?? "",
       hubName: row.rentalDue?.rental?.hub?.name ?? "",
       amount: moneyString(row.amount),
-      currency: row.rentalDue?.rental?.currency ?? "",
       paymentMethod: row.paymentMethod,
       referenceNumber: row.referenceNumber ?? "",
       status: row.status,

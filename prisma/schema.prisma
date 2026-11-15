@@ -185,15 +185,6 @@ enum PaymentMethod {
   OTHER
 }
 
-enum PayoutStatus {
-  PENDING
-  APPROVED
-  PROCESSING
-  PAID
-  FAILED
-  CANCELLED
-}
-
 enum PayStatementStatus {
   DRAFT
   PENDING_APPROVAL
@@ -212,6 +203,10 @@ enum PayStatementLineType {
   ADJUSTMENT
   OTHER_DEDUCTION
   PAYOUT_REVERSAL
+  INCENTIVE
+  REIMBURSEMENT
+  ADVANCE
+  ADVANCE_RECOVERY
 }
 
 // One ledger for both directions: money owed to AML by a client/rider
@@ -343,9 +338,9 @@ model User {
   passwordHash String
   status       AccountStatus @default(ONBOARDING)
   lastLoginAt  DateTime?     @db.Timestamptz(3)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  deletedAt    DateTime?
+  createdAt    DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime      @updatedAt @db.Timestamptz(3)
+  deletedAt    DateTime?     @db.Timestamptz(3)
   roleId       String
   role         Role          @relation(fields: [roleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
@@ -362,7 +357,7 @@ model User {
   collectionsReceived   Collection[] @relation("CollectionReceivedBy")
   collectionsReconciled Collection[] @relation("CollectionReconciledBy")
 
-  payoutsApproved    Payout[]            @relation("PayoutApprovedBy")
+  statementsPaid     RiderPayStatement[] @relation("PayStatementPaidBy")
   depositsAuthorized DepositLedger[]     @relation("DepositAuthorizedBy")
   ledgerCreated      LedgerEntry[]       @relation("LedgerCreatedBy")
   statementsApproved RiderPayStatement[] @relation("PayStatementApprovedBy")
@@ -396,9 +391,9 @@ model Staff {
   jobTitle        String?
   status          StaffStatus @default(ACTIVE)
   statusChangedAt DateTime?   @db.Timestamptz(3)
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  deletedAt       DateTime?
+  createdAt       DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime    @updatedAt @db.Timestamptz(3)
+  deletedAt       DateTime?   @db.Timestamptz(3)
 
   documents Document[]
 
@@ -440,9 +435,9 @@ model Rider {
   statusChangedAt DateTime?   @db.Timestamptz(3)
   version         Int         @default(0) //? remove this maybe
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt DateTime? @db.Timestamptz(3)
 
   rentals                Rental[]
   assignments            VehicleDeployment[]
@@ -450,9 +445,6 @@ model Rider {
   collections            Collection[]
   payStatements          RiderPayStatement[]
   ledgerEntries          LedgerEntry[]
-  payouts                Payout[]
-  // verifications          RiderVerification[]
-  // verificationHistory    RiderVerificationHistory[]
   documents              Document[]
   replacementAssignments ReplacementAssignment[]
 
@@ -480,8 +472,8 @@ model Hub {
   latitude     Float?
   longitude    Float?
   isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
 
   vehicles          Vehicle[]
   staff             Staff[]
@@ -521,12 +513,11 @@ model Vehicle {
   isActive        Boolean       @default(true)
   version         Int           @default(0)
   statusChangedAt DateTime?     @db.Timestamptz(3)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  deletedAt       DateTime?
+  createdAt       DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime      @updatedAt @db.Timestamptz(3)
+  deletedAt       DateTime?     @db.Timestamptz(3)
 
   assignments                    VehicleDeployment[]
-  // hubHistory                     VehicleHubHistory[]
   services                       Service[]
   replacementForServices         Service[]               @relation("ReplacementVehicle")
   inventoryMovements             InventoryMovement[]
@@ -563,8 +554,8 @@ model ClientContract {
   damageRecoveryRules String?
   taxDetails          Json?            @db.JsonB
   notes               String?
-  createdAt           DateTime         @default(now())
-  updatedAt           DateTime         @updatedAt
+  createdAt           DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime         @updatedAt @db.Timestamptz(3)
 
   rentals Rental[]
 
@@ -586,9 +577,9 @@ model Client {
   billingAddress   Json?      @db.JsonB
   paymentTermsDays Int?
   isActive         Boolean    @default(true)
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
-  deletedAt        DateTime?
+  createdAt        DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime   @updatedAt @db.Timestamptz(3)
+  deletedAt        DateTime?  @db.Timestamptz(3)
 
   rentals                Rental[]
   invoices               Invoice[]
@@ -623,9 +614,9 @@ model RateCard {
   effectiveTo     DateTime?   @db.Timestamptz(3)
   isActive        Boolean     @default(true)
   terms           Json?       @db.JsonB
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  deletedAt       DateTime?
+  createdAt       DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime    @updatedAt @db.Timestamptz(3)
+  deletedAt       DateTime?   @db.Timestamptz(3)
 
   @@index([vehicleCategory])
   @@index([rentalType])
@@ -671,8 +662,8 @@ model Rental {
   createdBy   User?           @relation("RentalCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
   closedById  String?
   closedBy    User?           @relation("RentalClosedBy", fields: [closedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  createdAt   DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime        @updatedAt @db.Timestamptz(3)
   contractId  String?
   contract    ClientContract? @relation(fields: [contractId], references: [id], onDelete: SetNull, onUpdate: Cascade)
 
@@ -718,14 +709,14 @@ model VehicleDeployment {
   replacementForId String?
   replacementFor   VehicleDeployment?  @relation("DeploymentReplacement", fields: [replacementForId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   replacements     VehicleDeployment[] @relation("DeploymentReplacement")
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  createdAt        DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime            @updatedAt @db.Timestamptz(3)
 
   @@index([vehicleId, status])
   @@index([riderId, status])
   @@index([rentalId, status])
   @@index([hubId])
-  @@map("vehicle_assignments")
+  @@map("vehicle_deployments")
 }
 
 //not considered as revenue. only held p
@@ -743,8 +734,8 @@ model Deposit {
   dueDate        DateTime?        @db.Timestamptz(3)
   version        Int              @default(0)
   notes          String?
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime         @updatedAt @db.Timestamptz(3)
 
   ledgerEntries DepositLedger[]
 
@@ -810,8 +801,8 @@ model Collection {
   reconciledBy    User?               @relation("CollectionReconciledBy", fields: [reconciledById], references: [id], onDelete: SetNull, onUpdate: Cascade)
   idempotencyKey  String              @unique
   notes           String?
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
+  createdAt       DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime            @updatedAt @db.Timestamptz(3)
 
   depositLedgerEntries DepositLedger[]
 
@@ -835,8 +826,8 @@ model RentalDue {
   outstandingAmount Decimal         @db.Decimal(14, 2) //amount to be collected
   status            RentalDueStatus @default(PENDING)
   generatedAt       DateTime        @default(now()) @db.Timestamptz(3)
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
+  createdAt         DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime        @updatedAt @db.Timestamptz(3)
 
   collections Collection[]
 
@@ -896,22 +887,6 @@ model LedgerEntry {
   @@map("ledger_entries")
 }
 
-//p
-
-// model PaymentAllocation {
-//   id           String     @id @default(uuid(7))
-//   collectionId String
-//   collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-//   invoiceId    String
-//   invoice      Invoice    @relation(fields: [invoiceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-//   amount       Decimal    @db.Decimal(14, 2)
-//   createdAt    DateTime   @default(now())
-
-//   @@unique([collectionId, invoiceId])
-//   @@index([invoiceId])
-//   @@map("payment_allocations")
-// }
-
 model RiderPayStatement {
   id                   String             @id @default(uuid(7))
   statementNumber      String             @unique
@@ -930,13 +905,16 @@ model RiderPayStatement {
   approvedById         String?
   approvedBy           User?              @relation("PayStatementApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
   approvedAt           DateTime?          @db.Timestamptz(3)
+  paidById             String?
+  paidBy               User?              @relation("PayStatementPaidBy", fields: [paidById], references: [id], onDelete: SetNull, onUpdate: Cascade)
   paidAt               DateTime?          @db.Timestamptz(3)
+  paymentMethod        PaymentMethod?
+  referenceNumber      String?
   failureReason        String?
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
+  createdAt            DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime           @updatedAt @db.Timestamptz(3)
 
   lines                RiderPayStatementLine[]
-  payouts              Payout[]
   ledgerEntries        LedgerEntry[]
   depositLedgerEntries DepositLedger[]         @relation("DepositPayStatement")
 
@@ -944,6 +922,7 @@ model RiderPayStatement {
   @@index([status])
   @@map("rider_pay_statements")
 }
+
 //p
 
 model RiderPayStatementLine {
@@ -961,38 +940,14 @@ model RiderPayStatementLine {
   referenceType  String? //add enum
   referenceId    String?
   snapshot       Json?                @db.JsonB
-  createdAt      DateTime             @default(now())
+  createdAt      DateTime             @default(now()) @db.Timestamptz(3)
 
   @@index([payStatementId])
   @@index([rentalId])
   @@index([ledgerEntryId])
   @@map("rider_pay_statement_lines")
 }
-//p
 
-model Payout {
-  id              String             @id @default(uuid(7))
-  riderId         String?
-  rider           Rider?             @relation(fields: [riderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  payStatementId  String?
-  payStatement    RiderPayStatement? @relation(fields: [payStatementId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  amount          Decimal            @db.Decimal(14, 2)
-  status          PayoutStatus       @default(PENDING)
-  approvedById    String?
-  approvedBy      User?              @relation("PayoutApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  approvedAt      DateTime?          @db.Timestamptz(3)
-  paidAt          DateTime?          @db.Timestamptz(3)
-  paymentMethod   PaymentMethod?
-  referenceNumber String?
-  idempotencyKey  String             @unique
-  notes           String?
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
-
-  @@index([riderId, status])
-  @@index([payStatementId])
-  @@map("payouts")
-}
 //p
 
 /**
@@ -1014,7 +969,6 @@ model Invoice {
   issuedAt           DateTime?        @db.Timestamptz(3)
   dueDate            DateTime         @db.Timestamptz(3)
   status             InvoiceStatus    @default(DRAFT)
-  currency           String           @default("INR") @db.Char(3)
   subtotal           Decimal          @default(0) @db.Decimal(14, 2)
   discountAmount     Decimal          @default(0) @db.Decimal(14, 2)
   taxAmount          Decimal          @default(0) @db.Decimal(14, 2)
@@ -1028,8 +982,8 @@ model Invoice {
   voidedBy           User?            @relation("InvoiceVoidedBy", fields: [voidedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
   voidedAt           DateTime?        @db.Timestamptz(3)
   voidReason         String?
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
+  createdAt          DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime         @updatedAt @db.Timestamptz(3)
 
   lines InvoiceLine[]
   // allocations PaymentAllocation[]
@@ -1056,7 +1010,7 @@ model InvoiceLine {
   periodStart     DateTime?      @db.Timestamptz(3)
   periodEnd       DateTime?      @db.Timestamptz(3)
   pricingSnapshot Json?          @db.JsonB
-  createdAt       DateTime       @default(now())
+  createdAt       DateTime       @default(now()) @db.Timestamptz(3)
 
   @@index([invoiceId])
   @@index([rentalId])
@@ -1072,8 +1026,6 @@ model InvoiceLine {
 //   isActive      Boolean  @default(true)
 //   createdAt     DateTime @default(now())
 //   updatedAt     DateTime @updatedAt
-
-//   payouts Payout[]
 
 //   @@map("vendors")
 // }
@@ -1116,8 +1068,8 @@ model Service {
   replacementVehicleId             String?
   replacementVehicle               Vehicle?         @relation("ReplacementVehicle", fields: [replacementVehicleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   version                          Int              @default(0)
-  createdAt                        DateTime         @default(now())
-  updatedAt                        DateTime         @updatedAt
+  createdAt                        DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt                        DateTime         @updatedAt @db.Timestamptz(3)
 
   charges                ServiceCharge[]
   spares                 ServiceSpare[]
@@ -1143,15 +1095,14 @@ model ServiceCharge {
   billableAmount  Decimal             @default(0) @db.Decimal(14, 2)
   recoverableFrom ResponsibleParty    @default(AML)
   status          ServiceChargeStatus @default(PENDING)
-  currency        String              @default("INR") @db.Char(3)
   description     String?
   sourceType      String?
   sourceId        String?
   idempotencyKey  String?             @unique
   serviceSpareId  String?             @unique
   serviceSpare    ServiceSpare?       @relation(fields: [serviceSpareId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
+  createdAt       DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime            @updatedAt @db.Timestamptz(3)
 
   invoiceLine InvoiceLine?
 
@@ -1172,7 +1123,7 @@ model ServiceSpare {
   idempotencyKey      String?            @unique
   inventoryMovementId String?            @unique
   inventoryMovement   InventoryMovement? @relation(fields: [inventoryMovementId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  createdAt           DateTime           @default(now())
+  createdAt           DateTime           @default(now()) @db.Timestamptz(3)
 
   charge ServiceCharge?
 
@@ -1206,8 +1157,8 @@ model ReplacementAssignment {
   returnedBy           User?            @relation("ReplacementReturnedBy", fields: [returnedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
   reason               String?
   notes                String?
-  createdAt            DateTime         @default(now())
-  updatedAt            DateTime         @updatedAt
+  createdAt            DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime         @updatedAt @db.Timestamptz(3)
 
   @@index([serviceId, status])
   @@index([replacementVehicleId, status])
@@ -1227,10 +1178,9 @@ model Spare {
   purchasePrice Decimal? @db.Decimal(14, 4)
   unitCost      Decimal  @db.Decimal(14, 4)
   minimumStock  Int      @default(0)
-  currency      String   @default("INR") @db.Char(3)
   isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
 
   balances      InventoryBalance[]
   movements     InventoryMovement[]
@@ -1250,7 +1200,7 @@ model InventoryBalance {
   hub       Hub      @relation(fields: [hubId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   onHand    Int      @default(0)
   reserved  Int      @default(0)
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
   @@unique([spareId, hubId])
   @@index([hubId])
@@ -1282,7 +1232,7 @@ model InventoryMovement {
   idempotencyKey String?               @unique
   notes          String?
   movedAt        DateTime              @default(now()) @db.Timestamptz(3)
-  createdAt      DateTime              @default(now())
+  createdAt      DateTime              @default(now()) @db.Timestamptz(3)
 
   serviceSpare ServiceSpare?
 
@@ -1322,9 +1272,9 @@ model Document {
   notes    String?
   metadata Json?   @db.JsonB
 
-  deletedAt DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
 
   @@index([riderId])
   @@index([staffId])
@@ -1338,7 +1288,7 @@ model Document {
 //done
 model AuditLog {
   id         String   @id @default(uuid(7))
-  createdAt  DateTime @default(now())
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
   userId     String
   user       User     @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   userName   String

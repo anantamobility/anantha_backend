@@ -79,7 +79,7 @@ export async function serviceReport(
         vehicle: {
           select: {
             registrationNumber: true,
-            hub: { select: { code: true, name: true } },
+            hub: { select: { hubCode: true, name: true } },
           },
         },
         rental: { select: { rentalNumber: true } },
@@ -141,7 +141,7 @@ export async function serviceReport(
         responsibleParty: row.responsibleParty,
         vehicleRegistration: row.vehicle.registrationNumber,
         rentalNumber: row.rental?.rentalNumber ?? "",
-        hubCode: row.vehicle.hub?.code ?? "",
+        hubCode: row.vehicle.hub?.hubCode ?? "",
         hubName: row.vehicle.hub?.name ?? "",
         reportedAt: row.reportedAt,
         startedAt: row.startedAt,

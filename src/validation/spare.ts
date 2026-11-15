@@ -22,12 +22,6 @@ function moneySchema(scale: number, label: string, positive = false) {
     );
 }
 
-const currencySchema = z
-  .string()
-  .trim()
-  .regex(/^[A-Za-z]{3}$/, "currency must be a 3-letter ISO code")
-  .transform((value) => value.toUpperCase());
-
 const optionalNullableString = (max: number) =>
   z.string().trim().min(1).max(max).nullable().optional();
 
@@ -56,7 +50,6 @@ export const createSpareSchema = z
     purchasePrice: moneySchema(4, "purchasePrice").nullable().optional(),
     unitCost: moneySchema(4, "unitCost"),
     minimumStock: quantitySchema.optional(),
-    currency: currencySchema.optional(),
   })
   .strict();
 
@@ -70,7 +63,6 @@ export const updateSpareSchema = z
     purchasePrice: moneySchema(4, "purchasePrice").nullable().optional(),
     unitCost: moneySchema(4, "unitCost").optional(),
     minimumStock: quantitySchema.optional(),
-    currency: currencySchema.optional(),
   })
   .strict();
 

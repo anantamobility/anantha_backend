@@ -7,8 +7,8 @@ import {
   approvePayStatementSchema,
   generatePayStatementSchema,
   listPayStatementsQuerySchema,
+  payStatementPaymentSchema,
 } from "../validation/payStatement.js";
-import { payStatementSchema } from "../validation/payout.js";
 import {
   approvePayStatement,
   generatePayStatement,
@@ -53,7 +53,7 @@ r.post(
   verifyToken,
   validate(idParamSchema, "params"),
   authorize("payStatement", "pay"),
-  validate(payStatementSchema),
+  validate(payStatementPaymentSchema),
   payStatement
 );
 

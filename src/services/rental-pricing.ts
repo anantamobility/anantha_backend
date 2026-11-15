@@ -7,7 +7,6 @@ export type ManualRentalPricingInput = {
   fortnightlyRate?: string | number | null;
   monthlyRate?: string | number | null;
   securityDeposit?: string | number | null;
-  currency?: string;
   notes?: string | null;
 };
 
@@ -63,18 +62,6 @@ function decimalString(
   return text;
 }
 
-function normalizeCurrency(value: string | undefined) {
-  const currency = (value ?? "INR").trim().toUpperCase();
-  if (!/^[A-Z]{3}$/.test(currency)) {
-    throw new AppError(
-      "currency must be a 3-letter ISO code",
-      400,
-      ErrorCode.VALIDATION_ERROR
-    );
-  }
-  return currency;
-}
-
 function manualPricing(
   input: ManualRentalPricingInput,
   clientId: string,
@@ -94,14 +81,10 @@ function manualPricing(
     "securityDeposit",
     2
   );
-  const currency = normalizeCurrency(input.currency);
 
   return {
     source: "MANUAL" as const,
     clientId,
-    rateCardId: null,
-    billingFrequency: null,
-    currency,
     rates,
     securityDepositRequired: securityDeposit,
   };
@@ -156,13 +139,11 @@ export async function resolveRentalPricing(
       code: true,
       name: true,
       vehicleCategory: true,
-      billingFrequency: true,
       dailyRate: true,
       weeklyRate: true,
       fortnightlyRate: true,
       monthlyRate: true,
       securityDeposit: true,
-      currency: true,
       effectiveFrom: true,
       effectiveTo: true,
     },
@@ -195,9 +176,6 @@ export async function resolveRentalPricing(
   return {
     source: "RATE_CARD" as const,
     clientId: input.clientId,
-    rateCardId: rateCard.id,
-    billingFrequency: rateCard.billingFrequency,
-    currency: rateCard.currency,
     rates,
     securityDepositRequired: securityDeposit,
   };

@@ -11,7 +11,6 @@ const RENTAL_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b";
 const DUE_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a9f";
 const STATEMENT_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4b01";
 const COLLECTION_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4b02";
-const PAYOUT_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4b03";
 
 function authUser(permissions: { resource: string; action: string }[]) {
   return {
@@ -46,7 +45,6 @@ function statementDetail(overrides: Record<string, unknown> = {}) {
     periodStart: new Date("2026-01-01T00:00:00.000Z"),
     periodEnd: new Date("2026-01-02T00:00:00.000Z"),
     status: "PAYABLE",
-    currency: "INR",
     grossEarnings: "1000.00",
     totalDeductions: "300.00",
     netPayable: "700.00",
@@ -61,8 +59,8 @@ function statementDetail(overrides: Record<string, unknown> = {}) {
     updatedAt: new Date("2026-01-01T00:00:00.000Z"),
     rider: { id: RIDER_ID, riderCode: "RDR-001", fullName: "Test Rider" },
     approvedBy: null,
+    paidBy: null,
     lines: [],
-    payouts: [],
     ...overrides,
   };
 }
@@ -148,7 +146,7 @@ describe("POST /pay-statements/generate", () => {
         data: expect.objectContaining({
           payerType: "RIDER",
           riderId: RIDER_ID,
-          rentalId: RENTAL_ID,
+          rentalDueId: DUE_ID,
           amount: expect.anything(),
           status: "CLEARED",
         }),
@@ -248,7 +246,7 @@ describe("POST /pay-statements/generate", () => {
     );
   });
 
-  it("marks a zero-net payStatement PAID without creating a payout", async () => {
+  it("marks a zero-net payStatement PAID", async () => {
     authenticate([{ resource: "payStatement", action: "generate" }]);
     mockGeneration({
       earnings: [
@@ -286,7 +284,6 @@ describe("POST /pay-statements/generate", () => {
     expect(update.data.status).toBe("PAID");
     expect(update.data.netPayable.toString()).toBe("0");
     expect(update.data.paidAt).toBeInstanceOf(Date);
-    expect(prismaMock.payout.create).not.toHaveBeenCalled();
   });
 
   it("flags a shortfall when deductions exceed earnings", async () => {
@@ -416,15 +413,8 @@ describe("POST /pay-statements/:id/pay", () => {
       statementNumber: "STL-ABC123",
       riderId: RIDER_ID,
       status: "APPROVED",
-      currency: "INR",
       netPayable: "700.00",
       paidAt: null,
-    });
-    prismaMock.payout.findUnique.mockResolvedValue(null);
-    prismaMock.payout.create.mockResolvedValue({
-      id: PAYOUT_ID,
-      amount: "700.00",
-      status: "PAID",
     });
     prismaMock.ledgerEntry.create.mockResolvedValue({});
     prismaMock.riderPayStatement.update.mockResolvedValue({
@@ -441,16 +431,6 @@ describe("POST /pay-statements/:id/pay", () => {
       .send({ paymentMethod: "UPI", referenceNumber: "PAY-1" });
 
     expect(res.status).toBe(201);
-    expect(prismaMock.payout.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          recipientType: "RIDER",
-          riderId: RIDER_ID,
-          payStatementId: STATEMENT_ID,
-          status: "PAID",
-        }),
-      })
-    );
     expect(prismaMock.ledgerEntry.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -462,7 +442,11 @@ describe("POST /pay-statements/:id/pay", () => {
     );
     expect(prismaMock.riderPayStatement.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ status: "PAID" }),
+        data: expect.objectContaining({
+          status: "PAID",
+          paymentMethod: "UPI",
+          referenceNumber: "PAY-1",
+        }),
       })
     );
   });

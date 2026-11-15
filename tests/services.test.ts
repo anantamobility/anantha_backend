@@ -206,7 +206,7 @@ describe("POST /services", () => {
 });
 
 describe("PATCH /services/:id/start", () => {
-  it("starts downtime, moves the vehicle to IN_SERVICE and pauses the rental", async () => {
+  it("starts downtime and moves the vehicle to IN_SERVICE", async () => {
     authenticate([{ resource: "service", action: "start" }]);
     const started = serviceDetail({
       status: "IN_PROGRESS",
@@ -259,12 +259,6 @@ describe("PATCH /services/:id/start", () => {
         data: expect.objectContaining({ status: "IN_SERVICE" }),
       })
     );
-    expect(prismaMock.rental.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ status: "ON_HOLD" }),
-      })
-    );
-    expect(prismaMock.rentalPause.create).toHaveBeenCalled();
   });
 });
 

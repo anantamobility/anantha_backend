@@ -2,13 +2,12 @@ import type { NextFunction, Request, Response } from "express";
 import { success } from "../../utils/http.js";
 import { getAuditActor } from "../../utils/log.js";
 import * as payStatementService from "../../services/pay-statement.js";
-import * as payoutService from "../../services/payout.js";
 import type {
   ApprovePayStatementInput,
   GeneratePayStatementInput,
   ListPayStatementsQuery,
+  PayStatementPaymentInput,
 } from "../../validation/payStatement.js";
-import type { PayStatementPaymentInput } from "../../validation/payout.js";
 
 export const generatePayStatement = async (
   req: Request,
@@ -79,11 +78,9 @@ export const payStatement = async (
   next: NextFunction
 ) => {
   try {
-    const result = await payoutService.createPayout(
-      {
-        ...(req.body as PayStatementPaymentInput),
-        payStatementId: req.params.id as string,
-      },
+    const result = await payStatementService.payPayStatement(
+      req.params.id as string,
+      req.body as PayStatementPaymentInput,
       getAuditActor(req)
     );
     return success(res, result, result.duplicate ? 200 : 201);

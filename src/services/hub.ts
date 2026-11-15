@@ -27,7 +27,9 @@ const hubDependencySelect = {
 
 function hubSnapshot(hub: {
   name: string;
-  code: string;
+  hubCode: string;
+  city: string;
+  state: string;
   address: unknown;
   contactPhone: string | null;
   contactEmail: string | null;
@@ -35,7 +37,9 @@ function hubSnapshot(hub: {
 }) {
   return {
     name: hub.name,
-    code: hub.code,
+    code: hub.hubCode,
+    city: hub.city,
+    state: hub.state,
     address: hub.address,
     contactPhone: hub.contactPhone,
     contactEmail: hub.contactEmail,
@@ -56,7 +60,9 @@ export async function createHub(input: CreateHubInput, actor: AuditActor) {
     return await prisma.$transaction(async (tx) => {
       const data: Prisma.HubCreateInput = {
         name: input.name,
-        code: input.code,
+        hubCode: input.code,
+        city: input.city,
+        state: input.state,
         isActive: input.isActive ?? true,
       };
 
@@ -94,7 +100,7 @@ export async function listHubs(query: ListHubsQuery, user?: UserContext) {
   if (search) {
     where.OR = [
       { name: { contains: search, mode: "insensitive" } },
-      { code: { contains: search, mode: "insensitive" } },
+      { hubCode: { contains: search, mode: "insensitive" } },
       { contactEmail: { contains: search, mode: "insensitive" } },
     ];
   }
@@ -153,7 +159,9 @@ export async function updateHub(
 
       const data: Prisma.HubUpdateInput = {};
       if (input.name !== undefined) data.name = input.name;
-      if (input.code !== undefined) data.code = input.code;
+      if (input.code !== undefined) data.hubCode = input.code;
+      if (input.city !== undefined) data.city = input.city;
+      if (input.state !== undefined) data.state = input.state;
       if (input.address !== undefined) data.address = toJsonValue(input.address);
       if (input.contactPhone !== undefined) {
         data.contactPhone = input.contactPhone;

@@ -38,7 +38,7 @@ const select = {
       unitCost: true,
     },
   },
-  hub: { select: { code: true, name: true } },
+  hub: { select: { hubCode: true, name: true } },
 } satisfies Prisma.InventoryBalanceSelect;
 
 type BalanceRow = Prisma.InventoryBalanceGetPayload<{ select: typeof select }>;
@@ -49,7 +49,7 @@ function mapBalance(row: BalanceRow) {
     partNumber: row.spare.partNumber,
     spareName: row.spare.name,
     category: row.spare.category ?? "",
-    hubCode: row.hub.code,
+    hubCode: row.hub.hubCode,
     hubName: row.hub.name,
     onHand: row.onHand,
     reserved: row.reserved,
@@ -80,7 +80,7 @@ export async function inventoryReport(
         },
       },
       { spare: { name: { contains: query.search, mode: "insensitive" } } },
-      { hub: { code: { contains: query.search, mode: "insensitive" } } },
+      { hub: { hubCode: { contains: query.search, mode: "insensitive" } } },
       { hub: { name: { contains: query.search, mode: "insensitive" } } },
     ];
   }
@@ -92,7 +92,7 @@ export async function inventoryReport(
     const allRows = await prisma.inventoryBalance.findMany({
       where,
       select,
-      orderBy: [{ hub: { code: "asc" } }, { spare: { name: "asc" } }],
+      orderBy: [{ hub: { hubCode: "asc" } }, { spare: { name: "asc" } }],
     });
     const mapped = allRows.map(mapBalance).filter((row) => row.belowMinimum);
     total = mapped.length;
@@ -105,7 +105,7 @@ export async function inventoryReport(
       prisma.inventoryBalance.findMany({
         where,
         select,
-        orderBy: [{ hub: { code: "asc" } }, { spare: { name: "asc" } }],
+        orderBy: [{ hub: { hubCode: "asc" } }, { spare: { name: "asc" } }],
         skip: (query.page - 1) * query.limit,
         take: query.limit,
       }),

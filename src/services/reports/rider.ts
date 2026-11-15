@@ -64,7 +64,7 @@ export async function riderReport(
         onboardedAt: true,
         createdAt: true,
         client: { select: { clientCode: true, name: true } },
-        hub: { select: { code: true, name: true } },
+        hub: { select: { hubCode: true, name: true } },
         _count: {
           select: {
             rentals: true,
@@ -103,7 +103,7 @@ export async function riderReport(
       b2bRiderMgmt: row.b2bRiderMgmt ?? "",
       clientCode: row.client?.clientCode ?? "",
       clientName: row.client?.name ?? "",
-      hubCode: row.hub?.code ?? "",
+      hubCode: row.hub?.hubCode ?? "",
       hubName: row.hub?.name ?? "",
       rentalCount: row._count.rentals,
       depositCount: row._count.deposits,

@@ -16,6 +16,7 @@ import type {
   ApprovePayStatementInput,
   GeneratePayStatementInput,
   ListPayStatementsQuery,
+  PayStatementPaymentInput,
 } from "../validation/payStatement.js";
 
 type Tx = Prisma.TransactionClient;
@@ -45,7 +46,6 @@ export const payStatementSelect = {
   periodStart: true,
   periodEnd: true,
   status: true,
-  currency: true,
   grossEarnings: true,
   totalDeductions: true,
   netPayable: true,
@@ -55,7 +55,10 @@ export const payStatementSelect = {
   version: true,
   approvedById: true,
   approvedAt: true,
+  paidById: true,
   paidAt: true,
+  paymentMethod: true,
+  referenceNumber: true,
   failureReason: true,
   createdAt: true,
   updatedAt: true,
@@ -65,19 +68,9 @@ export const payStatementDetailSelect = {
   ...payStatementSelect,
   rider: { select: { id: true, riderCode: true, fullName: true } },
   approvedBy: { select: { id: true, name: true } },
+  paidBy: { select: { id: true, name: true } },
   lines: {
     select: payStatementLineSelect,
-    orderBy: { createdAt: "asc" },
-  },
-  payouts: {
-    select: {
-      id: true,
-      amount: true,
-      status: true,
-      paymentMethod: true,
-      referenceNumber: true,
-      paidAt: true,
-    },
     orderBy: { createdAt: "asc" },
   },
 } as const;
@@ -192,7 +185,6 @@ export async function generatePayStatement(
           id: true,
           entryType: true,
           amount: true,
-          currency: true,
           description: true,
           rentalId: true,
           occurredAt: true,
@@ -218,7 +210,6 @@ export async function generatePayStatement(
           id: true,
           entryType: true,
           amount: true,
-          currency: true,
           description: true,
           rentalId: true,
           occurredAt: true,
@@ -233,7 +224,6 @@ export async function generatePayStatement(
         (total, entry) => total.add(toDecimal(entry.amount)),
         new Prisma.Decimal(0)
       );
-      const currency = earnings[0]?.currency ?? "INR";
       const now = new Date();
 
       const payStatement = await tx.riderPayStatement.create({
@@ -243,7 +233,6 @@ export async function generatePayStatement(
           periodStart,
           periodEnd,
           status: "DRAFT",
-          currency,
           grossEarnings,
           totalDeductions: new Prisma.Decimal(0),
           netPayable: new Prisma.Decimal(0),
@@ -329,7 +318,7 @@ export async function generatePayStatement(
           periodStart: true,
           periodEnd: true,
           rental: {
-            select: { rentalNumber: true, currency: true },
+            select: { rentalNumber: true },
           },
         },
       });
@@ -378,10 +367,8 @@ export async function generatePayStatement(
           data: {
             payerType: "RIDER",
             riderId: rider.id,
-            rentalId: due.rentalId,
             rentalDueId: due.id,
             amount: applied,
-            currency: due.rental.currency,
             paymentMethod: "OTHER",
             referenceNumber: null,
             receivedAt: now,
@@ -401,7 +388,6 @@ export async function generatePayStatement(
             entryType: "COLLECTION_RECEIVED",
             direction: "CREDIT",
             amount: applied,
-            currency: due.rental.currency,
             occurredAt: now,
             description: `Rent deducted from pay statement ${payStatement.statementNumber}`,
             sourceType: "Collection",
@@ -417,7 +403,6 @@ export async function generatePayStatement(
             entryType: "RENT_DEDUCTION",
             direction: "DEBIT",
             amount: applied,
-            currency,
             occurredAt: now,
             description: `Rent deducted for rental ${due.rental.rentalNumber}`,
             sourceType: "RiderPayStatement",
@@ -471,7 +456,6 @@ export async function generatePayStatement(
                 : deduction.lineType,
             direction: "DEBIT",
             amount,
-            currency,
             occurredAt: now,
             description: deduction.description,
             sourceType: "RiderPayStatement",
@@ -666,6 +650,112 @@ export async function approvePayStatement(
     });
   } catch (err) {
     rethrowPrismaError(err, "Pay statement could not be approved");
+  }
+}
+
+export async function payPayStatement(
+  id: string,
+  input: PayStatementPaymentInput,
+  actor: AuditActor
+) {
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const payStatement = await tx.riderPayStatement.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          statementNumber: true,
+          riderId: true,
+          status: true,
+          netPayable: true,
+          paidAt: true,
+        },
+      });
+
+      if (!payStatement) {
+        throw new AppError("Pay statement not found", 404, ErrorCode.NOT_FOUND);
+      }
+
+      if (payStatement.status === "PAID") {
+        const existing = await tx.riderPayStatement.findUniqueOrThrow({
+          where: { id },
+          select: payStatementDetailSelect,
+        });
+        return { payStatement: existing, duplicate: true };
+      }
+
+      if (payStatement.status !== "APPROVED") {
+        throw new AppError(
+          `Only an APPROVED payStatement can be paid (current status: ${payStatement.status})`,
+          409,
+          ErrorCode.CONFLICT
+        );
+      }
+
+      const amount = toDecimal(payStatement.netPayable);
+      if (amount.lte(0)) {
+        throw new AppError(
+          "Pay statement has no payable amount",
+          409,
+          ErrorCode.CONFLICT
+        );
+      }
+
+      const paidAt = input.paidAt ?? new Date();
+
+      await tx.ledgerEntry.create({
+        data: {
+          riderId: payStatement.riderId,
+          entryType: "PAYOUT",
+          direction: "DEBIT",
+          amount,
+          occurredAt: paidAt,
+          description: `Payout for pay statement ${payStatement.statementNumber}`,
+          sourceType: "RiderPayStatement",
+          sourceId: payStatement.id,
+          payStatementId: payStatement.id,
+          createdById: actor.userId,
+          idempotencyKey: `payStatement-payout:${payStatement.id}`,
+        },
+      });
+
+      const updated = await tx.riderPayStatement.update({
+        where: { id },
+        data: {
+          status: "PAID",
+          paidById: actor.userId,
+          paidAt,
+          paymentMethod: input.paymentMethod,
+          referenceNumber: input.referenceNumber ?? null,
+          version: { increment: 1 },
+        },
+        select: payStatementDetailSelect,
+      });
+
+      await logAudit({
+        ...actor,
+        action: "PAY",
+        resource: "RiderPayStatement",
+        resourceId: payStatement.id,
+        oldData: { status: payStatement.status },
+        newData: {
+          status: "PAID",
+          statementNumber: payStatement.statementNumber,
+          riderId: payStatement.riderId,
+          amount,
+          paymentMethod: input.paymentMethod,
+          referenceNumber: input.referenceNumber ?? null,
+          paidAt,
+        },
+        summary: `${actor.userName} paid ${amount} for payStatement ${payStatement.statementNumber}.`,
+        db: tx,
+        throwOnError: true,
+      });
+
+      return { payStatement: updated, duplicate: false };
+    });
+  } catch (err) {
+    rethrowPrismaError(err, "Pay statement could not be paid");
   }
 }
 

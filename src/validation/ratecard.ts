@@ -2,11 +2,6 @@ import { z } from "zod";
 import { paginationQuerySchema, searchQuerySchema } from "./common.js";
 
 export const rentalTypeSchema = z.enum(["B2C", "B2B"]);
-export const billingFrequencySchema = z.enum([
-  "WEEKLY",
-  "FORTNIGHTLY",
-  "MONTHLY",
-]);
 
 const rateCardCodeSchema = z
   .string()
@@ -55,18 +50,11 @@ const rateCardBaseShape = {
     .nullable()
     .optional(),
   rentalType: rentalTypeSchema.nullable().optional(),
-  billingFrequency: billingFrequencySchema.nullable().optional(),
   dailyRate: moneySchema(4, "dailyRate", { positive: true }),
   weeklyRate: moneySchema(4, "weeklyRate").nullable().optional(),
   fortnightlyRate: moneySchema(4, "fortnightlyRate").nullable().optional(),
   monthlyRate: moneySchema(4, "monthlyRate").nullable().optional(),
   securityDeposit: moneySchema(2, "securityDeposit").nullable().optional(),
-  currency: z
-    .string()
-    .trim()
-    .regex(/^[A-Za-z]{3}$/, "currency must be a 3-letter ISO code")
-    .transform((value) => value.toUpperCase())
-    .optional(),
   effectiveFrom: z.coerce.date(),
   effectiveTo: z.coerce.date().nullable().optional(),
   terms: z.json().nullable().optional(),
@@ -113,7 +101,6 @@ export const listRateCardsQuerySchema = paginationQuerySchema
       .max(100, "vehicleCategory cannot exceed 100 characters")
       .optional(),
     rentalType: rentalTypeSchema.optional(),
-    billingFrequency: billingFrequencySchema.optional(),
     isActive: z
       .enum(["true", "false"])
       .transform((value) => value === "true")

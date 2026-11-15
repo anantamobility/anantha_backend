@@ -66,16 +66,7 @@ const rentalRiderSelect = {
 const rentalHubSelect = {
   id: true,
   name: true,
-  code: true,
-  isActive: true,
-} as const;
-
-const rentalRateCardSelect = {
-  id: true,
-  code: true,
-  name: true,
-  billingFrequency: true,
-  currency: true,
+  hubCode: true,
   isActive: true,
 } as const;
 
@@ -97,15 +88,12 @@ export const rentalListSelect = {
   clientId: true,
   riderId: true,
   hubId: true,
-  rateCardId: true,
   startDate: true,
   endDate: true,
   expectedEndDate: true,
   status: true,
-  agreementRef: true,
-  billingFrequency: true,
+  statusChangedAt: true,
   collectionPeriod: true,
-  currency: true,
   dailyRate: true,
   weeklyRate: true,
   fortnightlyRate: true,
@@ -122,14 +110,13 @@ export const rentalListSelect = {
   client: { select: rentalClientSelect },
   rider: { select: rentalRiderSelect },
   hub: { select: rentalHubSelect },
-  rateCard: { select: rentalRateCardSelect },
+  contract: { select: { id: true, contractNumber: true } },
 } as const;
 
 export const rentalDetailSelect = {
   ...rentalListSelect,
   createdById: true,
   closedById: true,
-  statementSnapshot: true,
   createdBy: { select: { id: true, name: true } },
   closedBy: { select: { id: true, name: true } },
   assignments: {
@@ -149,7 +136,6 @@ export const rentalDetailSelect = {
       id: true,
       payerType: true,
       amountRequired: true,
-      currency: true,
       status: true,
       dueDate: true,
       version: true,
@@ -158,9 +144,10 @@ export const rentalDetailSelect = {
   _count: {
     select: {
       assignments: true,
-      collectionDues: true,
-      collections: true,
-      rentalLedgerEntries: true,
+      dues: true,
+      deposits: true,
+      ledgerEntries: true,
+      services: true,
     },
   },
 } as const;
@@ -469,19 +456,8 @@ export async function createRental(
       manualPricing: input.manualPricing ?? null,
     });
 
-    const billingFrequency =
-      input.billingFrequency ?? pricing.billingFrequency ?? null;
-
     return await prisma.$transaction(async (tx) => {
       await assertClient(tx, input.rentalType, input.clientId);
-
-      if (input.rentalType === "B2B" && !billingFrequency) {
-        throw new AppError(
-          "billingFrequency is required for B2B rentals (supply it directly or via the ratecard)",
-          400,
-          ErrorCode.VALIDATION_ERROR
-        );
-      }
 
       if (input.riderId) {
         await assertRider(tx, {
@@ -495,7 +471,6 @@ export async function createRental(
 
       if (input.hubId) await assertHub(tx, input.hubId);
       assertHubAccess(actor.user, input.hubId);
-
       if (input.vehicleId) {
         const vehicle = await tx.vehicle.findUnique({
           where: { id: input.vehicleId },
@@ -525,15 +500,11 @@ export async function createRental(
         b2bRiderMgmt: input.b2bRiderMgmt ?? null,
         clientId: input.clientId,
         riderId: input.riderId ?? null,
-        hubId: input.hubId ?? null,
-        rateCardId: pricing.rateCardId,
+        hubId: input.hubId,
         startDate: input.startDate,
         expectedEndDate: input.expectedEndDate ?? null,
         status: "DRAFT",
-        agreementRef: input.agreementRef ?? null,
-        billingFrequency,
         collectionPeriod: input.collectionPeriod,
-        currency: input.currency ?? pricing.currency,
         dailyRate: pricing.rates.dailyRate,
         weeklyRate: pricing.rates.weeklyRate,
         fortnightlyRate: pricing.rates.fortnightlyRate,
@@ -582,7 +553,7 @@ export async function createRental(
           rentalType: rental.rentalType,
           clientId: rental.clientId,
           riderId: rental.riderId,
-          rateCardId: rental.rateCardId,
+          hubId: rental.hubId,
           startDate: rental.startDate,
           collectionPeriod: rental.collectionPeriod,
           securityDepositRequired: rental.securityDepositRequired,
@@ -619,7 +590,6 @@ export async function listRentals(query: ListRentalsQuery, user?: UserContext) {
   if (search) {
     where.OR = [
       { rentalNumber: { contains: search, mode: "insensitive" } },
-      { agreementRef: { contains: search, mode: "insensitive" } },
       { client: { name: { contains: search, mode: "insensitive" } } },
       { rider: { fullName: { contains: search, mode: "insensitive" } } },
     ];
@@ -811,7 +781,6 @@ export async function closeRental(
           version: true,
           notes: true,
           collectionPeriod: true,
-          currency: true,
         },
       });
 
@@ -1006,7 +975,6 @@ export async function closeRental(
           closedById: actor.userId,
           finalOutstandingAmount: financialSummary.outstanding,
           finalDepositBalance: depositTotals.balance,
-          statementSnapshot: statementSnapshot as Prisma.InputJsonValue,
           notes: input.notes ?? rental.notes,
         },
         select: rentalDetailSelect,

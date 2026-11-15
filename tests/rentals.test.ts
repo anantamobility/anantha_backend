@@ -35,16 +35,12 @@ function rentalDetail(overrides: Record<string, unknown> = {}) {
     b2bRiderMgmt: null,
     clientId: CLIENT_ID,
     riderId: RIDER_ID,
-    hubId: null,
-    rateCardId: null,
+    hubId: HUB_ID,
     startDate: new Date("2026-01-01T00:00:00.000Z"),
     endDate: null,
     expectedEndDate: null,
     status: "DRAFT",
-    agreementRef: null,
-    billingFrequency: null,
     collectionPeriod: "MONTHLY",
-    currency: "INR",
     dailyRate: "500.0000",
     weeklyRate: null,
     fortnightlyRate: null,
@@ -62,11 +58,14 @@ function rentalDetail(overrides: Record<string, unknown> = {}) {
   };
 }
 
+const HUB_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a9a";
+
 const createBody = {
   rentalType: "B2C",
   b2cMode: "AML_RIDER",
   clientId: CLIENT_ID,
   riderId: RIDER_ID,
+  hubId: HUB_ID,
   startDate: "2026-01-01T00:00:00.000Z",
   collectionPeriod: "MONTHLY",
   securityDepositAmount: "2000",
@@ -83,6 +82,10 @@ beforeEach(() => {
   });
   prismaMock.rental.findMany.mockResolvedValue([]);
   prismaMock.rental.count.mockResolvedValue(0);
+  prismaMock.hub.findUnique.mockResolvedValue({
+    id: HUB_ID,
+    isActive: true,
+  });
   prismaMock.rentalDue.findMany.mockResolvedValue([]);
   prismaMock.collection.findMany.mockResolvedValue([]);
   prismaMock.vehicleDeployment.findMany.mockResolvedValue([]);
@@ -284,7 +287,7 @@ describe("PATCH /rentals/:id/assign-vehicle", () => {
     authenticate([{ resource: "rental", action: "assign" }]);
     prismaMock.rental.findFirst.mockResolvedValue(rentalDetail());
     prismaMock.rental.findUnique.mockResolvedValue(
-      rentalDetail({ riderId: RIDER_ID, hubId: null })
+      rentalDetail({ riderId: RIDER_ID })
     );
     prismaMock.vehicleDeployment.count.mockResolvedValue(0);
     prismaMock.vehicle.findUnique.mockResolvedValue({

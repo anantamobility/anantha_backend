@@ -23,7 +23,6 @@ export const earningSelect = {
   entryType: true,
   direction: true,
   amount: true,
-  currency: true,
   occurredAt: true,
   description: true,
   sourceType: true,
@@ -85,7 +84,6 @@ async function assertRentalForRider(
       rentalNumber: true,
       rentalType: true,
       riderId: true,
-      currency: true,
     },
   });
 
@@ -125,15 +123,9 @@ export async function recordEarning(
   try {
     return await prisma.$transaction(async (tx) => {
       const rider = await assertEarningRider(tx, input.riderId);
-      let currency = "INR";
 
       if (input.rentalId) {
-        const rental = await assertRentalForRider(
-          tx,
-          input.rentalId,
-          input.riderId
-        );
-        currency = rental.currency;
+        await assertRentalForRider(tx, input.rentalId, input.riderId);
       }
 
       const idempotencyKey =
@@ -159,7 +151,6 @@ export async function recordEarning(
           entryType: "DELIVERY_EARNING",
           direction: "CREDIT",
           amount,
-          currency,
           occurredAt,
           description:
             input.description ??
@@ -206,15 +197,9 @@ export async function adjustEarning(
   try {
     return await prisma.$transaction(async (tx) => {
       const rider = await assertEarningRider(tx, input.riderId);
-      let currency = "INR";
 
       if (input.rentalId) {
-        const rental = await assertRentalForRider(
-          tx,
-          input.rentalId,
-          input.riderId
-        );
-        currency = rental.currency;
+        await assertRentalForRider(tx, input.rentalId, input.riderId);
       }
 
       const amount = new Prisma.Decimal(input.amount);
@@ -248,7 +233,6 @@ export async function adjustEarning(
           entryType: "ADJUSTMENT",
           direction: input.direction,
           amount,
-          currency,
           occurredAt: input.occurredAt ?? new Date(),
           description: input.reason,
           sourceType: "EarningsAdjustment",
@@ -391,7 +375,6 @@ export async function getEarningsSummary(query: EarningsSummaryQuery) {
 
   return {
     rider,
-    currency: "INR",
     ...totals,
   };
 }

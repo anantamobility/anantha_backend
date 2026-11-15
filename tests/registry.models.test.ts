@@ -22,7 +22,6 @@ describe("MODEL_REGISTRY", () => {
         ratecard: prismaMock.rateCard,
         earning: prismaMock.ledgerEntry,
         payStatement: prismaMock.riderPayStatement,
-        payout: prismaMock.payout,
         inventory: prismaMock.inventoryMovement,
         dashboard: prismaMock.auditLog,
         report: prismaMock.auditLog,
