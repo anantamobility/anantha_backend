@@ -22,7 +22,6 @@ interface envConfig {
 
   frontendUrl: string;
   logLevel: string;
-  passwordResetMinLength: number;
 }
 
 function numberFromEnv(value: string | undefined, fallback: number) {
@@ -53,7 +52,6 @@ const envConfig: envConfig = {
     smtpPassword: String(process.env.SMTP_PASSWORD || ""),
     frontendUrl: String(process.env.FRONTEND_URL || "http://localhost:5173"),
     logLevel: String(process.env.LOG_LEVEL || "info").toLowerCase(),
-    passwordResetMinLength: numberFromEnv(process.env.PASSWORD_RESET_MIN_LENGTH, 8),
 }
 
 export default envConfig

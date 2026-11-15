@@ -81,7 +81,7 @@ The one row-level rule left is the user policy: a user can read and update their
 3. Validates `newPassword` with the shared password-strength rules.
 4. Hashes and stores the new password, deletes `session:<userId>`, and audits `PASSWORD_RESET`.
 
-Password strength uses `PASSWORD_RESET_MIN_LENGTH` (default `8`) plus the shared letter/number rules from `validatePasswordStrength`.
+Password strength is a fixed minimum of 8 characters plus the shared letter/number rules from `validatePasswordStrength`.
 
 ## Soft deletes
 
