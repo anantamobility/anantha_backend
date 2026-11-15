@@ -18,6 +18,19 @@ const optionalNullableString = (max: number) =>
 
 const currentYear = new Date().getFullYear();
 
+const optionalInt = z.number().int().nonnegative().nullable().optional();
+const optionalDate = z.coerce.date().nullable().optional();
+const optionalMoney = z.number().nonnegative().nullable().optional();
+
+const tyreSchema = z
+  .object({
+    position: optionalNullableString(50),
+    size: optionalNullableString(50),
+    serialNumber: optionalNullableString(100),
+    brand: optionalNullableString(100),
+  })
+  .strict();
+
 const vehicleBaseSchema = z.object({
   registrationNumber: z
     .string()
@@ -38,6 +51,46 @@ const vehicleBaseSchema = z.object({
   vin: optionalNullableString(50),
   acquiredAt: z.coerce.date().nullable().optional(),
   isActive: z.boolean().optional(),
+
+  vehicleCategory: optionalNullableString(100),
+  vehicleType: optionalNullableString(100),
+  seats: z.number().int().positive().nullable().optional(),
+  batteryType: optionalNullableString(100),
+  batteryCapacity: optionalInt,
+  nominalRange: optionalInt,
+  bootSpace: optionalInt,
+  chargingOptions: optionalNullableString(50),
+  chargerProvided: z.boolean().nullable().optional(),
+  noOfTyres: optionalInt,
+  tyres: z.array(tyreSchema).nullable().optional(),
+  batteryNumber: optionalNullableString(100),
+  batteryModelNumber: optionalNullableString(100),
+  batteryBrand: optionalNullableString(100),
+  registrationType: optionalNullableString(50),
+  ownershipType: optionalNullableString(50),
+
+  dateOfPurchase: optionalDate,
+  dateOfDelivery: optionalDate,
+  dateOfRegistration: optionalDate,
+  dateOfOperation: optionalDate,
+  warrantyStartDate: optionalDate,
+  warrantyEndDate: optionalDate,
+  safeCabCertificateExpiryDate: optionalDate,
+  telematicsExpiryDate: optionalDate,
+
+  loanProvider: optionalNullableString(150),
+  emiAmount: optionalMoney,
+  tenurePeriod: optionalInt,
+  emiDueDate: optionalDate,
+
+  insurancePolicyNumber: optionalNullableString(100),
+  insuranceProvider: optionalNullableString(150),
+  insurancePolicyType: optionalNullableString(100),
+  insuranceValidFrom: optionalDate,
+  insuranceValidTo: optionalDate,
+  insurancePremiumAmount: optionalMoney,
+  insuranceStatus: optionalNullableString(50),
+  insuranceThirdParty: optionalNullableString(100),
 });
 
 // Strict objects reject system-managed fields (id, status, version, timestamps,

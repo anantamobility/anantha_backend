@@ -132,7 +132,7 @@ async function main() {
 
   // Create the admin if missing, or ensure the existing
   // admin account is associated with the ADMIN role.
-  await prisma.user.upsert({
+  const admin = await prisma.user.upsert({
     where: { email: adminEmail },
     update: {
       role: {
@@ -140,7 +140,6 @@ async function main() {
       },
     },
     create: {
-      name: 'IT-ADMIN',
       phoneNumber: adminPhone,
       email: adminEmail,
       passwordHash: hashedPassword,
@@ -148,6 +147,19 @@ async function main() {
       role: {
         connect: { id: adminRoleRef.id },
       },
+    },
+  });
+
+  // A user has no name of its own; the staff profile holds it.
+  await prisma.staff.upsert({
+    where: { userId: admin.id },
+    update: { fullName: 'IT-ADMIN', deletedAt: null },
+    create: {
+      userId: admin.id,
+      fullName: 'IT-ADMIN',
+      gender: 'PREFER_NOT_TO_SAY',
+      jobTitle: 'System Administrator',
+      status: 'ACTIVE',
     },
   });
 

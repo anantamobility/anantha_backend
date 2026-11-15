@@ -3,11 +3,11 @@ import type { Prisma } from "../generated/prisma/client.js";
 import {
   AppError,
   ErrorCode,
-  rethrowPrismaError,
 } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
-import { assertHubAccess, resolveHubFilter } from "../utils/scope.js";
-import type { UserContext } from "../types/user.js";
+import { createUserRecord, resolveRole } from "./user.js";
+import { addressInput } from "./rider.js";
+import { generateEmployeeId } from "../utils/idGenerator.js";
 import type {
   CreateStaffInput,
   ListStaffQuery,
@@ -16,42 +16,9 @@ import type {
 
 export const staffUserSelect = {
   id: true,
-  name: true,
   email: true,
   phoneNumber: true,
 } as const;
-
-function staffSnapshot(staff: {
-  fullName: string;
-  userId: string | null;
-  employeeCode: string | null;
-  phoneNumber: string | null;
-  hubId: string | null;
-  jobTitle: string | null;
-  status: string;
-  deletedAt: Date | null;
-}) {
-  return {
-    fullName: staff.fullName,
-    userId: staff.userId,
-    employeeCode: staff.employeeCode,
-    phoneNumber: staff.phoneNumber,
-    hubId: staff.hubId,
-    jobTitle: staff.jobTitle,
-    status: staff.status,
-    deletedAt: staff.deletedAt,
-  };
-}
-
-async function assertUserExists(
-  tx: Prisma.TransactionClient,
-  userId: string
-) {
-  const user = await tx.user.findUnique({ where: { id: userId } });
-  if (!user) {
-    throw new AppError("User not found", 404, ErrorCode.NOT_FOUND);
-  }
-}
 
 async function assertHubExists(
   tx: Prisma.TransactionClient,
@@ -66,31 +33,71 @@ async function assertHubExists(
 export async function createStaff(input: CreateStaffInput, actor: AuditActor) {
   try {
     return await prisma.$transaction(async (tx) => {
-      if (input.userId) await assertUserExists(tx, input.userId);
       if (input.hubId) await assertHubExists(tx, input.hubId);
-      assertHubAccess(actor.user, input.hubId);
+
+      const role = await resolveRole(tx, input);
+      if (role.name === "ADMIN" && actor.userRole !== "ADMIN") {
+        throw new AppError(
+          "Only an administrator can assign the ADMIN role",
+          409,
+          ErrorCode.CONFLICT
+        );
+      }
+
+      const user = await createUserRecord(tx, {
+        phoneNumber: input.phoneNumber,
+        email: input.email,
+        password: input.password,
+        roleId: role.id,
+      });
 
       const data: Prisma.StaffUncheckedCreateInput = {
+        userId: user.id,
         fullName: input.fullName,
-        userId: input.userId ?? null,
-        employeeCode: input.employeeCode ?? null,
-        phoneNumber: input.phoneNumber ?? null,
+        gender: input.gender,
+        dateOfBirth: input.dateOfBirth ?? null,
+        department: input.department ?? null,
+        employeeCode: input.employeeCode ?? (await generateEmployeeId(tx)),
         hubId: input.hubId ?? null,
         jobTitle: input.jobTitle ?? null,
         status: input.status ?? "ACTIVE",
+        alternatePhone: input.alternatePhone ?? null,
+        emergencyContactName: input.emergencyContactName ?? null,
+        emergencyContactPhone: input.emergencyContactPhone ?? null,
+        bloodGroup: input.bloodGroup ?? null,
+        employmentType: input.employmentType ?? null,
+        workMode: input.workMode ?? null,
+        educationalQualification: input.educationalQualification ?? null,
+        anniversary: input.anniversary ?? null,
+        dateOfJoining: input.dateOfJoining ?? null,
+        probationEndDate: input.probationEndDate ?? null,
+        dateOfLastWorkingDay: input.dateOfLastWorkingDay ?? null,
+        dateOfRelieving: input.dateOfRelieving ?? null,
+        aadharNumber: input.aadharNumber ?? null,
+        panNumber: input.panNumber ?? null,
+        bankName: input.bankName ?? null,
+        branch: input.branch ?? null,
+        bankAccountNumber: input.bankAccountNumber ?? null,
+        bankIfsc: input.bankIfsc ?? null,
+        bankHolderName: input.bankHolderName ?? null,
       };
+
+      const address = addressInput(input.address);
+      if (address !== undefined) data.address = address;
 
       const staff = await tx.staff.create({
         data,
         include: { user: { select: staffUserSelect } },
       });
 
+      const { address: _address, ...staffAudit } = staff;
+
       await logAudit({
         ...actor,
         action: "CREATE",
         resource: "Staff",
         resourceId: staff.id,
-        newData: staffSnapshot(staff),
+        newData: staffAudit,
         summary: `${actor.userName} created a staff record for ${staff.fullName}.`,
         db: tx,
         throwOnError: true,
@@ -99,25 +106,25 @@ export async function createStaff(input: CreateStaffInput, actor: AuditActor) {
       return staff;
     });
   } catch (err) {
-    rethrowPrismaError(
+    throw AppError.fromPrisma(
       err,
-      "A staff member with this code or user already exists"
-    );
+      "A staff member with this code, phone number or email already exists"
+    ) ?? err;
   }
 }
 
-export async function listStaff(query: ListStaffQuery, user?: UserContext) {
+export async function listStaff(query: ListStaffQuery) {
   const { page, limit, search, hubId, status } = query;
 
   const where: Prisma.StaffWhereInput = { deletedAt: null };
-  const scopedHubId = resolveHubFilter(user, hubId);
-  if (scopedHubId) where.hubId = scopedHubId;
   if (status) where.status = status;
+  if (hubId) where.hubId = hubId;
   if (search) {
     where.OR = [
       { fullName: { contains: search, mode: "insensitive" } },
       { employeeCode: { contains: search, mode: "insensitive" } },
-      { phoneNumber: { contains: search, mode: "insensitive" } },
+      { user: { phoneNumber: { contains: search, mode: "insensitive" } } },
+      { user: { email: { contains: search, mode: "insensitive" } } },
     ];
   }
 
@@ -143,7 +150,7 @@ export async function listStaff(query: ListStaffQuery, user?: UserContext) {
   };
 }
 
-export async function getStaffById(id: string, user?: UserContext) {
+export async function getStaffById(id: string) {
   const staff = await prisma.staff.findUnique({
     where: { id },
     include: { user: { select: staffUserSelect } },
@@ -153,7 +160,6 @@ export async function getStaffById(id: string, user?: UserContext) {
     throw new AppError("Staff not found", 404, ErrorCode.NOT_FOUND);
   }
 
-  assertHubAccess(user, staff.hubId);
   return staff;
 }
 
@@ -164,23 +170,10 @@ export async function updateStaff(
 ) {
   try {
     return await prisma.$transaction(async (tx) => {
-      const existing = await tx.staff.findUnique({ where: { id } });
+      const existing = await tx.staff.findUnique({ where: { id }, include: { user: { select: staffUserSelect } } });
       if (!existing || existing.deletedAt) {
         throw new AppError("Staff not found", 404, ErrorCode.NOT_FOUND);
       }
-      assertHubAccess(actor.user, existing.hubId);
-      if (input.hubId !== undefined && input.hubId !== null) {
-        assertHubAccess(actor.user, input.hubId);
-      }
-
-      if (
-        input.userId !== undefined &&
-        input.userId !== null &&
-        input.userId !== existing.userId
-      ) {
-        await assertUserExists(tx, input.userId);
-      }
-
       if (
         input.hubId !== undefined &&
         input.hubId !== null &&
@@ -191,16 +184,61 @@ export async function updateStaff(
 
       const data: Prisma.StaffUncheckedUpdateInput = {};
       if (input.fullName !== undefined) data.fullName = input.fullName;
-      if (input.userId !== undefined) data.userId = input.userId;
+      if (input.gender !== undefined) data.gender = input.gender;
+      if (input.dateOfBirth !== undefined) data.dateOfBirth = input.dateOfBirth;
+      if (input.department !== undefined) data.department = input.department;
       if (input.employeeCode !== undefined) {
         data.employeeCode = input.employeeCode;
-      }
-      if (input.phoneNumber !== undefined) {
-        data.phoneNumber = input.phoneNumber;
       }
       if (input.hubId !== undefined) data.hubId = input.hubId;
       if (input.jobTitle !== undefined) data.jobTitle = input.jobTitle;
       if (input.status !== undefined) data.status = input.status;
+      if (input.alternatePhone !== undefined) {
+        data.alternatePhone = input.alternatePhone;
+      }
+      if (input.emergencyContactName !== undefined) {
+        data.emergencyContactName = input.emergencyContactName;
+      }
+      if (input.emergencyContactPhone !== undefined) {
+        data.emergencyContactPhone = input.emergencyContactPhone;
+      }
+      if (input.bloodGroup !== undefined) data.bloodGroup = input.bloodGroup;
+      if (input.employmentType !== undefined) {
+        data.employmentType = input.employmentType;
+      }
+      if (input.workMode !== undefined) data.workMode = input.workMode;
+      if (input.educationalQualification !== undefined) {
+        data.educationalQualification = input.educationalQualification;
+      }
+      if (input.anniversary !== undefined) data.anniversary = input.anniversary;
+      if (input.dateOfJoining !== undefined) {
+        data.dateOfJoining = input.dateOfJoining;
+      }
+      if (input.probationEndDate !== undefined) {
+        data.probationEndDate = input.probationEndDate;
+      }
+      if (input.dateOfLastWorkingDay !== undefined) {
+        data.dateOfLastWorkingDay = input.dateOfLastWorkingDay;
+      }
+      if (input.dateOfRelieving !== undefined) {
+        data.dateOfRelieving = input.dateOfRelieving;
+      }
+      if (input.aadharNumber !== undefined) {
+        data.aadharNumber = input.aadharNumber;
+      }
+      if (input.panNumber !== undefined) data.panNumber = input.panNumber;
+      if (input.bankName !== undefined) data.bankName = input.bankName;
+      if (input.branch !== undefined) data.branch = input.branch;
+      if (input.bankAccountNumber !== undefined) {
+        data.bankAccountNumber = input.bankAccountNumber;
+      }
+      if (input.bankIfsc !== undefined) data.bankIfsc = input.bankIfsc;
+      if (input.bankHolderName !== undefined) {
+        data.bankHolderName = input.bankHolderName;
+      }
+
+      const address = addressInput(input.address);
+      if (address !== undefined) data.address = address;
 
       const staff = await tx.staff.update({
         where: { id },
@@ -208,13 +246,16 @@ export async function updateStaff(
         include: { user: { select: staffUserSelect } },
       });
 
+      const { address: _oldAddress, ...staffBefore } = existing;
+      const { address: _newAddress, ...staffAfter } = staff;
+
       await logAudit({
         ...actor,
         action: "UPDATE",
         resource: "Staff",
         resourceId: staff.id,
-        oldData: staffSnapshot(existing),
-        newData: staffSnapshot(staff),
+        oldData: staffBefore,
+        newData: staffAfter,
         summary: `${actor.userName} updated staff ${staff.fullName}.`,
         db: tx,
         throwOnError: true,
@@ -223,36 +264,39 @@ export async function updateStaff(
       return staff;
     });
   } catch (err) {
-    rethrowPrismaError(
+    throw AppError.fromPrisma(
       err,
-      "A staff member with this code or user already exists"
-    );
+      "A staff member with this code, phone number or email already exists"
+    ) ?? err;
   }
 }
 
 export async function deleteStaff(id: string, actor: AuditActor) {
   try {
     return await prisma.$transaction(async (tx) => {
-      const existing = await tx.staff.findUnique({ where: { id } });
+      const existing = await tx.staff.findUnique({ where: { id }, include: { user: { select: staffUserSelect } } });
       if (!existing || existing.deletedAt) {
         throw new AppError("Staff not found", 404, ErrorCode.NOT_FOUND);
       }
-      assertHubAccess(actor.user, existing.hubId);
 
       // Soft delete preserves payouts, documents, and other historical records.
       // The linked User account is intentionally left untouched.
       const staff = await tx.staff.update({
         where: { id },
         data: { deletedAt: new Date() },
+        include: { user: { select: staffUserSelect } },
       });
+
+      const { address: _oldAddress, ...staffBefore } = existing;
+      const { address: _newAddress, ...staffAfter } = staff;
 
       await logAudit({
         ...actor,
         action: "DELETE",
         resource: "Staff",
         resourceId: staff.id,
-        oldData: staffSnapshot(existing),
-        newData: staffSnapshot(staff),
+        oldData: staffBefore,
+        newData: staffAfter,
         summary: `${actor.userName} deleted staff ${staff.fullName}.`,
         db: tx,
         throwOnError: true,
@@ -261,6 +305,6 @@ export async function deleteStaff(id: string, actor: AuditActor) {
       return staff;
     });
   } catch (err) {
-    rethrowPrismaError(err, "Staff could not be deleted");
+    throw AppError.fromPrisma(err, "Staff could not be deleted") ?? err;
   }
 }

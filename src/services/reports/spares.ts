@@ -29,11 +29,11 @@ const columns = [
 type SpareRow = Awaited<ReturnType<typeof findSpares>>[number];
 
 async function findSpares(
-  where: Prisma.SpareWhereInput,
+  where: Prisma.SparePartWhereInput,
   page?: { skip: number; take: number },
   hubId?: string
 ) {
-  return prisma.spare.findMany({
+  return prisma.sparePart.findMany({
     where,
     select: {
       partNumber: true,
@@ -90,7 +90,7 @@ export async function sparesReport(
   query: SparesReportQuery
 ): Promise<ReportResult> {
   const { startDate, endDate } = reportDateRange(query);
-  const where: Prisma.SpareWhereInput = {
+  const where: Prisma.SparePartWhereInput = {
     createdAt: { gte: startDate, lte: endDate },
   };
 
@@ -127,7 +127,7 @@ export async function sparesReport(
         },
         query.hubId
       ),
-      prisma.spare.count({ where }),
+      prisma.sparePart.count({ where }),
     ]);
     total = count;
     rows = rawRows.map(mapSpare);

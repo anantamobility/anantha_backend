@@ -33,8 +33,7 @@ export const getRentals = async (
 ) => {
   try {
     const result = await rentalService.listRentals(
-      req.query as unknown as ListRentalsQuery,
-      req.user
+      req.query as unknown as ListRentalsQuery
     );
     return success(res, result);
   } catch (err) {
@@ -49,8 +48,7 @@ export const getRentalById = async (
 ) => {
   try {
     const result = await rentalService.getRentalById(
-      req.params.id as string,
-      req.user
+      req.params.id as string
     );
     return success(res, result);
   } catch (err) {

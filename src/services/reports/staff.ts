@@ -34,7 +34,7 @@ export async function staffReport(
     where.OR = [
       { employeeCode: { contains: query.search, mode: "insensitive" } },
       { fullName: { contains: query.search, mode: "insensitive" } },
-      { phoneNumber: { contains: query.search, mode: "insensitive" } },
+      { user: { phoneNumber: { contains: query.search, mode: "insensitive" } } },
       { jobTitle: { contains: query.search, mode: "insensitive" } },
       { user: { email: { contains: query.search, mode: "insensitive" } } },
     ];
@@ -46,11 +46,10 @@ export async function staffReport(
       select: {
         employeeCode: true,
         fullName: true,
-        phoneNumber: true,
         jobTitle: true,
         status: true,
         createdAt: true,
-        user: { select: { email: true } },
+        user: { select: { email: true, phoneNumber: true } },
         hub: { select: { hubCode: true, name: true } },
       },
       orderBy: [{ fullName: "asc" }, { id: "asc" }],
@@ -73,7 +72,7 @@ export async function staffReport(
     rows: rows.map((row) => ({
       employeeCode: row.employeeCode ?? "",
       fullName: row.fullName,
-      phoneNumber: row.phoneNumber ?? "",
+      phoneNumber: row.user?.phoneNumber ?? "",
       email: row.user?.email ?? "",
       jobTitle: row.jobTitle ?? "",
       status: row.status,

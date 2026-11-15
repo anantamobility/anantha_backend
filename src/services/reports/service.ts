@@ -83,8 +83,8 @@ export async function serviceReport(
           },
         },
         rental: { select: { rentalNumber: true } },
-        reportedBy: { select: { name: true } },
-        approvedBy: { select: { name: true } },
+        reportedBy: { select: { staffProfile: { select: { fullName: true } } } },
+        approvedBy: { select: { staffProfile: { select: { fullName: true } } } },
         charges: {
           select: { costAmount: true, billableAmount: true },
         },
@@ -153,8 +153,8 @@ export async function serviceReport(
         costAmount: moneyString(costAmount),
         billableAmount: moneyString(billableAmount),
         sparesCost: moneyString(sparesCost),
-        reportedBy: row.reportedBy?.name ?? "",
-        approvedBy: row.approvedBy?.name ?? "",
+        reportedBy: row.reportedBy?.staffProfile?.fullName ?? "",
+        approvedBy: row.approvedBy?.staffProfile?.fullName ?? "",
         description: row.description ?? "",
       };
     }),

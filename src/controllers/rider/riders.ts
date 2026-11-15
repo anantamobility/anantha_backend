@@ -32,8 +32,7 @@ export const getRiders = async (
 ) => {
   try {
     const result = await riderService.listRiders(
-      req.query as unknown as ListRidersQuery,
-      req.user
+      req.query as unknown as ListRidersQuery
     );
     return success(res, result);
   } catch (err) {
@@ -48,8 +47,7 @@ export const getRiderById = async (
 ) => {
   try {
     const rider = await riderService.getRiderById(
-      req.params.id as string,
-      req.user
+      req.params.id as string
     );
     return success(res, { rider });
   } catch (err) {

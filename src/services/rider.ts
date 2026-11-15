@@ -1,4 +1,3 @@
-import { v4 as uuidv4 } from "uuid";
 import prisma from "../database/prismaClient.js";
 import { Prisma } from "../generated/prisma/client.js";
 import {
@@ -12,11 +11,10 @@ import {
 import {
   AppError,
   ErrorCode,
-  rethrowPrismaError,
 } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
-import { assertHubAccess, resolveHubFilter } from "../utils/scope.js";
-import type { UserContext } from "../types/user.js";
+import { createUserRecord, resolveRole } from "./user.js";
+import { generateRiderId } from "../utils/idGenerator.js";
 import type {
   ChangeRiderStatusInput,
   CreateRiderInput,
@@ -26,7 +24,6 @@ import type {
 
 export const riderUserSelect = {
   id: true,
-  name: true,
   email: true,
   phoneNumber: true,
 } as const;
@@ -51,8 +48,6 @@ export const riderListSelect = {
   userId: true,
   riderCode: true,
   fullName: true,
-  phoneNumber: true,
-  email: true,
   dateOfBirth: true,
   gender: true,
   address: true,
@@ -108,50 +103,6 @@ export const ALLOWED_RIDER_STATUS_TRANSITIONS: Record<
   TERMINATED: [],
 };
 
-type RiderAuditShape = {
-  riderCode: string;
-  fullName: string;
-  userId: string | null;
-  phoneNumber: string | null;
-  email: string | null;
-  dateOfBirth: Date | null;
-  gender: string | null;
-  rentalType: string | null;
-  b2cMode: string | null;
-  b2bRiderMgmt: string | null;
-  clientId: string | null;
-  hubId: string | null;
-  status: RiderStatus;
-  emergencyContactName: string | null;
-  emergencyContactPhone: string | null;
-  onboardedAt: Date | null;
-};
-
-function riderSnapshot(rider: RiderAuditShape) {
-  return {
-    riderCode: rider.riderCode,
-    fullName: rider.fullName,
-    userId: rider.userId,
-    phoneNumber: rider.phoneNumber,
-    email: rider.email,
-    dateOfBirth: rider.dateOfBirth,
-    gender: rider.gender,
-    rentalType: rider.rentalType,
-    b2cMode: rider.b2cMode,
-    b2bRiderMgmt: rider.b2bRiderMgmt,
-    clientId: rider.clientId,
-    hubId: rider.hubId,
-    status: rider.status,
-    emergencyContactName: rider.emergencyContactName,
-    emergencyContactPhone: rider.emergencyContactPhone,
-    onboardedAt: rider.onboardedAt,
-  };
-}
-
-function generateRiderCode() {
-  return `RDR-${uuidv4().replace(/-/g, "").slice(0, 8).toUpperCase()}`;
-}
-
 function validateClassification(
   rentalType: RentalType | null | undefined,
   b2cMode: B2CMode | null | undefined,
@@ -202,13 +153,6 @@ function validateClassification(
   }
 }
 
-async function assertUserExists(tx: Prisma.TransactionClient, userId: string) {
-  const user = await tx.user.findUnique({ where: { id: userId } });
-  if (!user) {
-    throw new AppError("User not found", 404, ErrorCode.NOT_FOUND);
-  }
-}
-
 async function assertHubExists(tx: Prisma.TransactionClient, hubId: string) {
   const hub = await tx.hub.findUnique({ where: { id: hubId } });
   if (!hub) {
@@ -226,7 +170,7 @@ async function assertClientExists(
   }
 }
 
-function addressInput(
+export function addressInput(
   address: Record<string, unknown> | null | undefined
 ): Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput | undefined {
   if (address === undefined) return undefined;
@@ -240,10 +184,8 @@ export async function createRider(
 ) {
   try {
     return await prisma.$transaction(async (tx) => {
-      if (input.userId) await assertUserExists(tx, input.userId);
       if (input.hubId) await assertHubExists(tx, input.hubId);
       if (input.clientId) await assertClientExists(tx, input.clientId);
-      assertHubAccess(actor.user, input.hubId);
 
       validateClassification(
         input.rentalType,
@@ -252,12 +194,29 @@ export async function createRider(
         input.clientId ?? null
       );
 
-      const data: Prisma.RiderUncheckedCreateInput = {
-        riderCode: input.riderCode ?? generateRiderCode(),
-        fullName: input.fullName,
-        userId: input.userId ?? null,
+      const role = await resolveRole(tx, { roleName: "RIDER" });
+      const user = await createUserRecord(tx, {
         phoneNumber: input.phoneNumber,
-        email: input.email ?? null,
+        email: input.email,
+        password: input.password,
+        roleId: role.id,
+      });
+
+      const data: Prisma.RiderUncheckedCreateInput = {
+        riderCode: input.riderCode ?? (await generateRiderId(tx)),
+        fullName: input.fullName,
+        userId: user.id,
+        aadharNumber: input.aadharNumber ?? null,
+        panNumber: input.panNumber ?? null,
+        licenseNumber: input.licenseNumber ?? null,
+        medicalReportExpiryDate: input.medicalReportExpiryDate ?? null,
+        agreementDate: input.agreementDate ?? null,
+        policeVerificationValidUpto: input.policeVerificationValidUpto ?? null,
+        backgroundVerificationExpiryDate:
+          input.backgroundVerificationExpiryDate ?? null,
+        dateOfLastWorkingDay: input.dateOfLastWorkingDay ?? null,
+        bankName: input.bankName ?? null,
+        branch: input.branch ?? null,
         dateOfBirth: input.dateOfBirth ?? null,
         gender: input.gender ?? null,
         emergencyContactName: input.emergencyContactName ?? null,
@@ -279,13 +238,14 @@ export async function createRider(
         data,
         select: riderDetailSelect,
       });
+      const { address: _address, ...riderAudit } = rider;
 
       await logAudit({
         ...actor,
         action: "CREATE",
         resource: "Rider",
         resourceId: rider.id,
-        newData: riderSnapshot(rider),
+        newData: riderAudit,
         summary: `${actor.userName} onboarded rider ${rider.fullName}.`,
         db: tx,
         throwOnError: true,
@@ -294,14 +254,14 @@ export async function createRider(
       return rider;
     });
   } catch (err) {
-    rethrowPrismaError(
+    throw AppError.fromPrisma(
       err,
-      "A rider with this code or user already exists"
-    );
+      "A rider with this code, phone number or email already exists"
+    ) ?? err;
   }
 }
 
-export async function listRiders(query: ListRidersQuery, user?: UserContext) {
+export async function listRiders(query: ListRidersQuery) {
   const {
     page,
     limit,
@@ -320,15 +280,14 @@ export async function listRiders(query: ListRidersQuery, user?: UserContext) {
   if (b2cMode) where.b2cMode = b2cMode;
   if (b2bRiderMgmt) where.b2bRiderMgmt = b2bRiderMgmt;
   if (clientId) where.clientId = clientId;
-  const scopedHubId = resolveHubFilter(user, hubId);
-  if (scopedHubId) where.hubId = scopedHubId;
+  if (hubId) where.hubId = hubId;
 
   if (search) {
     where.OR = [
       { fullName: { contains: search, mode: "insensitive" } },
       { riderCode: { contains: search, mode: "insensitive" } },
-      { phoneNumber: { contains: search, mode: "insensitive" } },
-      { email: { contains: search, mode: "insensitive" } },
+      { user: { phoneNumber: { contains: search, mode: "insensitive" } } },
+      { user: { email: { contains: search, mode: "insensitive" } } },
     ];
   }
 
@@ -358,7 +317,7 @@ export async function listRiders(query: ListRidersQuery, user?: UserContext) {
   };
 }
 
-export async function getRiderById(id: string, user?: UserContext) {
+export async function getRiderById(id: string) {
   const rider = await prisma.rider.findUnique({
     where: { id },
     select: { ...riderDetailSelect, deletedAt: true },
@@ -368,7 +327,6 @@ export async function getRiderById(id: string, user?: UserContext) {
     throw new AppError("Rider not found", 404, ErrorCode.NOT_FOUND);
   }
 
-  assertHubAccess(user, rider.hubId);
   const { deletedAt: _deletedAt, ...safeRider } = rider;
   return safeRider;
 }
@@ -384,17 +342,7 @@ export async function updateRider(
       if (!existing || existing.deletedAt) {
         throw new AppError("Rider not found", 404, ErrorCode.NOT_FOUND);
       }
-      assertHubAccess(actor.user, existing.hubId);
       if (input.hubId !== undefined && input.hubId !== null) {
-        assertHubAccess(actor.user, input.hubId);
-      }
-
-      if (
-        input.userId !== undefined &&
-        input.userId !== null &&
-        input.userId !== existing.userId
-      ) {
-        await assertUserExists(tx, input.userId);
       }
 
       if (
@@ -437,12 +385,28 @@ export async function updateRider(
 
       const data: Prisma.RiderUncheckedUpdateInput = {};
       if (input.fullName !== undefined) data.fullName = input.fullName;
-      if (input.userId !== undefined) data.userId = input.userId;
       if (input.riderCode !== undefined) data.riderCode = input.riderCode;
-      if (input.phoneNumber !== undefined) {
-        data.phoneNumber = input.phoneNumber;
+      if (input.aadharNumber !== undefined) data.aadharNumber = input.aadharNumber;
+      if (input.panNumber !== undefined) data.panNumber = input.panNumber;
+      if (input.licenseNumber !== undefined) data.licenseNumber = input.licenseNumber;
+      if (input.medicalReportExpiryDate !== undefined) {
+        data.medicalReportExpiryDate = input.medicalReportExpiryDate;
       }
-      if (input.email !== undefined) data.email = input.email;
+      if (input.agreementDate !== undefined) {
+        data.agreementDate = input.agreementDate;
+      }
+      if (input.policeVerificationValidUpto !== undefined) {
+        data.policeVerificationValidUpto = input.policeVerificationValidUpto;
+      }
+      if (input.backgroundVerificationExpiryDate !== undefined) {
+        data.backgroundVerificationExpiryDate =
+          input.backgroundVerificationExpiryDate;
+      }
+      if (input.dateOfLastWorkingDay !== undefined) {
+        data.dateOfLastWorkingDay = input.dateOfLastWorkingDay;
+      }
+      if (input.bankName !== undefined) data.bankName = input.bankName;
+      if (input.branch !== undefined) data.branch = input.branch;
       if (input.dateOfBirth !== undefined) {
         data.dateOfBirth = input.dateOfBirth;
       }
@@ -470,13 +434,16 @@ export async function updateRider(
         select: riderDetailSelect,
       });
 
+      const { address: _oldAddress, ...riderBefore } = existing;
+      const { address: _newAddress, ...riderAfter } = rider;
+
       await logAudit({
         ...actor,
         action: "UPDATE",
         resource: "Rider",
         resourceId: rider.id,
-        oldData: riderSnapshot(existing),
-        newData: riderSnapshot(rider),
+        oldData: riderBefore,
+        newData: riderAfter,
         summary: `${actor.userName} updated rider ${rider.fullName}.`,
         db: tx,
         throwOnError: true,
@@ -485,10 +452,10 @@ export async function updateRider(
       return rider;
     });
   } catch (err) {
-    rethrowPrismaError(
+    throw AppError.fromPrisma(
       err,
-      "A rider with this code or user already exists"
-    );
+      "A rider with this code, phone number or email already exists"
+    ) ?? err;
   }
 }
 
@@ -503,7 +470,6 @@ export async function changeRiderStatus(
       if (!rider || rider.deletedAt) {
         throw new AppError("Rider not found", 404, ErrorCode.NOT_FOUND);
       }
-      assertHubAccess(actor.user, rider.hubId);
 
       const previousStatus = rider.status;
       const nextStatus = input.status as RiderStatus;
@@ -556,16 +522,17 @@ export async function changeRiderStatus(
         statusChangedAt,
         version: rider.version + 1,
       };
+      const { address: _oldAddress, ...riderBefore } = rider;
+      const { address: _newAddress, ...riderAfter } = updatedRider;
 
       await logAudit({
         ...actor,
         action: "UPDATE",
         resource: "Rider",
         resourceId: id,
-        oldData: { status: previousStatus },
+        oldData: riderBefore,
         newData: {
-          status: nextStatus,
-          previousStatus,
+          ...riderAfter,
           reason: input.reason ?? null,
         },
         summary: `${actor.userName} changed rider ${rider.riderCode} status from ${previousStatus} to ${nextStatus}.`,
@@ -576,7 +543,7 @@ export async function changeRiderStatus(
       return { rider: updatedRider };
     });
   } catch (err) {
-    rethrowPrismaError(err, "Rider status could not be changed");
+    throw AppError.fromPrisma(err, "Rider status could not be changed") ?? err;
   }
 }
 
@@ -587,7 +554,6 @@ export async function deleteRider(id: string, actor: AuditActor) {
       if (!existing || existing.deletedAt) {
         throw new AppError("Rider not found", 404, ErrorCode.NOT_FOUND);
       }
-      assertHubAccess(actor.user, existing.hubId);
 
       const activeRentals = await tx.rental.count({
         where: {
@@ -649,13 +615,16 @@ export async function deleteRider(id: string, actor: AuditActor) {
         select: riderDetailSelect,
       });
 
+      const { address: _oldAddress, ...riderBefore } = existing;
+      const { address: _newAddress, ...riderAfter } = rider;
+
       await logAudit({
         ...actor,
         action: "DELETE",
         resource: "Rider",
         resourceId: rider.id,
-        oldData: riderSnapshot(existing),
-        newData: { deletedAt },
+        oldData: riderBefore,
+        newData: riderAfter,
         summary: `${actor.userName} soft-deleted rider ${existing.fullName}.`,
         db: tx,
         throwOnError: true,
@@ -664,6 +633,6 @@ export async function deleteRider(id: string, actor: AuditActor) {
       return rider;
     });
   } catch (err) {
-    rethrowPrismaError(err, "Rider could not be deleted");
+    throw AppError.fromPrisma(err, "Rider could not be deleted") ?? err;
   }
 }

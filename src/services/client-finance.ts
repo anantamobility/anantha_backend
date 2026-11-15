@@ -4,7 +4,6 @@ import prisma from "../database/prismaClient.js";
 import {
   AppError,
   ErrorCode,
-  rethrowPrismaError,
 } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import { toDecimal } from "./rental-schedule.js";
@@ -322,7 +321,7 @@ export async function generateClientDues(
       };
     });
   } catch (err) {
-    rethrowPrismaError(err, "Client dues could not be generated");
+    throw AppError.fromPrisma(err, "Client dues could not be generated") ?? err;
   }
 }
 
@@ -538,7 +537,7 @@ export async function recordClientPayment(
       return { collections, allocations, summary, duplicate: false };
     });
   } catch (err) {
-    rethrowPrismaError(err, "Client payment could not be recorded");
+    throw AppError.fromPrisma(err, "Client payment could not be recorded") ?? err;
   }
 }
 

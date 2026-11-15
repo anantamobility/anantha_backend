@@ -4,7 +4,6 @@ import prisma from "../database/prismaClient.js";
 import {
   AppError,
   ErrorCode,
-  rethrowPrismaError,
 } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import { deriveServiceChargeAllocation } from "./inventory.js";
@@ -479,7 +478,7 @@ export async function createService(
       return service;
     });
   } catch (err) {
-    rethrowPrismaError(err, "Service order could not be created");
+    throw AppError.fromPrisma(err, "Service order could not be created") ?? err;
   }
 }
 
@@ -798,7 +797,7 @@ export async function startService(
       return { service: refreshed, costSummary: summarizeServiceCost(refreshed) };
     });
   } catch (err) {
-    rethrowPrismaError(err, "Service could not be started");
+    throw AppError.fromPrisma(err, "Service could not be started") ?? err;
   }
 }
 
@@ -1445,10 +1444,10 @@ export async function assignReplacement(
       return { service: refreshed, replacementAssignment: assignment };
     });
   } catch (err) {
-    rethrowPrismaError(
+    throw AppError.fromPrisma(
       err,
       "A replacement vehicle is already active for this service or vehicle"
-    );
+    ) ?? err;
   }
 }
 
@@ -1731,6 +1730,6 @@ export async function createServiceCharge(
       return { charge, duplicate: false };
     });
   } catch (err) {
-    rethrowPrismaError(err, "Service charge could not be created");
+    throw AppError.fromPrisma(err, "Service charge could not be created") ?? err;
   }
 }

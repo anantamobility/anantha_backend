@@ -4,7 +4,6 @@ import prisma from "../database/prismaClient.js";
 import {
   AppError,
   ErrorCode,
-  rethrowPrismaError,
 } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import { toDecimal } from "./rental-schedule.js";
@@ -186,7 +185,7 @@ export async function recordEarning(
       return { entry, duplicate: false };
     });
   } catch (err) {
-    rethrowPrismaError(err, "An earning with this reference already exists");
+    throw AppError.fromPrisma(err, "An earning with this reference already exists") ?? err;
   }
 }
 
@@ -265,7 +264,7 @@ export async function adjustEarning(
       return { entry, duplicate: false };
     });
   } catch (err) {
-    rethrowPrismaError(err, "An earning adjustment with this key already exists");
+    throw AppError.fromPrisma(err, "An earning adjustment with this key already exists") ?? err;
   }
 }
 

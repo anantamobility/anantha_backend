@@ -279,7 +279,6 @@ Role defaults:
 
 - `ADMIN` receives every action.
 - `SUPERVISOR` receives the full service, spare and inventory workflow.
-- `OPERATOR` receives `service:read`, `spare:read` and `inventory:read` only.
 
 Movement list filters: `page`, `limit`, `spareId`, `hubId`, `serviceId`, `movementType`, `from`, `to`, `sortBy` (`movedAt`, `quantity`, `createdAt`), `sortOrder`.
 

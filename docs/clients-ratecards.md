@@ -60,19 +60,19 @@ Once any rental references a ratecard (`Rental.rateCardId`), the ratecard's comm
 
 ## Endpoints
 
-All routes require a bearer token. `PUT` is a compatibility alias for `PATCH` on client and ratecard update routes.
+All routes require a bearer token.
 
 | Method | Path | Permission |
 | --- | --- | --- |
 | `POST` | `/clients` | `client:create` |
 | `GET` | `/clients` | `client:read` |
 | `GET` | `/clients/:id` | `client:read` |
-| `PATCH` / `PUT` | `/clients/:id` | `client:update` |
+| `PATCH` | `/clients/:id` | `client:update` |
 | `PATCH` | `/clients/:id/status` | `client:status:update` |
 | `POST` | `/ratecards` | `ratecard:create` |
 | `GET` | `/ratecards` | `ratecard:read` |
 | `GET` | `/ratecards/:id` | `ratecard:read` |
-| `PATCH` / `PUT` | `/ratecards/:id` | `ratecard:update` |
+| `PATCH` | `/ratecards/:id` | `ratecard:update` |
 | `PATCH` | `/ratecards/:id/status` | `ratecard:status:update` |
 
 ### Ratecard queries
@@ -137,11 +137,8 @@ curl -X POST "$BASE_URL/ratecards" \
 
 ```json
 {
-  "success": false,
-  "error": {
-    "code": "CONFLICT",
-    "message": "Ratecard is not active for the requested date"
-  }
+  "code": "CONFLICT",
+  "message": "Ratecard is not active for the requested date"
 }
 ```
 
@@ -155,7 +152,7 @@ curl -X POST "$BASE_URL/ratecards" \
 
 ## Permissions
 
-`ADMIN` and `SUPERVISOR` may manage clients and ratecards. `OPERATOR` receives `client:read` only; ratecard pricing is not visible to `OPERATOR`.
+`ADMIN` and `SUPERVISOR` may manage clients and ratecards.
 
 ## Audit
 

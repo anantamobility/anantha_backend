@@ -6,12 +6,11 @@ import {
   DocumentType,
   Prisma,
 } from "../generated/prisma/client.js";
-import { storage } from "../storage/index.js";
+import { deleteDocument, uploadDocument } from "../storage/cloudinary.js";
 import { safeDocumentExtension } from "../storage/mime.js";
 import {
   AppError,
   ErrorCode,
-  rethrowPrismaError,
 } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import type {
@@ -26,8 +25,7 @@ export const riderDocumentSelect = {
   fileName: true,
   mimeType: true,
   fileSize: true,
-  storageKey: true,
-  storageBucket: true,
+  url: true,
   issueDate: true,
   expiryDate: true,
   documentNumber: true,
@@ -129,9 +127,11 @@ export async function uploadRiderDocument(
   const extension = safeDocumentExtension(file.originalname, file.mimetype);
 
   const documentId = uuidv4();
-  const storageKey = `riders/${riderId}/${documentId}${extension}`;
-
-  await storage.put(storageKey, file.buffer, file.mimetype);
+  const url = await uploadDocument(
+    file.buffer,
+    `anantha_file_storage/riders/${riderId}`,
+    `${documentId}${extension}`
+  );
 
   try {
     return await prisma.$transaction(async (tx) => {
@@ -143,8 +143,7 @@ export async function uploadRiderDocument(
           fileName: basename(file.originalname).slice(0, 255),
           mimeType: file.mimetype,
           fileSize: file.size,
-          storageKey,
-          storageBucket: null,
+          url,
           issueDate: metadata.issueDate ?? null,
           expiryDate: metadata.expiryDate ?? null,
           riderId,
@@ -174,8 +173,8 @@ export async function uploadRiderDocument(
     });
   } catch (err) {
     // Do not leave an orphaned file if the metadata write fails.
-    await storage.delete(storageKey).catch(() => undefined);
-    rethrowPrismaError(err, "Document metadata could not be saved");
+    await deleteDocument(url).catch(() => undefined);
+    throw AppError.fromPrisma(err, "Document metadata could not be saved") ?? err;
   }
 }
 
@@ -216,23 +215,23 @@ export async function deleteRiderDocument(
           riderId,
           documentType: existing.documentType,
           title: existing.title,
-          storageKey: existing.storageKey,
+          url: existing.url,
         },
         summary: `${actor.userName} deleted a ${existing.documentType} document for rider ${riderId}.`,
         db: tx,
         throwOnError: true,
       });
 
-      return { document, storageKey: existing.storageKey };
+      return { document, url: existing.url };
     });
 
-    await storage.delete(deleted.storageKey).catch((err) => {
+    await deleteDocument(deleted.url).catch((err) => {
       console.error("Failed to remove document from storage:", err?.message);
     });
 
     return deleted.document;
   } catch (err) {
-    rethrowPrismaError(err, "Document could not be deleted");
+    throw AppError.fromPrisma(err, "Document could not be deleted") ?? err;
   }
 }
 
@@ -241,6 +240,5 @@ export async function downloadRiderDocument(
   documentId: string
 ) {
   const document = await getRiderDocument(riderId, documentId);
-  const buffer = await storage.get(document.storageKey);
-  return { document, buffer };
+  return { document, url: document.url };
 }

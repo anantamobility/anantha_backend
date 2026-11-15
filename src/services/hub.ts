@@ -3,11 +3,9 @@ import { Prisma } from "../generated/prisma/client.js";
 import {
   AppError,
   ErrorCode,
-  rethrowPrismaError,
 } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
-import { assertHubAccess, isAdmin, actorHubId } from "../utils/scope.js";
-import type { UserContext } from "../types/user.js";
+import { stateCodeFor } from "../utils/indianStates.js";
 import type {
   CreateHubInput,
   ListHubsQuery,
@@ -20,32 +18,11 @@ const hubDependencySelect = {
   riders: true,
   rentals: true,
   assignments: true,
+  contracts: true,
   inventoryBalances: true,
   movementsFrom: true,
   movementsTo: true,
 } as const;
-
-function hubSnapshot(hub: {
-  name: string;
-  hubCode: string;
-  city: string;
-  state: string;
-  address: unknown;
-  contactPhone: string | null;
-  contactEmail: string | null;
-  isActive: boolean;
-}) {
-  return {
-    name: hub.name,
-    code: hub.hubCode,
-    city: hub.city,
-    state: hub.state,
-    address: hub.address,
-    contactPhone: hub.contactPhone,
-    contactEmail: hub.contactEmail,
-    isActive: hub.isActive,
-  };
-}
 
 function toJsonValue(
   value: CreateHubInput["address"]
@@ -55,12 +32,41 @@ function toJsonValue(
   return value as Prisma.InputJsonValue;
 }
 
+function hubCodePrefix(state: string, city: string) {
+  const stateCode = stateCodeFor(state);
+  if (!stateCode) {
+    throw new AppError(
+      `Unknown state "${state}". Use the full Indian state or union territory name.`,
+      400,
+      ErrorCode.VALIDATION_ERROR
+    );
+  }
+
+  const cityCode = city.replace(/[^a-zA-Z]/g, "").slice(0, 3).toUpperCase();
+  return `${stateCode}-${cityCode}-`;
+}
+
+async function nextHubCode(tx: Prisma.TransactionClient, prefix: string) {
+  const lastHub = await tx.hub.findFirst({
+    where: { hubCode: { startsWith: prefix, mode: "insensitive" } },
+    orderBy: { hubCode: "desc" },
+    select: { hubCode: true },
+  });
+
+  const lastNumber = lastHub ? Number.parseInt(lastHub.hubCode.slice(prefix.length), 10) : 0;
+  const nextNumber = Number.isFinite(lastNumber) && lastNumber > 0 ? lastNumber + 1 : 1;
+  return `${prefix}${String(nextNumber).padStart(3, "0")}`;
+}
+
 export async function createHub(input: CreateHubInput, actor: AuditActor) {
   try {
     return await prisma.$transaction(async (tx) => {
+      const prefix = hubCodePrefix(input.state, input.city);
+      const hubCode = await nextHubCode(tx, prefix);
+
       const data: Prisma.HubCreateInput = {
         name: input.name,
-        hubCode: input.code,
+        hubCode,
         city: input.city,
         state: input.state,
         isActive: input.isActive ?? true,
@@ -71,13 +77,14 @@ export async function createHub(input: CreateHubInput, actor: AuditActor) {
       if (input.contactEmail !== undefined) data.contactEmail = input.contactEmail;
 
       const hub = await tx.hub.create({ data });
+      const { address: _address, ...hubAudit } = hub;
 
       await logAudit({
         ...actor,
         action: "CREATE",
         resource: "Hub",
         resourceId: hub.id,
-        newData: hubSnapshot(hub),
+        newData: hubAudit,
         summary: `${actor.userName} created hub ${hub.name}.`,
         db: tx,
         throwOnError: true,
@@ -86,16 +93,14 @@ export async function createHub(input: CreateHubInput, actor: AuditActor) {
       return hub;
     });
   } catch (err) {
-    rethrowPrismaError(err, "A hub with this name or code already exists");
+    throw AppError.fromPrisma(err, "A hub with this name or code already exists") ?? err;
   }
 }
 
-export async function listHubs(query: ListHubsQuery, user?: UserContext) {
+export async function listHubs(query: ListHubsQuery) {
   const { page, limit, search, isActive } = query;
 
   const where: Prisma.HubWhereInput = {};
-  const scopedHubId = user && !isAdmin(user) ? actorHubId(user) : null;
-  if (scopedHubId) where.id = scopedHubId;
   if (typeof isActive === "boolean") where.isActive = isActive;
   if (search) {
     where.OR = [
@@ -126,7 +131,7 @@ export async function listHubs(query: ListHubsQuery, user?: UserContext) {
   };
 }
 
-export async function getHubById(id: string, user?: UserContext) {
+export async function getHubById(id: string) {
   const hub = await prisma.hub.findUnique({
     where: { id },
     include: {
@@ -140,26 +145,19 @@ export async function getHubById(id: string, user?: UserContext) {
     throw new AppError("Hub not found", 404, ErrorCode.NOT_FOUND);
   }
 
-  assertHubAccess(user, hub.id);
   return hub;
 }
 
-export async function updateHub(
-  id: string,
-  input: UpdateHubInput,
-  actor: AuditActor
-) {
+export async function updateHub(id: string, input: UpdateHubInput, actor: AuditActor) {
   try {
     return await prisma.$transaction(async (tx) => {
       const existing = await tx.hub.findUnique({ where: { id } });
       if (!existing) {
         throw new AppError("Hub not found", 404, ErrorCode.NOT_FOUND);
       }
-      assertHubAccess(actor.user, existing.id);
 
       const data: Prisma.HubUpdateInput = {};
       if (input.name !== undefined) data.name = input.name;
-      if (input.code !== undefined) data.hubCode = input.code;
       if (input.city !== undefined) data.city = input.city;
       if (input.state !== undefined) data.state = input.state;
       if (input.address !== undefined) data.address = toJsonValue(input.address);
@@ -173,13 +171,16 @@ export async function updateHub(
 
       const hub = await tx.hub.update({ where: { id }, data });
 
+      const { address: _oldAddress, ...hubBefore } = existing;
+      const { address: _newAddress, ...hubAfter } = hub;
+
       await logAudit({
         ...actor,
         action: "UPDATE",
         resource: "Hub",
         resourceId: hub.id,
-        oldData: hubSnapshot(existing),
-        newData: hubSnapshot(hub),
+        oldData: hubBefore,
+        newData: hubAfter,
         summary: `${actor.userName} updated hub ${hub.name}.`,
         db: tx,
         throwOnError: true,
@@ -188,7 +189,7 @@ export async function updateHub(
       return hub;
     });
   } catch (err) {
-    rethrowPrismaError(err, "A hub with this name or code already exists");
+    throw AppError.fromPrisma(err, "A hub with this name or code already exists") ?? err;
   }
 }
 
@@ -203,7 +204,6 @@ export async function deleteHub(id: string, actor: AuditActor) {
       if (!hub) {
         throw new AppError("Hub not found", 404, ErrorCode.NOT_FOUND);
       }
-      assertHubAccess(actor.user, hub.id);
 
       const dependencyCount = Object.values(hub._count).reduce(
         (total, count) => total + count,
@@ -220,12 +220,14 @@ export async function deleteHub(id: string, actor: AuditActor) {
 
       await tx.hub.delete({ where: { id } });
 
+      const { address: _address, ...hubAudit } = hub;
+
       await logAudit({
         ...actor,
         action: "DELETE",
         resource: "Hub",
         resourceId: hub.id,
-        oldData: hubSnapshot(hub),
+        oldData: hubAudit,
         summary: `${actor.userName} deleted hub ${hub.name}.`,
         db: tx,
         throwOnError: true,
@@ -234,6 +236,6 @@ export async function deleteHub(id: string, actor: AuditActor) {
       return hub;
     });
   } catch (err) {
-    rethrowPrismaError(err, "Hub could not be deleted");
+    throw AppError.fromPrisma(err, "Hub could not be deleted") ?? err;
   }
 }

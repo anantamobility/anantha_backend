@@ -20,57 +20,49 @@ import {
 
 const r = Router();
 
-// r.post(
-//   "/",
-//   verifyToken,
-//   authorize("ratecard", "create"),
-//   validate(createRateCardSchema),
-//   createRateCard
-// );
-// r.get(
-//   "/",
-//   verifyToken,
-//   authorize("ratecard", "read", { policy: false }),
-//   validate(listRateCardsQuerySchema, "query"),
-//   getRateCards
-// );
-// r.patch(
-//   "/:id/status",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("ratecard", "status:update"),
-//   validate(changeRateCardStatusSchema),
-//   changeRateCardStatus
-// );
-// r.get(
-//   "/:id",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("ratecard", "read"),
-//   getRateCardById
-// );
-// r.patch(
-//   "/:id",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("ratecard", "update"),
-//   validate(updateRateCardSchema),
-//   updateRateCard
-// );
-// r.put(
-//   "/:id",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("ratecard", "update"),
-//   validate(updateRateCardSchema),
-//   updateRateCard
-// );
-// r.delete(
-//   "/:id",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("ratecard", "delete"),
-//   deleteRateCard
-// );
+r.post(
+  "/",
+  verifyToken,
+  authorize("ratecard", "create"),
+  validate(createRateCardSchema),
+  createRateCard
+);
+r.get(
+  "/",
+  verifyToken,
+  authorize("ratecard", "read", { policy: false }),
+  validate(listRateCardsQuerySchema, "query"),
+  getRateCards
+);
+r.patch(
+  "/:id/status",
+  verifyToken,
+  validate(idParamSchema, "params"),
+  authorize("ratecard", "status:update"),
+  validate(changeRateCardStatusSchema),
+  changeRateCardStatus
+);
+r.get(
+  "/:id",
+  verifyToken,
+  validate(idParamSchema, "params"),
+  authorize("ratecard", "read"),
+  getRateCardById
+);
+r.patch(
+  "/:id",
+  verifyToken,
+  validate(idParamSchema, "params"),
+  authorize("ratecard", "update"),
+  validate(updateRateCardSchema),
+  updateRateCard
+);
+r.delete(
+  "/:id",
+  verifyToken,
+  validate(idParamSchema, "params"),
+  authorize("ratecard", "delete"),
+  deleteRateCard
+);
 
 export default r;

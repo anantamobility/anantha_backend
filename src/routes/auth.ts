@@ -3,7 +3,6 @@ import {
   login,
   logout,
   refresh,
-  signUp,
   changePass,
 } from "../controllers/users/auth.js";
 import { Router } from "express";
@@ -17,18 +16,11 @@ import {
 
 const r = Router();
 
-// r.post("/signup", signUp);
-// r.post("/login", login);
-// r.post("/logout", logout);
-// r.post("/tokenRefresh", refresh);
-// r.post("/change-password", verifyToken, changePass);
-// r.post(
-//   "/reset-password/:userId",
-//   verifyToken,
-//   validate(adminResetPasswordParamSchema, "params"),
-//   authorize("user", "resetPassword", { policy: false, idParam: "userId" }),
-//   validate(adminResetPasswordBodySchema),
-//   adminResetPassword
-// );
+r.post("/login", login);
+r.post("/logout", logout);
+r.post("/tokenRefresh", refresh);
+r.post("/change-password", verifyToken, changePass);
+r.post("/reset-password/:userId", verifyToken, validate(adminResetPasswordParamSchema, "params"), 
+  authorize("user", "resetPassword", { policy: false }), validate(adminResetPasswordBodySchema), adminResetPassword);
 
 export default r;

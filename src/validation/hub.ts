@@ -6,7 +6,6 @@ const optionalNullableString = (max: number) =>
 
 export const createHubSchema = z.object({
   name: z.string().trim().min(1, "name is required").max(150),
-  code: z.string().trim().min(1, "code is required").max(30),
   city: z.string().trim().min(1, "city is required").max(100),
   state: z.string().trim().min(1, "state is required").max(100),
   address: z.json().nullable().optional(),

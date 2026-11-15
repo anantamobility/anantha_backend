@@ -63,29 +63,12 @@ export const downloadRiderDocument = async (
   next: NextFunction
 ) => {
   try {
-    const { document, buffer } =
-      await documentService.downloadRiderDocument(
-        req.params.id as string,
-        req.params.documentId as string
-      );
-
-    const fileName = (document.fileName || `document-${document.id}`).replace(
-      /["\r\n]/g,
-      "_"
+    const { url } = await documentService.downloadRiderDocument(
+      req.params.id as string,
+      req.params.documentId as string
     );
 
-    res.setHeader(
-      "Content-Type",
-      document.mimeType || "application/octet-stream"
-    );
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="${fileName}"`
-    );
-    res.setHeader("Content-Length", String(buffer.length));
-    res.setHeader("Cache-Control", "private, no-store");
-    res.setHeader("X-Content-Type-Options", "nosniff");
-    return res.send(buffer);
+    return res.redirect(url);
   } catch (err) {
     next(err);
   }

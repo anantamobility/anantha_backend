@@ -31,8 +31,7 @@ export const getStaff = async (
 ) => {
   try {
     const result = await staffService.listStaff(
-      req.query as unknown as ListStaffQuery,
-      req.user
+      req.query as unknown as ListStaffQuery
     );
     return success(res, result);
   } catch (err) {
@@ -47,8 +46,7 @@ export const getStaffById = async (
 ) => {
   try {
     const staff = await staffService.getStaffById(
-      req.params.id as string,
-      req.user
+      req.params.id as string
     );
     return success(res, { staff });
   } catch (err) {

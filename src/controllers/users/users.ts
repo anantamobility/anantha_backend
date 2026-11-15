@@ -5,26 +5,9 @@ import * as userService from "../../services/user.js";
 import type {
   AssignUserRoleInput,
   ChangeUserStatusInput,
-  CreateUserInput,
   ListUsersQuery,
   UpdateUserInput,
 } from "../../validation/user.js";
-
-export const createUser = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const user = await userService.createUser(
-      req.body as CreateUserInput,
-      getAuditActor(req)
-    );
-    return success(res, { user }, 201);
-  } catch (err) {
-    next(err);
-  }
-};
 
 export const getUsers = async (
   req: Request,
@@ -33,8 +16,7 @@ export const getUsers = async (
 ) => {
   try {
     const result = await userService.listUsers(
-      req.query as unknown as ListUsersQuery,
-      req.user
+      req.query as unknown as ListUsersQuery
     );
     return success(res, result);
   } catch (err) {
@@ -49,8 +31,7 @@ export const getUserById = async (
 ) => {
   try {
     const user = await userService.getUserById(
-      req.params.id as string,
-      req.user
+      req.params.id as string
     );
     return success(res, { user });
   } catch (err) {

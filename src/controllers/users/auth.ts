@@ -9,6 +9,7 @@ import { validatePasswordStrength } from "../../validation/auth.js";
 import { AppError, ErrorCode } from "../../utils/errors.js";
 import { success } from "../../utils/http.js";
 import { getAuditActor, logAudit } from "../../utils/log.js";
+import { displayName } from "../../services/user.js";
 
 const isProd = envConfig.nodeEnv === "prod";
 const cookieOptions = {
@@ -17,89 +18,6 @@ const cookieOptions = {
   sameSite: "lax" as const,
   maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
 };
-
-export const signUp = async(req: Request,res: Response, next: NextFunction) => {
-    try {
-        const {fullName, phone, password} = req.body
-
-        if (!fullName?.trim() || !password) {
-            return res.status(400).json({message: "fullname or password missing"})
-        }
-        if (!phone || phone.length !== 10 || isNaN(Number(phone))) {
-            return res.status(400).json({ message: "Invalid phone number. It must be exactly 10 digits." });
-        }
-
-        const hashedPassword = await bcrypt.hash(password,10)
-
-        const newUser = await prisma.$transaction(async (tx) => {
-            const supervisorRole = await tx.role.findUnique({ 
-                where: { name: 'SUPERVISOR' } 
-            });
-
-            if (!supervisorRole) {
-                throw new Error("System Error: 'SUPERVISOR' role not found. Please seed the database.");
-            }
-
-            const user = await tx.user.create({
-                data: {
-                    name: fullName.trim(),
-                    phoneNumber: phone,
-                    passwordHash: hashedPassword,
-                    status: 'ACTIVE',
-                    role: { 
-                        connect: { id: supervisorRole.id } 
-                    }
-                },
-                include: { role: true } 
-            });
-
-            return user
-        });
-        console.log('Created user:', newUser)
-
-        const sessionId = uuidv4();
-        const sessionSaved = await redisSet(
-            `session:${newUser.id}`,
-            sessionId,
-            604800
-        );
-
-        if (!sessionSaved) {
-            console.warn("Redis unavailable: signup session was not persisted");
-        }
-        
-        const accessToken = jwt.sign(
-            { userId: String(newUser?.id), role: String(newUser?.role.name), sessionId }, 
-            envConfig.jwtSecret,
-            {expiresIn:"4h"}
-        )
-
-        const refreshToken = jwt.sign(
-            { userId: String(newUser?.id), sessionId },
-            envConfig.jwtRefreshSecret,
-            {expiresIn:"7d"}
-        )
-        res
-        .cookie('refresh_token', refreshToken, cookieOptions)
-        .json({ 
-            accessToken: accessToken,
-            refreshToken,
-            user:{
-                name: newUser.name,
-                email: newUser.email,
-                phoneNumber: newUser.phoneNumber,
-                role: newUser.role.name,
-                status: newUser.status
-            } 
-        })
-
-    } catch (error) {
-        if ((error as any).code === 'P2002') {
-            return res.status(409).json({ message: "Account with this phoneNumber already exists" });
-        }
-        next(error)
-    }
-}
 
 export const login = async(req: Request, res: Response, next: NextFunction) => {
     try {
@@ -110,10 +28,9 @@ export const login = async(req: Request, res: Response, next: NextFunction) => {
         }
         const user = await prisma.user.findUnique({
             where: { phoneNumber: phone },
-            include:{
-                role: true
-            },
+            include: { role: true, staffProfile: { select: { fullName: true } }, riderProfile: { select: { fullName: true } } },
         })
+        const userName = user ? displayName(user) : "";
 
         // Generic error message prevents malicious user enumeration
         if(!user){
@@ -133,13 +50,13 @@ export const login = async(req: Request, res: Response, next: NextFunction) => {
             await logAudit({
                 req,
                 userId: user.id,
-                userName: user.name,
+                userName,
                 userRole: user.role.name,
                 action: "LOGIN_FAILED",
                 resource: "User",
                 resourceId: user.id,
                 status: "FAILURE",
-                summary: `Failed login attempt for user ${user.name}.`,
+                summary: `Failed login attempt for user ${userName}.`,
                 throwOnError: false,
             });
             res
@@ -161,12 +78,12 @@ export const login = async(req: Request, res: Response, next: NextFunction) => {
         await logAudit({
             req,
             userId: user.id,
-            userName: user.name,
+            userName,
             userRole: user.role.name,
             action: "LOGIN",
             resource: "User",
             resourceId: user.id,
-            summary: `User ${user.name} signed in.`,
+            summary: `User ${userName} signed in.`,
             throwOnError: false,
         });
         const accessToken = jwt.sign(
@@ -186,7 +103,7 @@ export const login = async(req: Request, res: Response, next: NextFunction) => {
             accessToken: accessToken,
             refreshToken,
             user:{           
-                name: user.name,
+                name: userName,
                 email: user.email,
                 phoneNumber: user.phoneNumber,
                 role: user.role.name,
@@ -222,7 +139,7 @@ export const refresh = async(req: Request, res: Response, next: NextFunction) =>
         }
         const foundUser = await prisma.user.findUnique({
             where: { id: decoded.userId },
-            include:{role: true}
+            include: { role: true, staffProfile: { select: { fullName: true } }, riderProfile: { select: { fullName: true } } }
         });
 
         if (!foundUser || foundUser.deletedAt) {
@@ -245,7 +162,7 @@ export const refresh = async(req: Request, res: Response, next: NextFunction) =>
         res.json({ 
             accessToken,
             user:{
-                name: foundUser.name,
+                name: displayName(foundUser),
                 email: foundUser.email,
                 phoneNumber: foundUser.phoneNumber,
                 role: foundUser.role.name,
@@ -272,18 +189,18 @@ export const logout = async(req: Request, res: Response)=>{
 
         const loggedOutUser = await prisma.user.findUnique({
             where: { id: decoded.userId },
-            include: { role: true },
+            include: { role: true, staffProfile: { select: { fullName: true } }, riderProfile: { select: { fullName: true } } },
         });
         if (loggedOutUser) {
             await logAudit({
                 req,
                 userId: loggedOutUser.id,
-                userName: loggedOutUser.name,
+                userName: displayName(loggedOutUser),
                 userRole: loggedOutUser.role.name,
                 action: "LOGOUT",
                 resource: "User",
                 resourceId: loggedOutUser.id,
-                summary: `User ${loggedOutUser.name} signed out.`,
+                summary: `User ${displayName(loggedOutUser)} signed out.`,
                 throwOnError: false,
             });
         }
@@ -309,7 +226,7 @@ export const changePass = async(req: Request, res: Response,next: NextFunction) 
         const userId = req.user?.id
         if(!userId) return res.status(404).json({message: "user id not found. Unauthorized."})
         
-        const foundUser = await prisma.user.findUnique({ where: { id: userId }})
+        const foundUser = await prisma.user.findUnique({ where: { id: userId }, include: { staffProfile: { select: { fullName: true } }, riderProfile: { select: { fullName: true } } }})
         if (!foundUser) return res.status(401).json({message: "user not found. Unauthorized."})
         const isMatch = await bcrypt.compare(oldpassword, foundUser?.passwordHash)
 
@@ -333,12 +250,12 @@ export const changePass = async(req: Request, res: Response,next: NextFunction) 
             await logAudit({
                 req,
                 userId: userId!,
-                userName: foundUser.name,
+                userName: displayName(foundUser),
                 userRole: req.user?.role ?? "UNKNOWN",
                 action: "PASSWORD_CHANGE",
                 resource: "User",
                 resourceId: userId!,
-                summary: `User ${foundUser.name} changed their password.`,
+                summary: `User ${displayName(foundUser)} changed their password.`,
                 throwOnError: false,
             });
 
@@ -378,8 +295,10 @@ export const adminResetPassword = async (
       where: { id: userId },
       select: {
         id: true,
-        name: true,
         deletedAt: true,
+        phoneNumber: true,
+        staffProfile: { select: { fullName: true } },
+        riderProfile: { select: { fullName: true } },
         role: { select: { name: true } },
       },
     });
@@ -406,7 +325,7 @@ export const adminResetPassword = async (
       action: "PASSWORD_RESET",
       resource: "User",
       resourceId: userId,
-      summary: `${actor.userName} reset the password for user ${target.name}.`,
+      summary: `${actor.userName} reset the password for user ${displayName(target)}.`,
       throwOnError: false,
     });
 

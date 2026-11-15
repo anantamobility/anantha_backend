@@ -4,11 +4,8 @@ import prisma from "../database/prismaClient.js";
 import {
   AppError,
   ErrorCode,
-  rethrowPrismaError,
 } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
-import { assertHubAccess, resolveHubFilter } from "../utils/scope.js";
-import type { UserContext } from "../types/user.js";
 import { resolveRentalPricing } from "./rental-pricing.js";
 import {
   getDepositBalanceByRental,
@@ -470,7 +467,6 @@ export async function createRental(
       }
 
       if (input.hubId) await assertHub(tx, input.hubId);
-      assertHubAccess(actor.user, input.hubId);
       if (input.vehicleId) {
         const vehicle = await tx.vehicle.findUnique({
           where: { id: input.vehicleId },
@@ -571,11 +567,11 @@ export async function createRental(
       return refreshed;
     });
   } catch (err) {
-    rethrowPrismaError(err, "Rental could not be created");
+    throw AppError.fromPrisma(err, "Rental could not be created") ?? err;
   }
 }
 
-export async function listRentals(query: ListRentalsQuery, user?: UserContext) {
+export async function listRentals(query: ListRentalsQuery) {
   const { page, limit, search } = query;
   const where: Prisma.RentalWhereInput = {};
 
@@ -583,8 +579,7 @@ export async function listRentals(query: ListRentalsQuery, user?: UserContext) {
   if (query.status) where.status = query.status;
   if (query.clientId) where.clientId = query.clientId;
   if (query.riderId) where.riderId = query.riderId;
-  const scopedHubId = resolveHubFilter(user, query.hubId);
-  if (scopedHubId) where.hubId = scopedHubId;
+  if (query.hubId) where.hubId = query.hubId;
   if (query.collectionPeriod) where.collectionPeriod = query.collectionPeriod;
 
   if (search) {
@@ -621,7 +616,7 @@ export async function listRentals(query: ListRentalsQuery, user?: UserContext) {
   };
 }
 
-export async function getRentalById(id: string, user?: UserContext) {
+export async function getRentalById(id: string) {
   const rental = await prisma.rental.findUnique({
     where: { id },
     select: rentalDetailSelect,
@@ -630,7 +625,6 @@ export async function getRentalById(id: string, user?: UserContext) {
   if (!rental) {
     throw new AppError("Rental not found", 404, ErrorCode.NOT_FOUND);
   }
-  assertHubAccess(user, rental.hubId);
 
   const financialSummary = await prisma.$transaction(async (tx) =>
     getRentalFinancialSummary(tx, id)
@@ -676,7 +670,7 @@ export async function assignVehicle(
       return { assignment };
     });
   } catch (err) {
-    rethrowPrismaError(err, "Vehicle could not be assigned");
+    throw AppError.fromPrisma(err, "Vehicle could not be assigned") ?? err;
   }
 }
 
@@ -758,7 +752,7 @@ export async function activateRental(
       return { rental: rentalWithDetail };
     });
   } catch (err) {
-    rethrowPrismaError(err, "Rental could not be activated");
+    throw AppError.fromPrisma(err, "Rental could not be activated") ?? err;
   }
 }
 
@@ -787,7 +781,6 @@ export async function closeRental(
       if (!rental) {
         throw new AppError("Rental not found", 404, ErrorCode.NOT_FOUND);
       }
-      assertHubAccess(actor.user, rental.hubId);
 
       if (rental.status !== "ACTIVE" && rental.status !== "ON_HOLD") {
         throw new AppError(
@@ -1010,6 +1003,6 @@ export async function closeRental(
       };
     });
   } catch (err) {
-    rethrowPrismaError(err, "Rental could not be closed");
+    throw AppError.fromPrisma(err, "Rental could not be closed") ?? err;
   }
 }

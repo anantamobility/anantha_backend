@@ -8,11 +8,7 @@ import type {
   UpdateHubInput,
 } from "../../validation/hub.js";
 
-export const createHub = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
+export const createHub = async ( req: Request, res: Response, next: NextFunction) => {
   try {
     const hub = await hubService.createHub(
       req.body as CreateHubInput,
@@ -31,8 +27,7 @@ export const getHubs = async (
 ) => {
   try {
     const result = await hubService.listHubs(
-      req.query as unknown as ListHubsQuery,
-      req.user
+      req.query as unknown as ListHubsQuery
     );
     return success(res, result);
   } catch (err) {
@@ -47,8 +42,7 @@ export const getHubById = async (
 ) => {
   try {
     const hub = await hubService.getHubById(
-      req.params.id as string,
-      req.user
+      req.params.id as string
     );
     return success(res, { hub });
   } catch (err) {

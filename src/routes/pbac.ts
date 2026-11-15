@@ -8,34 +8,34 @@ import { addRole, getRolesAndPerms, renameRole, updatePermsOnRole } from "../con
 
 const r = Router();
 
-// r.get(
-// 	"/rolesAndPermissions",
-// 	verifyToken,
-// 	authorize("role", "read", { policy: false }),
-// 	getRolesAndPerms
-// );
-// r.post(
-// 	"/addRole",
-// 	verifyToken,
-// 	authorize("role", "create"),
-// 	validate(createRoleSchema),
-// 	addRole
-// );
-// r.patch(
-// 	"/:id/rename",
-// 	verifyToken,
-// 	validate(idParamSchema, "params"),
-// 	authorize("role", "edit"),
-// 	validate(renameRoleSchema),
-// 	renameRole
-// );
-// r.put(
-// 	"/:id/permissions",
-// 	verifyToken,
-// 	validate(idParamSchema, "params"),
-// 	authorize("role", "assign_perm"),
-// 	validate(assignRolePermissionsSchema),
-// 	updatePermsOnRole
-// );
+r.get(
+	"/rolesAndPermissions",
+	verifyToken,
+	authorize("role", "read", { policy: false }),
+	getRolesAndPerms
+);
+r.post(
+	"/addRole",
+	verifyToken,
+	authorize("role", "create"),
+	validate(createRoleSchema),
+	addRole
+);
+r.patch(
+	"/:id/rename",
+	verifyToken,
+	validate(idParamSchema, "params"),
+	authorize("role", "edit"),
+	validate(renameRoleSchema),
+	renameRole
+);
+r.put(
+	"/:id/permissions",
+	verifyToken,
+	validate(idParamSchema, "params"),
+	authorize("role", "assign_perm"),
+	validate(assignRolePermissionsSchema),
+	updatePermsOnRole
+);
 
 export default r;

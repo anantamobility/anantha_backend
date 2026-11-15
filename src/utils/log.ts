@@ -104,6 +104,8 @@ export const logAudit = async({
 
     } catch (error) {
         console.error("FAILED TO LOG AUDIT:", error);
-        if (throwOnError) throw error;
+        if (throwOnError) {
+          throw new AppError("The change was not saved because the audit record failed", 500, ErrorCode.INTERNAL_ERROR);
+        }
     }
 }

@@ -3,7 +3,6 @@ import prisma from "../database/prismaClient.js";
 import {
   AppError,
   ErrorCode,
-  rethrowPrismaError,
 } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import type {
@@ -143,7 +142,7 @@ async function assertSpare(
   spareId: string,
   options: { requireActive?: boolean } = {}
 ) {
-  const spare = await tx.spare.findUnique({
+  const spare = await tx.sparePart.findUnique({
     where: { id: spareId },
     select: { id: true, partNumber: true, name: true, unitCost: true, isActive: true },
   });
@@ -306,7 +305,7 @@ export async function createSpare(
 ) {
   try {
     return await prisma.$transaction(async (tx) => {
-      const spare = await tx.spare.create({
+      const spare = await tx.sparePart.create({
         data: {
           partNumber: input.sku,
           name: input.name,
@@ -336,7 +335,7 @@ export async function createSpare(
       return withSku(spare);
     });
   } catch (err) {
-    rethrowPrismaError(err, "A spare with this SKU already exists");
+    throw AppError.fromPrisma(err, "A spare with this SKU already exists") ?? err;
   }
 }
 
@@ -351,7 +350,7 @@ export async function listSpares(query: {
 }) {
   const { page, limit, search, category, isActive } = query;
 
-  const where: Prisma.SpareWhereInput = {};
+  const where: Prisma.SparePartWhereInput = {};
   if (category) where.category = category;
   if (typeof isActive === "boolean") where.isActive = isActive;
   if (search) {
@@ -363,19 +362,19 @@ export async function listSpares(query: {
   }
 
   const sortBy = query.sortBy === "sku" ? "partNumber" : query.sortBy;
-  const orderBy: Prisma.SpareOrderByWithRelationInput = {
+  const orderBy: Prisma.SparePartOrderByWithRelationInput = {
     [sortBy]: query.sortOrder,
   };
 
   const [spares, total] = await Promise.all([
-    prisma.spare.findMany({
+    prisma.sparePart.findMany({
       where,
       select: spareSelect,
       orderBy,
       skip: (page - 1) * limit,
       take: limit,
     }),
-    prisma.spare.count({ where }),
+    prisma.sparePart.count({ where }),
   ]);
 
   return {
@@ -390,7 +389,7 @@ export async function listSpares(query: {
 }
 
 export async function getSpareById(id: string) {
-  const spare = await prisma.spare.findUnique({
+  const spare = await prisma.sparePart.findUnique({
     where: { id },
     select: spareSelect,
   });
@@ -416,12 +415,12 @@ export async function updateSpare(
 ) {
   try {
     return await prisma.$transaction(async (tx) => {
-      const existing = await tx.spare.findUnique({ where: { id } });
+      const existing = await tx.sparePart.findUnique({ where: { id } });
       if (!existing) {
         throw new AppError("Spare not found", 404, ErrorCode.NOT_FOUND);
       }
 
-      const data: Prisma.SpareUncheckedUpdateInput = {};
+      const data: Prisma.SparePartUncheckedUpdateInput = {};
       if (input.sku !== undefined) data.partNumber = input.sku;
       if (input.name !== undefined) data.name = input.name;
       if (input.category !== undefined) data.category = input.category;
@@ -442,7 +441,7 @@ export async function updateSpare(
         data.minimumStock = input.minimumStock;
       }
 
-      const spare = await tx.spare.update({
+      const spare = await tx.sparePart.update({
         where: { id },
         data,
         select: spareSelect,
@@ -463,7 +462,7 @@ export async function updateSpare(
       return withSku(spare);
     });
   } catch (err) {
-    rethrowPrismaError(err, "A spare with this SKU already exists");
+    throw AppError.fromPrisma(err, "A spare with this SKU already exists") ?? err;
   }
 }
 
@@ -473,12 +472,12 @@ export async function changeSpareStatus(
   actor: AuditActor
 ) {
   return prisma.$transaction(async (tx) => {
-    const existing = await tx.spare.findUnique({ where: { id } });
+    const existing = await tx.sparePart.findUnique({ where: { id } });
     if (!existing) {
       throw new AppError("Spare not found", 404, ErrorCode.NOT_FOUND);
     }
 
-    const spare = await tx.spare.update({
+    const spare = await tx.sparePart.update({
       where: { id },
       data: { isActive: input.isActive },
       select: spareSelect,
@@ -507,7 +506,7 @@ async function runInventoryOperation(
   try {
     return await prisma.$transaction(operation);
   } catch (err) {
-    rethrowPrismaError(err, "Inventory operation could not be completed");
+    throw AppError.fromPrisma(err, "Inventory operation could not be completed") ?? err;
   }
 }
 
@@ -1030,7 +1029,7 @@ export async function getSpareMovements(
   spareId: string,
   query: ListInventoryMovementsQuery
 ) {
-  const spare = await prisma.spare.findUnique({
+  const spare = await prisma.sparePart.findUnique({
     where: { id: spareId },
     select: { id: true, partNumber: true, name: true, unitOfMeasure: true },
   });
@@ -1054,7 +1053,7 @@ export async function getSpareMovements(
 
 export async function getStockBalance(spareId: string, hubId: string) {
   const [spare, balance, totals] = await Promise.all([
-    prisma.spare.findUnique({
+    prisma.sparePart.findUnique({
       where: { id: spareId },
       select: spareSelect,
     }),

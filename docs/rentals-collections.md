@@ -159,7 +159,7 @@ All routes require a bearer token.
 | `GET` | `/collections/:id` | `collection:read` |
 | `PATCH` | `/collections/:id/clear` | `collection:update` |
 
-`OPERATOR` receives read-only rental, deposit and collection access. `SUPERVISOR` and `ADMIN` receive the full workflow.
+`SUPERVISOR` and `ADMIN` receive the full rental, deposit and collection workflow.
 
 ## Query parameters
 

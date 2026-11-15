@@ -4,7 +4,6 @@ import { InvoiceStatus, Prisma, RentalStatus } from "../generated/prisma/client.
 import {
   AppError,
   ErrorCode,
-  rethrowPrismaError,
 } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import type {
@@ -41,36 +40,6 @@ export const clientDetailSelect = {
     },
   },
 } as const;
-
-type ClientAuditShape = {
-  clientCode: string;
-  type: string;
-  name: string;
-  companyName: string | null;
-  contactPerson: string | null;
-  email: string | null;
-  phoneNumber: string | null;
-  taxId: string | null;
-  billingAddress: unknown;
-  paymentTermsDays: number | null;
-  isActive: boolean;
-};
-
-function clientSnapshot(client: ClientAuditShape) {
-  return {
-    clientCode: client.clientCode,
-    type: client.type,
-    name: client.name,
-    companyName: client.companyName,
-    contactPerson: client.contactPerson,
-    email: client.email,
-    phoneNumber: client.phoneNumber,
-    taxId: client.taxId,
-    billingAddress: client.billingAddress,
-    paymentTermsDays: client.paymentTermsDays,
-    isActive: client.isActive,
-  };
-}
 
 function generateClientCode() {
   return `CLI-${uuidv4().replace(/-/g, "").slice(0, 8).toUpperCase()}`;
@@ -110,13 +79,14 @@ export async function createClient(
         data,
         select: clientDetailSelect,
       });
+      const { billingAddress: _billingAddress, ...clientAudit } = client;
 
       await logAudit({
         ...actor,
         action: "CREATE",
         resource: "Client",
         resourceId: client.id,
-        newData: clientSnapshot(client),
+        newData: clientAudit,
         summary: `${actor.userName} created client ${client.name}.`,
         db: tx,
         throwOnError: true,
@@ -125,10 +95,10 @@ export async function createClient(
       return client;
     });
   } catch (err) {
-    rethrowPrismaError(
+    throw AppError.fromPrisma(
       err,
       "A client with this code or identifying details already exists"
-    );
+    ) ?? err;
   }
 }
 
@@ -228,13 +198,16 @@ export async function updateClient(
         select: clientDetailSelect,
       });
 
+      const { billingAddress: _oldBillingAddress, ...clientBefore } = existing;
+      const { billingAddress: _newBillingAddress, ...clientAfter } = client;
+
       await logAudit({
         ...actor,
         action: "UPDATE",
         resource: "Client",
         resourceId: client.id,
-        oldData: clientSnapshot(existing),
-        newData: clientSnapshot(client),
+        oldData: clientBefore,
+        newData: clientAfter,
         summary: `${actor.userName} updated client ${client.name}.`,
         db: tx,
         throwOnError: true,
@@ -243,10 +216,10 @@ export async function updateClient(
       return client;
     });
   } catch (err) {
-    rethrowPrismaError(
+    throw AppError.fromPrisma(
       err,
       "A client with this code or identifying details already exists"
-    );
+    ) ?? err;
   }
 }
 
@@ -292,16 +265,17 @@ export async function changeClientStatus(
         ...currentClient,
         isActive: input.isActive,
       };
+      const { billingAddress: _oldBillingAddress, ...clientBefore } = existing;
+      const { billingAddress: _newBillingAddress, ...clientAfter } = client;
 
       await logAudit({
         ...actor,
         action: "UPDATE",
         resource: "Client",
         resourceId: id,
-        oldData: { isActive: existing.isActive },
+        oldData: clientBefore,
         newData: {
-          isActive: input.isActive,
-          previousStatus: existing.isActive ? "ACTIVE" : "INACTIVE",
+          ...clientAfter,
           reason: input.reason ?? null,
         },
         summary: `${actor.userName} changed client ${existing.clientCode} status to ${
@@ -314,7 +288,7 @@ export async function changeClientStatus(
       return { client };
     });
   } catch (err) {
-    rethrowPrismaError(err, "Client status could not be changed");
+    throw AppError.fromPrisma(err, "Client status could not be changed") ?? err;
   }
 }
 
@@ -375,13 +349,16 @@ export async function deleteClient(id: string, actor: AuditActor) {
         select: clientDetailSelect,
       });
 
+      const { billingAddress: _oldBillingAddress, ...clientBefore } = existing;
+      const { billingAddress: _newBillingAddress, ...clientAfter } = client;
+
       await logAudit({
         ...actor,
         action: "DELETE",
         resource: "Client",
         resourceId: client.id,
-        oldData: clientSnapshot(existing),
-        newData: { deletedAt, isActive: false },
+        oldData: clientBefore,
+        newData: clientAfter,
         summary: `${actor.userName} soft-deleted client ${existing.name}.`,
         db: tx,
         throwOnError: true,
@@ -390,6 +367,6 @@ export async function deleteClient(id: string, actor: AuditActor) {
       return client;
     });
   } catch (err) {
-    rethrowPrismaError(err, "Client could not be deleted");
+    throw AppError.fromPrisma(err, "Client could not be deleted") ?? err;
   }
 }

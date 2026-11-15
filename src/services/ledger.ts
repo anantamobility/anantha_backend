@@ -4,7 +4,6 @@ import prisma from "../database/prismaClient.js";
 import {
   AppError,
   ErrorCode,
-  rethrowPrismaError,
 } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import { toDecimal } from "./rental-schedule.js";
@@ -301,7 +300,7 @@ export async function receiveDeposit(
       })
     );
   } catch (err) {
-    rethrowPrismaError(err, "This deposit transaction already exists");
+    throw AppError.fromPrisma(err, "This deposit transaction already exists") ?? err;
   }
 }
 
@@ -324,7 +323,7 @@ export async function refundDeposit(
       })
     );
   } catch (err) {
-    rethrowPrismaError(err, "This deposit transaction already exists");
+    throw AppError.fromPrisma(err, "This deposit transaction already exists") ?? err;
   }
 }
 
@@ -347,7 +346,7 @@ export async function adjustDeposit(
       })
     );
   } catch (err) {
-    rethrowPrismaError(err, "This deposit transaction already exists");
+    throw AppError.fromPrisma(err, "This deposit transaction already exists") ?? err;
   }
 }
 

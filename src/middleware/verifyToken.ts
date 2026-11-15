@@ -31,7 +31,8 @@ export const verifyToken = async(req: Request, res: Response, next: NextFunction
                 where: { id: decoded.userId },
                 include: {
                     role: { include: { permissions: true } },
-                    staffProfile: { select: { id: true, hubId: true } }
+                    staffProfile: { select: { fullName: true } },
+                    riderProfile: { select: { fullName: true } },
                 }
         });
 
@@ -44,13 +45,10 @@ export const verifyToken = async(req: Request, res: Response, next: NextFunction
 
         req.user = {
                 id: userWithRole.id,
-                name: userWithRole.name,
+                name: userWithRole.staffProfile?.fullName ?? userWithRole.riderProfile?.fullName ?? userWithRole.phoneNumber,
                 role: userWithRole.role.name,
                 status: userWithRole.status,
                 permissions: userWithRole.role.permissions.map(p => `${p.resource}:${p.action}`),
-                attributes: {
-                    hubId: userWithRole.staffProfile?.hubId ?? null,
-                }
         };
         next();   
     } catch (err: any) {

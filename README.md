@@ -24,12 +24,10 @@ cp .env.example .env
 # Edit .env: set DATABASE_URL, REDIS_URL and strong JWT secrets.
 npx prisma migrate deploy
 npm run seed        # permissions, roles, default admin
-npm run seed:demo   # optional idempotent demo data
 npm run dev
 ```
 
 `npm run seed` logs in with `1234567890 / supersecret123` unless you change the seed. Change that password immediately outside local development.
-`npm run seed:demo` additionally creates `9000000000 / DemoPassword123` (override with `DEMO_SEED_PASSWORD`) plus two hubs, clients, ratecards, riders, vehicles and hub-scoped staff users.
 
 ## Scripts
 
@@ -41,8 +39,7 @@ npm run dev
 | `npm test` | Run the unit/HTTP suite with Prisma mocked. |
 | `npm run test:watch` | Run the unit suite in watch mode. |
 | `npm run test:integration` | Run real-PostgreSQL integration tests against the isolated test schema. |
-| `npm run seed` | Upsert permissions, roles and the default admin. |
-| `npm run seed:demo` | Seed RBAC, then upsert demo operational data. |
+| `npm run seed` | Upsert permissions, roles and the default admin. No business data. |
 
 ## Integration tests
 
@@ -60,7 +57,7 @@ When `TEST_DATABASE_URL` is not set, the suite derives the URL from `DATABASE_UR
 Routers are mounted in `src/app.ts`:
 
 - `/auth` - signup, login, refresh, logout, change-password, admin reset-password
-- `/users` - user CRUD, role/status changes, session revocation
+- `/users` - account read/update, role/status changes, session revocation
 - `/audit-logs` - audit log read API
 - `/hubs`, `/staff`, `/vehicles`, `/riders`, `/clients`, `/ratecards`
 - `/rentals`, `/deposits`, `/collections`, `/earnings`, `/pay-statements`
@@ -84,6 +81,6 @@ Detailed domain documentation lives in [`docs/`](docs). Start with:
 - User lifecycle guards prevent self-demotion, self-deactivation, self-deletion, and removal of the last active administrator.
 - Sensitive mutations write audit rows in the same database transaction as the change.
 - Authorization is deny-by-default through the permission registry; resource policies add record-level checks.
-- Hub-scoped non-admin users can only access records in their assigned hub. Administrators bypass hub scoping.
+- Access is permission-based only; there is no hub-level row restriction in the current build.
 
 See [`docs/users-security.md`](docs/users-security.md) for endpoint-level details and environment settings.

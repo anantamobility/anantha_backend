@@ -4,7 +4,6 @@ import prisma from "../database/prismaClient.js";
 import {
   AppError,
   ErrorCode,
-  rethrowPrismaError,
 } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import { deriveDueStatus, toDecimal } from "./rental-schedule.js";
@@ -185,10 +184,10 @@ export async function createCollection(
       createCollectionWithinTransaction(tx, input, actor)
     );
   } catch (err) {
-    rethrowPrismaError(
+    throw AppError.fromPrisma(
       err,
       "A collection with this reference or idempotency key already exists"
-    );
+    ) ?? err;
   }
 }
 
@@ -380,7 +379,7 @@ export async function clearCollection(
       };
     });
   } catch (err) {
-    rethrowPrismaError(err, "Collection could not be cleared");
+    throw AppError.fromPrisma(err, "Collection could not be cleared") ?? err;
   }
 }
 
@@ -559,6 +558,6 @@ export async function generateDues(
       })
     );
   } catch (err) {
-    rethrowPrismaError(err, "Collection dues could not be generated");
+    throw AppError.fromPrisma(err, "Collection dues could not be generated") ?? err;
   }
 }

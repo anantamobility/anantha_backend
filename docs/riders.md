@@ -1,6 +1,6 @@
 # Rider Management
 
-Rider onboarding, classification, lifecycle status, and private document storage.
+Rider onboarding, classification, lifecycle status, and document storage.
 
 ## Classification
 
@@ -12,6 +12,24 @@ Rider onboarding, classification, lifecycle status, and private document storage
 | `clientId` | UUID | Required for B2B; optional otherwise |
 
 Riders are created in `ONBOARDING` status. Status changes stamp `statusChangedAt`.
+
+## Account
+
+`POST /riders` creates the rider and its `User` account in one transaction. The account gets the `RIDER` role, which has no permissions, so it can authenticate but cannot reach any staff endpoint.
+
+- `riderCode` is optional; when omitted it is generated sequentially as `R001`, `R002`, … (`generateRiderId` in `src/utils/idGenerator.ts`). Staff employee codes use the same helper with the `S` prefix.
+
+- `phoneNumber` is required and is the login identifier.
+- `email` is optional.
+- `password` is required and must pass the password strength rules.
+- Name, phone and email are stored once: `fullName` on the rider, phone and email on the account. `PATCH /riders/:id` no longer accepts phone, email or `userId`; change those with `PATCH /users/:id`, which requires `user:update` (ADMIN or SUPERVISOR).
+- `userId` is required and unique at the database level, so a rider row cannot exist without an account.
+
+## Profile fields
+
+Identity and compliance data lives on the rider row: `aadharNumber`, `panNumber`, `licenseNumber`, `medicalReportExpiryDate`, `agreementDate`, `policeVerificationValidUpto`, `backgroundVerificationExpiryDate`, `dateOfLastWorkingDay`, `bankName`, `branch`. Existing `bankAccountNumber`, `bankIfsc` and `bankHolderName` are unchanged.
+
+Files are never stored as columns. Uploads go to `Document` (`documentType`, `url`, `documentNumber`, `issueDate`, `expiryDate`), which covers Aadhaar, PAN, licence, medical, agreement, police and BGV copies.
 
 ## Lifecycle Status
 
@@ -27,20 +45,21 @@ Allowed transitions:
 
 Allowed MIME types: `application/pdf`, `image/jpeg`, `image/png`, `image/webp`.
 
-- Files are stored via the storage adapter under a generated key; the original filename is never used as the storage path.
+- Files are uploaded to Cloudinary under `anantha_file_storage/riders/<riderId>/` and the returned public URL is stored on the document row.
 - Upload size is limited by `STORAGE_MAX_FILE_BYTES` (default 10 MiB).
-- Deleting a document soft-deletes metadata (`deletedAt`) and best-effort removes the stored file.
-- Downloads require `rider:document:read` and are sent with `Cache-Control: private, no-store` and an attachment disposition.
+- Deleting a document soft-deletes metadata (`deletedAt`) and best-effort removes the Cloudinary asset.
+- Downloads require `rider:document:read` and redirect to the stored URL.
 
 ### Storage configuration
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `STORAGE_DRIVER` | `local` | Active adapter |
-| `STORAGE_LOCAL_DIR` | `storage/uploads` | Local adapter root |
+| `CLOUDINARY_CLOUD_NAME` | none | Cloudinary cloud |
+| `CLOUDINARY_API_KEY` | none | Cloudinary API key |
+| `CLOUDINARY_API_SECRET` | none | Cloudinary API secret |
 | `STORAGE_MAX_FILE_BYTES` | `10485760` | Upload size limit |
 
-Only the `local` adapter is implemented. `STORAGE_DRIVER=s3` fails fast until an S3 adapter is provided.
+Documents are public URLs by design. Do not store anything here that must not leak if a link escapes.
 
 ## Endpoints
 
@@ -51,7 +70,7 @@ All routes require a bearer token.
 | `POST` | `/riders` | `rider:create` |
 | `GET` | `/riders` | `rider:read` |
 | `GET` | `/riders/:id` | `rider:read` |
-| `PATCH` / `PUT` | `/riders/:id` | `rider:update` |
+| `PATCH` | `/riders/:id` | `rider:update` |
 | `PATCH` | `/riders/:id/status` | `rider:status:update` |
 | `POST` | `/riders/:id/documents` | `rider:document:upload` |
 | `GET` | `/riders/:id/documents` | `rider:document:read` |
@@ -59,8 +78,6 @@ All routes require a bearer token.
 | `GET` | `/riders/:id/documents/:documentId/download` | `rider:document:read` |
 | `DELETE` | `/riders/:id/documents/:documentId` | `rider:document:delete` |
 | `DELETE` | `/riders/:id` | `rider:delete` |
-
-`PUT /riders/:id` is retained as a compatibility alias for `PATCH /riders/:id`.
 
 ### List filters
 

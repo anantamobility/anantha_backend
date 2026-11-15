@@ -11,14 +11,14 @@ history rows.
 
 ## Permissions
 
-| Permission | ADMIN | SUPERVISOR | OPERATOR |
-| --- | --- | --- | --- |
-| `dashboard:read` | yes | yes | no |
-| `report:read` | yes | yes | no |
+| Permission | ADMIN | SUPERVISOR |
+| --- | --- | --- |
+| `dashboard:read` | yes | yes |
+| `report:read` | yes | yes |
 
 New permissions are registered in `src/registry/perm.ts` and granted by
 `getRolePermissionBuckets`. Dashboard and reports aggregate financial data, so
-they are intentionally not granted to `OPERATOR`.
+they are limited to `ADMIN` and `SUPERVISOR`.
 
 ## Dashboard
 

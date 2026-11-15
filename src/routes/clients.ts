@@ -109,14 +109,6 @@ const r = Router();
 //   validate(updateClientSchema),
 //   updateClient
 // );
-// r.put(
-//   "/:id",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("client", "update"),
-//   validate(updateClientSchema),
-//   updateClient
-// );
 // r.delete(
 //   "/:id",
 //   verifyToken,

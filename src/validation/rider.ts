@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { paginationQuerySchema, searchQuerySchema } from "./common.js";
+import {
+  addressSchema,
+  genderSchema,
+  paginationQuerySchema,
+  pastDateSchema,
+  searchQuerySchema,
+} from "./common.js";
+import { strongPasswordSchema } from "./user.js";
 
 export const riderStatusSchema = z.enum([
   "ONBOARDING",
@@ -12,13 +19,6 @@ export const riderStatusSchema = z.enum([
 export const rentalTypeSchema = z.enum(["B2C", "B2B"]);
 export const b2cModeSchema = z.enum(["AML_RIDER", "INDIVIDUAL_RIDER"]);
 export const b2bRiderMgmtSchema = z.enum(["CLIENT_MANAGED", "AML_MANAGED"]);
-export const genderSchema = z.enum([
-  "MALE",
-  "FEMALE",
-  "OTHER",
-  "PREFER_NOT_TO_SAY",
-]);
-
 export const documentTypeSchema = z.enum([
   "ID_PROOF",
   "ADDRESS_PROOF",
@@ -56,38 +56,24 @@ const emailSchema = z
   .nullable()
   .optional();
 
-const addressSchema = z
-  .object({
-    line1: z.string().trim().min(1).max(200).optional(),
-    line2: z.string().trim().min(1).max(200).optional(),
-    city: z.string().trim().min(1).max(100).optional(),
-    state: z.string().trim().min(1).max(100).optional(),
-    postalCode: z.string().trim().min(1).max(20).optional(),
-    country: z.string().trim().min(1).max(100).optional(),
-  })
-  .strict()
-  .nullable()
-  .optional();
-
-const dateOfBirthSchema = z.coerce
-  .date()
-  .refine((value) => value.getTime() <= Date.now(), {
-    message: "dateOfBirth cannot be in the future",
-  })
-  .nullable()
-  .optional();
-
 const riderBaseShape = {
   fullName: z.string().trim().min(1, "fullName is required").max(150),
-  userId: optionalNullableUuid("userId"),
   riderCode: z.string().trim().min(1).max(50).optional(),
-  phoneNumber: phoneNumberSchema,
-  email: emailSchema,
-  dateOfBirth: dateOfBirthSchema,
+  dateOfBirth: pastDateSchema,
   gender: genderSchema.nullable().optional(),
   address: addressSchema,
   emergencyContactName: optionalNullableString(150),
   emergencyContactPhone: optionalPhoneNumber,
+  aadharNumber: optionalNullableString(20),
+  panNumber: optionalNullableString(20),
+  licenseNumber: optionalNullableString(30),
+  medicalReportExpiryDate: z.coerce.date().nullable().optional(),
+  agreementDate: z.coerce.date().nullable().optional(),
+  policeVerificationValidUpto: z.coerce.date().nullable().optional(),
+  backgroundVerificationExpiryDate: z.coerce.date().nullable().optional(),
+  dateOfLastWorkingDay: z.coerce.date().nullable().optional(),
+  bankName: optionalNullableString(100),
+  branch: optionalNullableString(100),
   rentalType: rentalTypeSchema,
   b2cMode: b2cModeSchema.nullable().optional(),
   b2bRiderMgmt: b2bRiderMgmtSchema.nullable().optional(),
@@ -147,7 +133,12 @@ function validateClassification(
 }
 
 export const createRiderSchema = z
-  .object(riderBaseShape)
+  .object({
+    ...riderBaseShape,
+    phoneNumber: phoneNumberSchema,
+    email: emailSchema,
+    password: strongPasswordSchema,
+  })
   .strict()
   .superRefine(validateClassification);
 

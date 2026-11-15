@@ -1,4 +1,4 @@
-export type RoleName = 'ADMIN' | 'SUPERVISOR' | 'OPERATOR';
+export type RoleName = 'ADMIN' | 'SUPERVISOR' | 'RIDER';
 
 /** Minimal read-only shape required to derive role permission buckets. */
 export type PermissionGroup = {
@@ -17,7 +17,7 @@ export function getRolePermissionBuckets(
   const buckets: Record<RoleName, string[]> = {
     ADMIN: [],
     SUPERVISOR: [],
-    OPERATOR: [],
+    RIDER: [],
   };
 
   for (const group of registry) {
@@ -62,8 +62,6 @@ export function getRolePermissionBuckets(
         buckets.SUPERVISOR.push(key);
       }
 
-      // OPERATOR receives read-only operational permissions. Ratecard pricing
-      // and financial mutations remain restricted to ADMIN and SUPERVISOR.
       // SUPERVISOR owns the full operational service, spares and inventory
       // workflow, including damage responsibility approval.
       if (['service', 'spare', 'inventory'].includes(group.resource)) {
@@ -74,25 +72,6 @@ export function getRolePermissionBuckets(
       // data, so they are limited to ADMIN and SUPERVISOR.
       if (['dashboard', 'report'].includes(group.resource)) {
         buckets.SUPERVISOR.push(key);
-      }
-
-      if (
-        [
-          'rider',
-          'staff',
-          'vehicle',
-          'hub',
-          'client',
-          'rental',
-          'deposit',
-          'collection',
-          'service',
-          'spare',
-          'inventory',
-        ].includes(group.resource) &&
-        action === 'read'
-      ) {
-        buckets.OPERATOR.push(key);
       }
     }
   }

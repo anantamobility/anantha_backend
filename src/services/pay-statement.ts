@@ -4,7 +4,6 @@ import prisma from "../database/prismaClient.js";
 import {
   AppError,
   ErrorCode,
-  rethrowPrismaError,
 } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import {
@@ -550,10 +549,10 @@ export async function generatePayStatement(
       return { payStatement: updatedStatement, duplicate: false };
     });
   } catch (err) {
-    rethrowPrismaError(
+    throw AppError.fromPrisma(
       err,
       "A pay statement already exists for this rider and period"
-    );
+    ) ?? err;
   }
 }
 
@@ -649,7 +648,7 @@ export async function approvePayStatement(
       return { payStatement: updated, duplicate: false };
     });
   } catch (err) {
-    rethrowPrismaError(err, "Pay statement could not be approved");
+    throw AppError.fromPrisma(err, "Pay statement could not be approved") ?? err;
   }
 }
 
@@ -755,7 +754,7 @@ export async function payPayStatement(
       return { payStatement: updated, duplicate: false };
     });
   } catch (err) {
-    rethrowPrismaError(err, "Pay statement could not be paid");
+    throw AppError.fromPrisma(err, "Pay statement could not be paid") ?? err;
   }
 }
 

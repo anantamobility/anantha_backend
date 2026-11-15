@@ -1,6 +1,6 @@
 # Users, Authentication, Security and Audit Logging
 
-This module covers account authentication, administrative user management, password reset, RBAC/PBAC, hub-scoped access, soft deletes and audit-log reads.
+This module covers account authentication, administrative user management, password reset, RBAC/PBAC, soft deletes and audit-log reads.
 
 ## Authentication
 
@@ -15,18 +15,19 @@ This module covers account authentication, administrative user management, passw
 
 Access tokens carry a session id. Every protected request verifies the token signature and checks `session:<userId>` in Redis. A missing or mismatched session returns `401`; an unavailable Redis instance skips only the session-value comparison and logs a warning.
 
-Token verification reloads the user from PostgreSQL on each request. Deleted users return `401`; users whose status is not `ACTIVE` return `403`. The request context includes the user's role, permission strings, and `attributes.hubId` from their staff profile.
+Token verification reloads the user from PostgreSQL on each request. Deleted users return `401`; users whose status is not `ACTIVE` return `403`. The request context includes the user's role and permission strings.
 
 ## User management API
 
 All routes require a bearer token and are mounted at `/users`.
 
+Accounts are no longer created here. `POST /staff` and `POST /riders` create the `User` row in the same transaction as the profile, because a user holds only credentials (`email`, `phoneNumber`, `passwordHash`, `status`, `role`) and the profile holds the person's name.
+
 | Method | Endpoint | Required permission | Notes |
 | --- | --- | --- | --- |
-| `POST` | `/users` | `user:create` | Requires `name`, `phoneNumber`, `password`, and either `roleId` or `roleName`. |
 | `GET` | `/users` | `user:read` | Supports `page`, `limit`, `search`, `roleId`, `status`, `sortBy`, `sortOrder`. |
 | `GET` | `/users/:id` | `user:read` + policy | Admins may read any user; non-admins may read themselves under the current policy. |
-| `PATCH`/`PUT` | `/users/:id` | `user:update` + policy | Updates name, email and phone only. |
+| `PATCH` | `/users/:id` | `user:update` + policy | Updates email and phone only. |
 | `PATCH` | `/users/:id/role` | `user:role:assign` | Body: `roleId`, optional `reason`. |
 | `PATCH` | `/users/:id/status` | `user:status:update` | Body: `status` (`ONBOARDING`, `ACTIVE`, `SUSPENDED`), optional `reason`. |
 | `POST` | `/users/:id/revoke-sessions` | `user:session:revoke` | Deletes the user's Redis session and refresh state. |
@@ -39,7 +40,6 @@ Password hashes are never selected by the API.
 - An administrator cannot remove their own administrator role.
 - An administrator cannot deactivate their own account.
 - An administrator cannot delete their own account.
-- The last active administrator cannot be demoted, deactivated or deleted (`409`).
 - Role, status and delete changes are rejected for missing or already-deleted users.
 - Revoking sessions fails with `503` if Redis cannot confirm revocation; success is never reported blindly.
 - Administrative mutations write audit rows in the same transaction as the change, and audit failure rolls the transaction back.
@@ -64,18 +64,13 @@ Permission buckets are derived by `getRolePermissionBuckets` in `src/database/ro
 
 - `ADMIN`: all registered permissions.
 - `SUPERVISOR`: user read/update, role read, audit read, B2B clients, ratecards/assignments, rental/financial workflow, services/spares/inventory, dashboards/reports.
-- `OPERATOR`: read-only access to riders, staff, vehicles, hubs, clients, rentals, deposits, collections, services, spares and inventory.
+- `RIDER`: no permissions. Rider accounts exist so a rider can authenticate; every staff endpoint rejects them.
 
-## Hub-scoped access
+## Access model
 
-A non-admin actor with `attributes.hubId` is restricted to that hub:
+Authorization is permission-based only. A user with `vehicle:read` can read every vehicle, a user with `rental:create` can create a rental in any hub. There is no row-level or hub-level restriction in the current build.
 
-- List endpoints for vehicles, staff, riders, rentals and hubs apply the hub filter automatically.
-- Detail reads and mutations for vehicles, staff, riders, rentals and hubs reject records outside the actor's hub with `403`.
-- User lists are limited to the actor themselves plus users whose staff profile is in the actor's hub.
-- Attempting to request a different `hubId` filter returns `403`.
-
-Non-admin actors with **no** assigned hub retain the historical unrestricted behavior. Administrators always bypass hub scoping.
+The one row-level rule left is the user policy: a user can read and update their own account, administrators can act on any account. Everything else is decided by the `resource:action` permission string.
 
 ## Admin password reset
 
@@ -97,9 +92,11 @@ The following records use `deletedAt` instead of hard deletion:
 | User | `DELETE /users/:id` | Last-admin/self guards; sets status to `SUSPENDED`. |
 | Client | `DELETE /clients/:id` | Refuses open rentals and open invoices. |
 | Rider | `DELETE /riders/:id` | Refuses open rentals, open pay statements and approved statements awaiting payment. |
-| Ratecard | `DELETE /ratecards/:id` | Refuses any rental or assignment referencing it. |
+| Ratecard | `DELETE /ratecards/:id` | Soft delete only; rentals copy their own rates, so no reference check applies. |
 
-Deleted records are excluded from normal list/detail reads and return `404`. Historical foreign-key references remain intact. Hub deletion is intentionally unchanged and still requires a hub with no associated records.
+Deleted records are excluded from normal list/detail reads and return `404`. Historical foreign-key references remain intact.
+
+Foreign keys are `Restrict` on delete everywhere, so no delete silently detaches or cascades. A hard delete is only possible once nothing references the row; code-level guards produce the friendly message first, and the database refuses with `409` if a guard is missed. Hub deletion is the only hard delete, and it requires a hub with no vehicles, staff, riders, rentals, assignments, contracts or inventory attached.
 
 ## Audit log API
 

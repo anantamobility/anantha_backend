@@ -18,49 +18,41 @@ import {
 
 const r = Router();
 
-// r.post(
-//   "/",
-//   verifyToken,
-//   authorize("staff", "create"),
-//   validate(createStaffSchema),
-//   createStaff
-// );
-// r.get(
-//   "/",
-//   verifyToken,
-//   authorize("staff", "read", { policy: false }),
-//   validate(listStaffQuerySchema, "query"),
-//   getStaff
-// );
-// r.get(
-//   "/:id",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("staff", "read"),
-//   getStaffById
-// );
-// r.patch(
-//   "/:id",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("staff", "update"),
-//   validate(updateStaffSchema),
-//   updateStaff
-// );
-// r.put(
-//   "/:id",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("staff", "update"),
-//   validate(updateStaffSchema),
-//   updateStaff
-// );
-// r.delete(
-//   "/:id",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("staff", "delete"),
-//   deleteStaff
-// );
+r.post(
+  "/",
+  verifyToken,
+  authorize("staff", "create"),
+  validate(createStaffSchema),
+  createStaff
+);
+r.get(
+  "/",
+  verifyToken,
+  authorize("staff", "read", { policy: false }),
+  validate(listStaffQuerySchema, "query"),
+  getStaff
+);
+r.get(
+  "/:id",
+  verifyToken,
+  validate(idParamSchema, "params"),
+  authorize("staff", "read"),
+  getStaffById
+);
+r.patch(
+  "/:id",
+  verifyToken,
+  validate(idParamSchema, "params"),
+  authorize("staff", "update"),
+  validate(updateStaffSchema),
+  updateStaff
+);
+r.delete(
+  "/:id",
+  verifyToken,
+  validate(idParamSchema, "params"),
+  authorize("staff", "delete"),
+  deleteStaff
+);
 
 export default r;

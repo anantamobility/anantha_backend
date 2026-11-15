@@ -12,7 +12,7 @@ export const UserPolicies: ResourcePolicies = {
     return user.id === targetUser.id;
   },
 
-  // 2. Who can update a user's basic profile? (PUT /users/:id)
+  // 2. Who can update a user's basic profile? (PATCH /users/:id)
   update: (user, targetUser) => {
     if (isAdmin(user)) return true;
     // Non-admins may only edit their own profile fields. Role and status

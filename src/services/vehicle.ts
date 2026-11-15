@@ -1,14 +1,10 @@
 import prisma from "../database/prismaClient.js";
-import { VehicleStatus } from "../generated/prisma/client.js";
-import type { Prisma } from "../generated/prisma/client.js";
+import { Prisma, VehicleStatus } from "../generated/prisma/client.js";
 import {
   AppError,
   ErrorCode,
-  rethrowPrismaError,
 } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
-import { assertHubAccess, resolveHubFilter } from "../utils/scope.js";
-import type { UserContext } from "../types/user.js";
 import type {
   ChangeVehicleStatusInput,
   CreateVehicleInput,
@@ -45,6 +41,42 @@ export const vehicleListSelect = {
 
 export const vehicleDetailSelect = {
   ...vehicleListSelect,
+  vehicleCategory: true,
+  vehicleType: true,
+  seats: true,
+  batteryType: true,
+  batteryCapacity: true,
+  nominalRange: true,
+  bootSpace: true,
+  chargingOptions: true,
+  chargerProvided: true,
+  noOfTyres: true,
+  tyres: true,
+  batteryNumber: true,
+  batteryModelNumber: true,
+  batteryBrand: true,
+  registrationType: true,
+  ownershipType: true,
+  dateOfPurchase: true,
+  dateOfDelivery: true,
+  dateOfRegistration: true,
+  dateOfOperation: true,
+  warrantyStartDate: true,
+  warrantyEndDate: true,
+  safeCabCertificateExpiryDate: true,
+  telematicsExpiryDate: true,
+  loanProvider: true,
+  emiAmount: true,
+  tenurePeriod: true,
+  emiDueDate: true,
+  insurancePolicyNumber: true,
+  insuranceProvider: true,
+  insurancePolicyType: true,
+  insuranceValidFrom: true,
+  insuranceValidTo: true,
+  insurancePremiumAmount: true,
+  insuranceStatus: true,
+  insuranceThirdParty: true,
   _count: {
     select: {
       assignments: true,
@@ -94,34 +126,9 @@ export const ALLOWED_VEHICLE_STATUS_TRANSITIONS: Record<
   RETIRED: [],
 };
 
-type VehicleAuditShape = {
-  registrationNumber: string;
-  hubId: string | null;
-  make: string | null;
-  model: string | null;
-  year: number | null;
-  color: string | null;
-  vin: string | null;
-  status: VehicleStatus;
-  acquiredAt: Date | null;
-  retiredAt: Date | null;
-  isActive: boolean;
-};
-
-function vehicleSnapshot(vehicle: VehicleAuditShape) {
-  return {
-    registrationNumber: vehicle.registrationNumber,
-    hubId: vehicle.hubId,
-    make: vehicle.make,
-    model: vehicle.model,
-    year: vehicle.year,
-    color: vehicle.color,
-    vin: vehicle.vin,
-    status: vehicle.status,
-    acquiredAt: vehicle.acquiredAt,
-    retiredAt: vehicle.retiredAt,
-    isActive: vehicle.isActive,
-  };
+function tyresInput(tyres: unknown[] | null | undefined) {
+  if (tyres === undefined || tyres === null) return undefined;
+  return tyres as Prisma.InputJsonValue;
 }
 
 async function assertHubExists(tx: Prisma.TransactionClient, hubId: string) {
@@ -138,7 +145,6 @@ export async function createVehicle(
   try {
     return await prisma.$transaction(async (tx) => {
       if (input.hubId) await assertHubExists(tx, input.hubId);
-      assertHubAccess(actor.user, input.hubId);
 
       const data: Prisma.VehicleUncheckedCreateInput = {
         registrationNumber: input.registrationNumber,
@@ -151,7 +157,46 @@ export async function createVehicle(
         status: VehicleStatus.IDLE,
         statusChangedAt: new Date(),
         isActive: input.isActive ?? true,
+        vehicleCategory: input.vehicleCategory ?? null,
+        vehicleType: input.vehicleType ?? null,
+        seats: input.seats ?? null,
+        batteryType: input.batteryType ?? null,
+        batteryCapacity: input.batteryCapacity ?? null,
+        nominalRange: input.nominalRange ?? null,
+        bootSpace: input.bootSpace ?? null,
+        chargingOptions: input.chargingOptions ?? null,
+        chargerProvided: input.chargerProvided ?? null,
+        noOfTyres: input.noOfTyres ?? null,
+        batteryNumber: input.batteryNumber ?? null,
+        batteryModelNumber: input.batteryModelNumber ?? null,
+        batteryBrand: input.batteryBrand ?? null,
+        registrationType: input.registrationType ?? null,
+        ownershipType: input.ownershipType ?? null,
+        dateOfPurchase: input.dateOfPurchase ?? null,
+        dateOfDelivery: input.dateOfDelivery ?? null,
+        dateOfRegistration: input.dateOfRegistration ?? null,
+        dateOfOperation: input.dateOfOperation ?? null,
+        warrantyStartDate: input.warrantyStartDate ?? null,
+        warrantyEndDate: input.warrantyEndDate ?? null,
+        safeCabCertificateExpiryDate:
+          input.safeCabCertificateExpiryDate ?? null,
+        telematicsExpiryDate: input.telematicsExpiryDate ?? null,
+        loanProvider: input.loanProvider ?? null,
+        emiAmount: input.emiAmount ?? null,
+        tenurePeriod: input.tenurePeriod ?? null,
+        emiDueDate: input.emiDueDate ?? null,
+        insurancePolicyNumber: input.insurancePolicyNumber ?? null,
+        insuranceProvider: input.insuranceProvider ?? null,
+        insurancePolicyType: input.insurancePolicyType ?? null,
+        insuranceValidFrom: input.insuranceValidFrom ?? null,
+        insuranceValidTo: input.insuranceValidTo ?? null,
+        insurancePremiumAmount: input.insurancePremiumAmount ?? null,
+        insuranceStatus: input.insuranceStatus ?? null,
+        insuranceThirdParty: input.insuranceThirdParty ?? null,
       };
+
+      const tyres = tyresInput(input.tyres);
+      if (tyres !== undefined) data.tyres = tyres;
 
       if (input.acquiredAt !== undefined) data.acquiredAt = input.acquiredAt;
 
@@ -160,12 +205,14 @@ export async function createVehicle(
         select: vehicleDetailSelect,
       });
 
+      const { tyres: _tyres, ...vehicleAudit } = vehicle;
+
       await logAudit({
         ...actor,
         action: "CREATE",
         resource: "Vehicle",
         resourceId: vehicle.id,
-        newData: vehicleSnapshot(vehicle),
+        newData: vehicleAudit,
         summary: `${actor.userName} created vehicle ${vehicle.registrationNumber}.`,
         db: tx,
         throwOnError: true,
@@ -174,20 +221,19 @@ export async function createVehicle(
       return vehicle;
     });
   } catch (err) {
-    rethrowPrismaError(
+    throw AppError.fromPrisma(
       err,
       "A vehicle with this registration number or VIN already exists"
-    );
+    ) ?? err;
   }
 }
 
-export async function listVehicles(query: ListVehiclesQuery, user?: UserContext) {
+export async function listVehicles(query: ListVehiclesQuery) {
   const { page, limit, search, status, hubId, make, model, isActive } = query;
 
   const where: Prisma.VehicleWhereInput = { deletedAt: null };
   if (status) where.status = status;
-  const scopedHubId = resolveHubFilter(user, hubId);
-  if (scopedHubId) where.hubId = scopedHubId;
+  if (hubId) where.hubId = hubId;
   if (typeof isActive === "boolean") where.isActive = isActive;
   if (make) where.make = { equals: make, mode: "insensitive" };
   if (model) where.model = { equals: model, mode: "insensitive" };
@@ -227,7 +273,7 @@ export async function listVehicles(query: ListVehiclesQuery, user?: UserContext)
   };
 }
 
-export async function getVehicleById(id: string, user?: UserContext) {
+export async function getVehicleById(id: string) {
   const vehicle = await prisma.vehicle.findUnique({
     where: { id },
     select: { ...vehicleDetailSelect, deletedAt: true },
@@ -237,7 +283,6 @@ export async function getVehicleById(id: string, user?: UserContext) {
     throw new AppError("Vehicle not found", 404, ErrorCode.NOT_FOUND);
   }
 
-  assertHubAccess(user, vehicle.hubId);
   const { deletedAt: _deletedAt, ...safeVehicle } = vehicle;
   return safeVehicle;
 }
@@ -253,9 +298,7 @@ export async function updateVehicle(
       if (!existing || existing.deletedAt) {
         throw new AppError("Vehicle not found", 404, ErrorCode.NOT_FOUND);
       }
-      assertHubAccess(actor.user, existing.hubId);
       if (input.hubId !== undefined && input.hubId !== null) {
-        assertHubAccess(actor.user, input.hubId);
       }
 
       if (
@@ -278,6 +321,94 @@ export async function updateVehicle(
       if (input.vin !== undefined) data.vin = input.vin;
       if (input.acquiredAt !== undefined) data.acquiredAt = input.acquiredAt;
       if (input.isActive !== undefined) data.isActive = input.isActive;
+      if (input.vehicleCategory !== undefined) {
+        data.vehicleCategory = input.vehicleCategory;
+      }
+      if (input.vehicleType !== undefined) data.vehicleType = input.vehicleType;
+      if (input.seats !== undefined) data.seats = input.seats;
+      if (input.batteryType !== undefined) data.batteryType = input.batteryType;
+      if (input.batteryCapacity !== undefined) {
+        data.batteryCapacity = input.batteryCapacity;
+      }
+      if (input.nominalRange !== undefined) data.nominalRange = input.nominalRange;
+      if (input.bootSpace !== undefined) data.bootSpace = input.bootSpace;
+      if (input.chargingOptions !== undefined) {
+        data.chargingOptions = input.chargingOptions;
+      }
+      if (input.chargerProvided !== undefined) {
+        data.chargerProvided = input.chargerProvided;
+      }
+      if (input.noOfTyres !== undefined) data.noOfTyres = input.noOfTyres;
+      if (input.batteryNumber !== undefined) {
+        data.batteryNumber = input.batteryNumber;
+      }
+      if (input.batteryModelNumber !== undefined) {
+        data.batteryModelNumber = input.batteryModelNumber;
+      }
+      if (input.batteryBrand !== undefined) data.batteryBrand = input.batteryBrand;
+      if (input.registrationType !== undefined) {
+        data.registrationType = input.registrationType;
+      }
+      if (input.ownershipType !== undefined) {
+        data.ownershipType = input.ownershipType;
+      }
+      if (input.dateOfPurchase !== undefined) {
+        data.dateOfPurchase = input.dateOfPurchase;
+      }
+      if (input.dateOfDelivery !== undefined) {
+        data.dateOfDelivery = input.dateOfDelivery;
+      }
+      if (input.dateOfRegistration !== undefined) {
+        data.dateOfRegistration = input.dateOfRegistration;
+      }
+      if (input.dateOfOperation !== undefined) {
+        data.dateOfOperation = input.dateOfOperation;
+      }
+      if (input.warrantyStartDate !== undefined) {
+        data.warrantyStartDate = input.warrantyStartDate;
+      }
+      if (input.warrantyEndDate !== undefined) {
+        data.warrantyEndDate = input.warrantyEndDate;
+      }
+      if (input.safeCabCertificateExpiryDate !== undefined) {
+        data.safeCabCertificateExpiryDate = input.safeCabCertificateExpiryDate;
+      }
+      if (input.telematicsExpiryDate !== undefined) {
+        data.telematicsExpiryDate = input.telematicsExpiryDate;
+      }
+      if (input.loanProvider !== undefined) data.loanProvider = input.loanProvider;
+      if (input.emiAmount !== undefined) data.emiAmount = input.emiAmount;
+      if (input.tenurePeriod !== undefined) {
+        data.tenurePeriod = input.tenurePeriod;
+      }
+      if (input.emiDueDate !== undefined) data.emiDueDate = input.emiDueDate;
+      if (input.insurancePolicyNumber !== undefined) {
+        data.insurancePolicyNumber = input.insurancePolicyNumber;
+      }
+      if (input.insuranceProvider !== undefined) {
+        data.insuranceProvider = input.insuranceProvider;
+      }
+      if (input.insurancePolicyType !== undefined) {
+        data.insurancePolicyType = input.insurancePolicyType;
+      }
+      if (input.insuranceValidFrom !== undefined) {
+        data.insuranceValidFrom = input.insuranceValidFrom;
+      }
+      if (input.insuranceValidTo !== undefined) {
+        data.insuranceValidTo = input.insuranceValidTo;
+      }
+      if (input.insurancePremiumAmount !== undefined) {
+        data.insurancePremiumAmount = input.insurancePremiumAmount;
+      }
+      if (input.insuranceStatus !== undefined) {
+        data.insuranceStatus = input.insuranceStatus;
+      }
+      if (input.insuranceThirdParty !== undefined) {
+        data.insuranceThirdParty = input.insuranceThirdParty;
+      }
+
+      const tyres = tyresInput(input.tyres);
+      if (tyres !== undefined) data.tyres = tyres;
 
       const vehicle = await tx.vehicle.update({
         where: { id },
@@ -285,13 +416,16 @@ export async function updateVehicle(
         select: vehicleDetailSelect,
       });
 
+      const { tyres: _oldTyres, ...vehicleBefore } = existing;
+      const { tyres: _newTyres, ...vehicleAfter } = vehicle;
+
       await logAudit({
         ...actor,
         action: "UPDATE",
         resource: "Vehicle",
         resourceId: vehicle.id,
-        oldData: vehicleSnapshot(existing),
-        newData: vehicleSnapshot(vehicle),
+        oldData: vehicleBefore,
+        newData: vehicleAfter,
         summary: `${actor.userName} updated vehicle ${vehicle.registrationNumber}.`,
         db: tx,
         throwOnError: true,
@@ -300,10 +434,10 @@ export async function updateVehicle(
       return vehicle;
     });
   } catch (err) {
-    rethrowPrismaError(
+    throw AppError.fromPrisma(
       err,
       "A vehicle with this registration number or VIN already exists"
-    );
+    ) ?? err;
   }
 }
 
@@ -351,12 +485,16 @@ export async function deleteVehicle(id: string, actor: AuditActor) {
         select: vehicleDetailSelect,
       });
 
+      const { tyres: _oldTyres, ...vehicleBefore } = existing;
+      const { tyres: _newTyres, ...vehicleAfter } = vehicle;
+
       await logAudit({
         ...actor,
         action: "DELETE",
         resource: "Vehicle",
         resourceId: vehicle.id,
-        oldData: vehicleSnapshot(existing),
+        oldData: vehicleBefore,
+        newData: vehicleAfter,
         summary: `${actor.userName} deleted vehicle ${vehicle.registrationNumber}.`,
         db: tx,
         throwOnError: true,
@@ -365,7 +503,7 @@ export async function deleteVehicle(id: string, actor: AuditActor) {
       return vehicle;
     });
   } catch (err) {
-    rethrowPrismaError(err, "Vehicle could not be deleted");
+    throw AppError.fromPrisma(err, "Vehicle could not be deleted") ?? err;
   }
 }
 
@@ -380,7 +518,6 @@ export async function changeVehicleStatus(
       if (!vehicle || vehicle.deletedAt) {
         throw new AppError("Vehicle not found", 404, ErrorCode.NOT_FOUND);
       }
-      assertHubAccess(actor.user, vehicle.hubId);
 
       const previousStatus = vehicle.status;
       const nextStatus = input.status;
@@ -459,10 +596,9 @@ export async function changeVehicleStatus(
         action: "UPDATE",
         resource: "Vehicle",
         resourceId: id,
-        oldData: { status: previousStatus },
+        oldData: vehicle,
         newData: {
-          status: nextStatus,
-          previousStatus,
+          ...updatedVehicle,
           reason: input.reason ?? null,
         },
         summary: `${actor.userName} changed vehicle ${vehicle.registrationNumber} status from ${previousStatus} to ${nextStatus}.`,
@@ -473,6 +609,6 @@ export async function changeVehicleStatus(
       return { vehicle: updatedVehicle };
     });
   } catch (err) {
-    rethrowPrismaError(err, "Vehicle status could not be changed");
+    throw AppError.fromPrisma(err, "Vehicle status could not be changed") ?? err;
   }
 }

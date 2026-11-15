@@ -5,15 +5,11 @@ import { redisDel } from "../config/redis.js";
 import {
   AppError,
   ErrorCode,
-  rethrowPrismaError,
 } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
-import { actorHubId, isAdmin } from "../utils/scope.js";
-import type { UserContext } from "../types/user.js";
 import type {
   AssignUserRoleInput,
   ChangeUserStatusInput,
-  CreateUserInput,
   ListUsersQuery,
   UpdateUserInput,
 } from "../validation/user.js";
@@ -24,7 +20,6 @@ const roleSelect = { id: true, name: true } as const;
 
 const userSafeSelect = {
   id: true,
-  name: true,
   email: true,
   phoneNumber: true,
   status: true,
@@ -34,14 +29,21 @@ const userSafeSelect = {
   updatedAt: true,
   role: { select: roleSelect },
   staffProfile: {
-    select: { id: true, employeeCode: true, hubId: true, status: true },
+    select: {
+      id: true,
+      fullName: true,
+      employeeCode: true,
+      hubId: true,
+      status: true,
+    },
   },
-  riderProfile: { select: { id: true, riderCode: true, status: true } },
+  riderProfile: {
+    select: { id: true, fullName: true, riderCode: true, status: true },
+  },
 } as const;
 
 const userListSelect = {
   id: true,
-  name: true,
   email: true,
   phoneNumber: true,
   status: true,
@@ -50,25 +52,26 @@ const userListSelect = {
   createdAt: true,
   updatedAt: true,
   role: { select: roleSelect },
+  staffProfile: { select: { id: true, fullName: true } },
+  riderProfile: { select: { id: true, fullName: true } },
 } as const;
 
-function userSnapshot(user: {
-  name: string;
-  email: string | null;
+type NamedUser = {
   phoneNumber: string;
-  status: string;
-  roleId: string;
-}) {
-  return {
-    name: user.name,
-    email: user.email,
-    phoneNumber: user.phoneNumber,
-    status: user.status,
-    roleId: user.roleId,
-  };
+  staffProfile?: { fullName: string } | null;
+  riderProfile?: { fullName: string } | null;
+};
+
+// A user has no name of its own; the linked profile holds it.
+export function displayName(user: NamedUser) {
+  return (
+    user.staffProfile?.fullName ??
+    user.riderProfile?.fullName ??
+    user.phoneNumber
+  );
 }
 
-async function resolveRole(
+export async function resolveRole(
   tx: Tx,
   input: { roleId?: string; roleName?: string }
 ) {
@@ -84,55 +87,32 @@ async function resolveRole(
   return role;
 }
 
-async function activeAdminCount(tx: Tx, excludeUserId?: string) {
-  return tx.user.count({
-    where: {
-      deletedAt: null,
-      status: "ACTIVE",
-      role: { name: "ADMIN" },
-      ...(excludeUserId ? { id: { not: excludeUserId } } : {}),
-    },
-  });
-}
-
-async function assertNotLastActiveAdmin(
-  tx: Tx,
-  target: { id: string; roleId: string; status: string },
-  next: { roleId?: string; status?: string }
-) {
-  const targetIsActiveAdmin = target.roleId === undefined ? false : true;
-  const currentRole = await tx.role.findUnique({
-    where: { id: target.roleId },
-    select: { name: true },
-  });
-  if (!currentRole || currentRole.name !== "ADMIN") {
-    return;
-  }
-
-  const willRemainActiveAdmin =
-    target.status === "ACTIVE" &&
-    (next.status === undefined || next.status === "ACTIVE") &&
-    (next.roleId === undefined ||
-      next.roleId === target.roleId);
-
-  if (willRemainActiveAdmin) return;
-
-  const others = await activeAdminCount(tx, target.id);
-  if (others === 0) {
-    throw new AppError(
-      "The last active administrator cannot be demoted, deactivated or deleted",
-      409,
-      ErrorCode.CONFLICT
-    );
-  }
-}
-
 async function loadTarget(tx: Tx, id: string) {
   const user = await tx.user.findUnique({
     where: { id },
-    include: {
+    select: {
+      id: true,
+      email: true,
+      phoneNumber: true,
+      status: true,
+      roleId: true,
+      lastLoginAt: true,
+      createdAt: true,
+      updatedAt: true,
+      deletedAt: true,
       role: { select: roleSelect },
-      staffProfile: { select: { hubId: true } },
+      staffProfile: {
+        select: {
+          id: true,
+          fullName: true,
+          employeeCode: true,
+          hubId: true,
+          status: true,
+        },
+      },
+      riderProfile: {
+        select: { id: true, fullName: true, riderCode: true, status: true },
+      },
     },
   });
   if (!user || user.deletedAt) {
@@ -141,78 +121,39 @@ async function loadTarget(tx: Tx, id: string) {
   return user;
 }
 
-function assertUserScope(
-  actorUser: UserContext | undefined,
-  target: { id: string; staffProfile?: { hubId: string | null } | null }
+export async function createUserRecord(
+  tx: Tx,
+  input: {
+    phoneNumber: string;
+    password: string;
+    roleId: string;
+    email?: string | null;
+    status?: "ONBOARDING" | "ACTIVE" | "SUSPENDED";
+  }
 ) {
-  if (!actorUser || isAdmin(actorUser)) return;
-  const scopedHub = actorHubId(actorUser);
-  if (!scopedHub) return;
-  if (target.id === actorUser.id) return;
-  if (target.staffProfile?.hubId !== scopedHub) {
-    throw new AppError(
-      "You do not have access to users outside your assigned hub",
-      403,
-      ErrorCode.FORBIDDEN
-    );
-  }
+  const passwordHash = await bcrypt.hash(input.password, 10);
+  return tx.user.create({
+    data: {
+      email: input.email ?? null,
+      phoneNumber: input.phoneNumber,
+      passwordHash,
+      status: input.status ?? "ACTIVE",
+      roleId: input.roleId,
+    },
+    select: { id: true },
+  });
 }
 
-export async function createUser(input: CreateUserInput, actor: AuditActor) {
-  try {
-    return await prisma.$transaction(async (tx) => {
-      const role = await resolveRole(tx, input);
-      const passwordHash = await bcrypt.hash(input.password, 10);
-
-      const user = await tx.user.create({
-        data: {
-          name: input.name,
-          email: input.email ?? null,
-          phoneNumber: input.phoneNumber,
-          passwordHash,
-          status: input.status ?? "ACTIVE",
-          roleId: role.id,
-        },
-        select: userSafeSelect,
-      });
-
-      await logAudit({
-        ...actor,
-        action: "CREATE",
-        resource: "User",
-        resourceId: user.id,
-        newData: {
-          ...userSnapshot(user),
-          role: role.name,
-        },
-        summary: `${actor.userName} created user ${user.name} with role ${role.name}.`,
-        db: tx,
-        throwOnError: true,
-      });
-
-      return user;
-    });
-  } catch (err) {
-    rethrowPrismaError(
-      err,
-      "A user with this email or phone number already exists"
-    );
-  }
-}
-
-export async function listUsers(query: ListUsersQuery, user?: UserContext) {
+export async function listUsers(query: ListUsersQuery) {
   const { page, limit, search, roleId, status } = query;
   const where: Prisma.UserWhereInput = { deletedAt: null };
-  const scopedHubId = user && !isAdmin(user) ? actorHubId(user) : null;
-  if (scopedHubId) {
-    where.OR = [{ id: user!.id }, { staffProfile: { is: { hubId: scopedHubId } } }];
-  }
   if (roleId) where.roleId = roleId;
   if (status) where.status = status;
   const searchWhere: Prisma.UserWhereInput | null = search
     ? {
         OR: [
-          { name: { contains: search, mode: "insensitive" } },
+          { staffProfile: { fullName: { contains: search, mode: "insensitive" } } },
+          { riderProfile: { fullName: { contains: search, mode: "insensitive" } } },
           { email: { contains: search, mode: "insensitive" } },
           { phoneNumber: { contains: search, mode: "insensitive" } },
         ],
@@ -253,7 +194,7 @@ export async function listUsers(query: ListUsersQuery, user?: UserContext) {
   };
 }
 
-export async function getUserById(id: string, user?: UserContext) {
+export async function getUserById(id: string) {
   const target = await prisma.user.findUnique({
     where: { id },
     select: { ...userSafeSelect, deletedAt: true },
@@ -262,7 +203,6 @@ export async function getUserById(id: string, user?: UserContext) {
   if (!target || target.deletedAt) {
     throw new AppError("User not found", 404, ErrorCode.NOT_FOUND);
   }
-  assertUserScope(user, target);
 
   const { deletedAt: _deletedAt, ...safeUser } = target;
   return safeUser;
@@ -276,10 +216,8 @@ export async function updateUser(
   try {
     return await prisma.$transaction(async (tx) => {
       const existing = await loadTarget(tx, id);
-      assertUserScope(actor.user, existing);
 
       const data: Prisma.UserUncheckedUpdateInput = {};
-      if (input.name !== undefined) data.name = input.name;
       if (input.phoneNumber !== undefined) data.phoneNumber = input.phoneNumber;
       if (input.email !== undefined) data.email = input.email;
 
@@ -294,9 +232,9 @@ export async function updateUser(
         action: "UPDATE",
         resource: "User",
         resourceId: user.id,
-        oldData: userSnapshot(existing),
-        newData: userSnapshot(user),
-        summary: `${actor.userName} updated user ${user.name}.`,
+        oldData: existing,
+        newData: user,
+        summary: `${actor.userName} updated user ${displayName(user)}.`,
         db: tx,
         throwOnError: true,
       });
@@ -304,10 +242,10 @@ export async function updateUser(
       return user;
     });
   } catch (err) {
-    rethrowPrismaError(
+    throw AppError.fromPrisma(
       err,
       "A user with this email or phone number already exists"
-    );
+    ) ?? err;
   }
 }
 
@@ -318,7 +256,6 @@ export async function assignUserRole(
 ) {
   return prisma.$transaction(async (tx) => {
     const existing = await loadTarget(tx, id);
-    assertUserScope(actor.user, existing);
     const role = await resolveRole(tx, { roleId: input.roleId });
 
     if (existing.id === actor.userId && existing.role.name === "ADMIN" && role.name !== "ADMIN") {
@@ -328,8 +265,6 @@ export async function assignUserRole(
         ErrorCode.CONFLICT
       );
     }
-
-    await assertNotLastActiveAdmin(tx, existing, { roleId: role.id });
 
     const user = await tx.user.update({
       where: { id },
@@ -342,13 +277,12 @@ export async function assignUserRole(
       action: "ASSIGN_ROLE",
       resource: "User",
       resourceId: user.id,
-      oldData: { role: existing.role.name, roleId: existing.roleId },
+      oldData: existing,
       newData: {
-        role: role.name,
-        roleId: role.id,
+        ...user,
         reason: input.reason ?? null,
       },
-      summary: `${actor.userName} changed user ${user.name} role from ${existing.role.name} to ${role.name}.`,
+      summary: `${actor.userName} changed user ${displayName(user)} role from ${existing.role.name} to ${role.name}.`,
       db: tx,
       throwOnError: true,
     });
@@ -364,7 +298,6 @@ export async function changeUserStatus(
 ) {
   return prisma.$transaction(async (tx) => {
     const existing = await loadTarget(tx, id);
-    assertUserScope(actor.user, existing);
 
     if (existing.id === actor.userId && input.status !== "ACTIVE") {
       throw new AppError(
@@ -373,8 +306,6 @@ export async function changeUserStatus(
         ErrorCode.CONFLICT
       );
     }
-
-    await assertNotLastActiveAdmin(tx, existing, { status: input.status });
 
     const user = await tx.user.update({
       where: { id },
@@ -396,9 +327,9 @@ export async function changeUserStatus(
       action: "UPDATE_STATUS",
       resource: "User",
       resourceId: user.id,
-      oldData: { status: existing.status },
-      newData: { status: input.status, reason: input.reason ?? null },
-      summary: `${actor.userName} changed user ${user.name} status from ${existing.status} to ${input.status}.`,
+      oldData: existing,
+      newData: { ...user, reason: input.reason ?? null },
+      summary: `${actor.userName} changed user ${displayName(user)} status from ${existing.status} to ${input.status}.`,
       db: tx,
       throwOnError: true,
     });
@@ -410,7 +341,6 @@ export async function changeUserStatus(
 export async function revokeUserSessions(id: string, actor: AuditActor) {
   return prisma.$transaction(async (tx) => {
     const existing = await loadTarget(tx, id);
-    assertUserScope(actor.user, existing);
     const revoked = await redisDel(`session:${id}`);
     if (!revoked) {
       throw new AppError(
@@ -426,7 +356,7 @@ export async function revokeUserSessions(id: string, actor: AuditActor) {
       resource: "User",
       resourceId: existing.id,
       newData: { userId: existing.id },
-      summary: `${actor.userName} revoked active sessions for user ${existing.name}.`,
+      summary: `${actor.userName} revoked active sessions for user ${displayName(existing)}.`,
       db: tx,
       throwOnError: true,
     });
@@ -438,7 +368,6 @@ export async function revokeUserSessions(id: string, actor: AuditActor) {
 export async function deleteUser(id: string, actor: AuditActor) {
   return prisma.$transaction(async (tx) => {
     const existing = await loadTarget(tx, id);
-    assertUserScope(actor.user, existing);
 
     if (existing.id === actor.userId) {
       throw new AppError(
@@ -447,8 +376,6 @@ export async function deleteUser(id: string, actor: AuditActor) {
         ErrorCode.CONFLICT
       );
     }
-
-    await assertNotLastActiveAdmin(tx, existing, { status: "SUSPENDED" });
 
     const deletedAt = new Date();
     const user = await tx.user.update({
@@ -469,9 +396,9 @@ export async function deleteUser(id: string, actor: AuditActor) {
       action: "DELETE",
       resource: "User",
       resourceId: user.id,
-      oldData: userSnapshot(existing),
-      newData: { deletedAt, status: "SUSPENDED" },
-      summary: `${actor.userName} soft-deleted user ${existing.name}.`,
+      oldData: existing,
+      newData: { ...user, deletedAt },
+      summary: `${actor.userName} soft-deleted user ${displayName(existing)}.`,
       db: tx,
       throwOnError: true,
     });

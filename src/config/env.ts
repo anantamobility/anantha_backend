@@ -9,8 +9,9 @@ interface envConfig {
   jwtRefreshSecret: string;
   nodeEnv: string;
   redisUrl: string;
-  storageDriver: string;
-  storageLocalDir: string;
+  cloudinaryCloudName: string;
+  cloudinaryApiKey: string;
+  cloudinaryApiSecret: string;
   storageMaxFileBytes: number;
 
   smtpHost: string;
@@ -41,8 +42,9 @@ const envConfig: envConfig = {
     jwtRefreshSecret: String(process.env.JWT_REFRESH_SECRET),
     nodeEnv: String(process.env.NODE_ENV),
     redisUrl: String(process.env.REDIS_URL),
-    storageDriver: String(process.env.STORAGE_DRIVER || "local").toLowerCase(),
-    storageLocalDir: String(process.env.STORAGE_LOCAL_DIR || "storage/uploads"),
+    cloudinaryCloudName: String(process.env.CLOUDINARY_CLOUD_NAME),
+    cloudinaryApiKey: String(process.env.CLOUDINARY_API_KEY),
+    cloudinaryApiSecret: String(process.env.CLOUDINARY_API_SECRET),
     storageMaxFileBytes: numberFromEnv(process.env.STORAGE_MAX_FILE_BYTES, 10 * 1024 * 1024),
     smtpHost: String(process.env.SMTP_HOST || ""),
     smtpPort: numberFromEnv(process.env.SMTP_PORT, 587),

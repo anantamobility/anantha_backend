@@ -22,7 +22,7 @@ export const MODEL_REGISTRY = {
   earning: prisma.ledgerEntry,
   payStatement: prisma.riderPayStatement,
   service: prisma.service,
-  spare: prisma.spare,
+  spare: prisma.sparePart,
   inventory: prisma.inventoryMovement,
   // Aggregate-only resources have no dedicated table. They are authorized
   // with policy:false, and auditLog is used only as a safe read-only delegate

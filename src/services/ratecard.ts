@@ -4,7 +4,6 @@ import { Prisma } from "../generated/prisma/client.js";
 import {
   AppError,
   ErrorCode,
-  rethrowPrismaError,
 } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import type {
@@ -37,42 +36,6 @@ export const rateCardListSelect = {
 export const rateCardDetailSelect = {
   ...rateCardListSelect,
 } as const;
-
-type RateCardAuditShape = {
-  code: string;
-  name: string;
-  description: string | null;
-  vehicleCategory: string | null;
-  rentalType: string | null;
-  dailyRate: unknown;
-  weeklyRate: unknown;
-  fortnightlyRate: unknown;
-  monthlyRate: unknown;
-  securityDeposit: unknown;
-  effectiveFrom: Date;
-  effectiveTo: Date | null;
-  isActive: boolean;
-  terms: unknown;
-};
-
-function rateCardSnapshot(rateCard: RateCardAuditShape) {
-  return {
-    code: rateCard.code,
-    name: rateCard.name,
-    description: rateCard.description,
-    vehicleCategory: rateCard.vehicleCategory,
-    rentalType: rateCard.rentalType,
-    dailyRate: rateCard.dailyRate,
-    weeklyRate: rateCard.weeklyRate,
-    fortnightlyRate: rateCard.fortnightlyRate,
-    monthlyRate: rateCard.monthlyRate,
-    securityDeposit: rateCard.securityDeposit,
-    effectiveFrom: rateCard.effectiveFrom,
-    effectiveTo: rateCard.effectiveTo,
-    isActive: rateCard.isActive,
-    terms: rateCard.terms,
-  };
-}
 
 function generateRateCardCode() {
   return `RC-${uuidv4().replace(/-/g, "").slice(0, 8).toUpperCase()}`;
@@ -128,13 +91,14 @@ export async function createRateCard(
         data,
         select: rateCardDetailSelect,
       });
+      const { terms: _terms, ...rateCardAudit } = rateCard;
 
       await logAudit({
         ...actor,
         action: "CREATE",
         resource: "RateCard",
         resourceId: rateCard.id,
-        newData: rateCardSnapshot(rateCard),
+        newData: rateCardAudit,
         summary: `${actor.userName} created ratecard ${rateCard.code}.`,
         db: tx,
         throwOnError: true,
@@ -143,7 +107,7 @@ export async function createRateCard(
       return rateCard;
     });
   } catch (err) {
-    rethrowPrismaError(err, "A ratecard with this code already exists");
+    throw AppError.fromPrisma(err, "A ratecard with this code already exists") ?? err;
   }
 }
 
@@ -279,13 +243,16 @@ export async function updateRateCard(
         select: rateCardDetailSelect,
       });
 
+      const { terms: _oldTerms, ...rateCardBefore } = existing;
+      const { terms: _newTerms, ...rateCardAfter } = rateCard;
+
       await logAudit({
         ...actor,
         action: "UPDATE",
         resource: "RateCard",
         resourceId: rateCard.id,
-        oldData: rateCardSnapshot(existing),
-        newData: rateCardSnapshot(rateCard),
+        oldData: rateCardBefore,
+        newData: rateCardAfter,
         summary: `${actor.userName} updated ratecard ${rateCard.code}.`,
         db: tx,
         throwOnError: true,
@@ -294,7 +261,7 @@ export async function updateRateCard(
       return rateCard;
     });
   } catch (err) {
-    rethrowPrismaError(err, "A ratecard with this code already exists");
+    throw AppError.fromPrisma(err, "A ratecard with this code already exists") ?? err;
   }
 }
 
@@ -339,15 +306,17 @@ export async function changeRateCardStatus(
         isActive: input.isActive,
       };
 
+      const { terms: _oldTerms, ...rateCardBefore } = existing;
+      const { terms: _newTerms, ...rateCardAfter } = rateCard;
+
       await logAudit({
         ...actor,
         action: "UPDATE",
         resource: "RateCard",
         resourceId: id,
-        oldData: { isActive: existing.isActive },
+        oldData: rateCardBefore,
         newData: {
-          isActive: input.isActive,
-          previousStatus: existing.isActive ? "ACTIVE" : "INACTIVE",
+          ...rateCardAfter,
           reason: input.reason ?? null,
         },
         summary: `${actor.userName} changed ratecard ${existing.code} status to ${
@@ -360,7 +329,7 @@ export async function changeRateCardStatus(
       return { rateCard };
     });
   } catch (err) {
-    rethrowPrismaError(err, "Ratecard status could not be changed");
+    throw AppError.fromPrisma(err, "Ratecard status could not be changed") ?? err;
   }
 }
 
@@ -379,13 +348,16 @@ export async function deleteRateCard(id: string, actor: AuditActor) {
         select: rateCardDetailSelect,
       });
 
+      const { terms: _oldTerms, ...rateCardBefore } = existing;
+      const { terms: _newTerms, ...rateCardAfter } = rateCard;
+
       await logAudit({
         ...actor,
         action: "DELETE",
         resource: "RateCard",
         resourceId: rateCard.id,
-        oldData: rateCardSnapshot(existing),
-        newData: { deletedAt, isActive: false },
+        oldData: rateCardBefore,
+        newData: rateCardAfter,
         summary: `${actor.userName} soft-deleted ratecard ${existing.code}.`,
         db: tx,
         throwOnError: true,
@@ -394,6 +366,6 @@ export async function deleteRateCard(id: string, actor: AuditActor) {
       return rateCard;
     });
   } catch (err) {
-    rethrowPrismaError(err, "Ratecard could not be deleted");
+    throw AppError.fromPrisma(err, "Ratecard could not be deleted") ?? err;
   }
 }

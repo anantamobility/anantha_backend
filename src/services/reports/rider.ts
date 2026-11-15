@@ -44,8 +44,8 @@ export async function riderReport(
     where.OR = [
       { riderCode: { contains: query.search, mode: "insensitive" } },
       { fullName: { contains: query.search, mode: "insensitive" } },
-      { phoneNumber: { contains: query.search, mode: "insensitive" } },
-      { email: { contains: query.search, mode: "insensitive" } },
+      { user: { phoneNumber: { contains: query.search, mode: "insensitive" } } },
+      { user: { email: { contains: query.search, mode: "insensitive" } } },
     ];
   }
 
@@ -55,14 +55,13 @@ export async function riderReport(
       select: {
         riderCode: true,
         fullName: true,
-        phoneNumber: true,
-        email: true,
         status: true,
         rentalType: true,
         b2cMode: true,
         b2bRiderMgmt: true,
         onboardedAt: true,
         createdAt: true,
+        user: { select: { phoneNumber: true, email: true } },
         client: { select: { clientCode: true, name: true } },
         hub: { select: { hubCode: true, name: true } },
         _count: {
@@ -95,8 +94,8 @@ export async function riderReport(
     rows: rows.map((row) => ({
       riderCode: row.riderCode,
       fullName: row.fullName,
-      phoneNumber: row.phoneNumber ?? "",
-      email: row.email ?? "",
+      phoneNumber: row.user?.phoneNumber ?? "",
+      email: row.user?.email ?? "",
       status: row.status,
       rentalType: row.rentalType ?? "",
       b2cMode: row.b2cMode ?? "",
