@@ -13,7 +13,7 @@ import { resolveRentalPricing } from "./rental-pricing.js";
 import {
   getDepositBalanceByRental,
   getOrCreateDepositForRental,
-  recordDepositTransaction,
+  recordDepositLedgerEntry,
 } from "./ledger.js";
 import {
   generateRentalDues,
@@ -867,7 +867,7 @@ export async function closeRental(
       }
 
       if (input.depositAdjustment) {
-        await recordDepositTransaction(tx, {
+        await recordDepositLedgerEntry(tx, {
           rentalId: rental.id,
           type: "ADJUSTMENT",
           direction: input.depositAdjustment.direction,
@@ -879,7 +879,7 @@ export async function closeRental(
       }
 
       if (input.depositRefund) {
-        await recordDepositTransaction(tx, {
+        await recordDepositLedgerEntry(tx, {
           rentalId: rental.id,
           type: "REFUND",
           direction: "DEBIT",

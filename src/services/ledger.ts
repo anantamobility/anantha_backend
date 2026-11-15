@@ -33,7 +33,7 @@ export const depositSelect = {
   updatedAt: true,
 } as const;
 
-const depositTransactionUserSelect = {
+const depositLedgerUserSelect = {
   id: true,
   name: true,
 } as const;
@@ -60,7 +60,7 @@ function deriveDepositStatus(input: {
 }
 
 async function depositTotals(tx: Tx, depositId: string) {
-  const rows = await tx.depositTransaction.findMany({
+  const rows = await tx.depositLedger.findMany({
     where: { depositId },
     select: { direction: true, amount: true },
   });
@@ -153,7 +153,7 @@ export async function getDepositBalanceByRental(tx: Tx, rentalId: string) {
   return depositTotals(tx, deposit.id);
 }
 
-export async function recordDepositTransaction(
+export async function recordDepositLedgerEntry(
   tx: Tx,
   input: {
     rentalId: string;
@@ -175,7 +175,7 @@ export async function recordDepositTransaction(
       ? `deposit-${input.type}:${deposit.id}:${input.reference}`
       : `deposit-${input.type}:${deposit.id}:${uuidv4()}`);
 
-  const duplicate = await tx.depositTransaction.findUnique({
+  const duplicate = await tx.depositLedger.findUnique({
     where: { idempotencyKey },
   });
   if (duplicate) {
@@ -213,7 +213,7 @@ export async function recordDepositTransaction(
     );
   }
 
-  const transaction = await tx.depositTransaction.create({
+  const transaction = await tx.depositLedger.create({
     data: {
       depositId: deposit.id,
       type: input.type,
@@ -293,7 +293,7 @@ export async function receiveDeposit(
 ) {
   try {
     return await prisma.$transaction(async (tx) =>
-      recordDepositTransaction(tx, {
+      recordDepositLedgerEntry(tx, {
         rentalId,
         type: "RECEIPT",
         direction: "CREDIT",
@@ -316,7 +316,7 @@ export async function refundDeposit(
 ) {
   try {
     return await prisma.$transaction(async (tx) =>
-      recordDepositTransaction(tx, {
+      recordDepositLedgerEntry(tx, {
         rentalId,
         type: "REFUND",
         direction: "DEBIT",
@@ -339,7 +339,7 @@ export async function adjustDeposit(
 ) {
   try {
     return await prisma.$transaction(async (tx) =>
-      recordDepositTransaction(tx, {
+      recordDepositLedgerEntry(tx, {
         rentalId,
         type: "ADJUSTMENT",
         direction: input.direction,
@@ -399,19 +399,19 @@ export async function getRentalDepositLedger(
   }
 
   const { page, limit } = query;
-  const where: Prisma.DepositTransactionWhereInput = {
+  const where: Prisma.DepositLedgerWhereInput = {
     depositId: deposit.id,
   };
 
   const [transactions, total, totals] = await Promise.all([
-    prisma.depositTransaction.findMany({
+    prisma.depositLedger.findMany({
       where,
-      include: { authorizedBy: { select: depositTransactionUserSelect } },
+      include: { authorizedBy: { select: depositLedgerUserSelect } },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       skip: (page - 1) * limit,
       take: limit,
     }),
-    prisma.depositTransaction.count({ where }),
+    prisma.depositLedger.count({ where }),
     depositTotals(prisma as unknown as Tx, deposit.id),
   ]);
 

@@ -51,7 +51,7 @@ beforeEach(() => {
       });
     }
   });
-  prismaMock.depositTransaction.findMany.mockResolvedValue([]);
+  prismaMock.depositLedger.findMany.mockResolvedValue([]);
   prismaMock.auditLog.create.mockResolvedValue({});
 });
 
@@ -59,7 +59,7 @@ describe("GET /rentals/:id/deposit", () => {
   it("returns the deposit with its derived balance", async () => {
     authenticate([{ resource: "deposit", action: "read" }]);
     prismaMock.deposit.findUnique.mockResolvedValue(deposit());
-    prismaMock.depositTransaction.findMany.mockResolvedValue([
+    prismaMock.depositLedger.findMany.mockResolvedValue([
       { direction: "CREDIT", amount: "2000.00" },
       { direction: "DEBIT", amount: "500.00" },
     ]);
@@ -94,10 +94,10 @@ describe("GET /rentals/:id/deposit/ledger", () => {
       id: DEPOSIT_ID,
       currency: "INR",
     });
-    prismaMock.depositTransaction.findMany.mockResolvedValue([
+    prismaMock.depositLedger.findMany.mockResolvedValue([
       { id: TRANSACTION_ID, type: "RECEIPT", direction: "CREDIT" },
     ]);
-    prismaMock.depositTransaction.count.mockResolvedValue(1);
+    prismaMock.depositLedger.count.mockResolvedValue(1);
 
     const res = await request(app)
       .get(`/rentals/${RENTAL_ID}/deposit/ledger?page=1&limit=10`)
@@ -118,9 +118,9 @@ describe("POST /rentals/:id/deposit/receive", () => {
   it("records a receipt and updates the deposit status", async () => {
     authenticate([{ resource: "deposit", action: "receive" }]);
     prismaMock.deposit.findUnique.mockResolvedValue(deposit({ status: "REQUIRED" }));
-    prismaMock.depositTransaction.findUnique.mockResolvedValue(null);
+    prismaMock.depositLedger.findUnique.mockResolvedValue(null);
     prismaMock.deposit.updateMany.mockResolvedValue({ count: 1 });
-    prismaMock.depositTransaction.create.mockResolvedValue({
+    prismaMock.depositLedger.create.mockResolvedValue({
       id: TRANSACTION_ID,
       type: "RECEIPT",
       direction: "CREDIT",
@@ -138,7 +138,7 @@ describe("POST /rentals/:id/deposit/receive", () => {
     expect(res.status).toBe(201);
     expect(res.body.data.transaction.id).toBe(TRANSACTION_ID);
     expect(res.body.data.balance).toBe("500");
-    expect(prismaMock.depositTransaction.create).toHaveBeenCalledWith({
+    expect(prismaMock.depositLedger.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         depositId: DEPOSIT_ID,
         type: "RECEIPT",
@@ -163,7 +163,7 @@ describe("POST /rentals/:id/deposit/receive", () => {
       .send({ amount: "0" });
 
     expect(res.status).toBe(400);
-    expect(prismaMock.depositTransaction.create).not.toHaveBeenCalled();
+    expect(prismaMock.depositLedger.create).not.toHaveBeenCalled();
   });
 });
 
@@ -171,9 +171,9 @@ describe("POST /rentals/:id/deposit/refund", () => {
   it("rejects a refund that exceeds the available balance", async () => {
     authenticate([{ resource: "deposit", action: "refund" }]);
     prismaMock.deposit.findUnique.mockResolvedValue(deposit());
-    prismaMock.depositTransaction.findUnique.mockResolvedValue(null);
+    prismaMock.depositLedger.findUnique.mockResolvedValue(null);
     prismaMock.deposit.updateMany.mockResolvedValue({ count: 1 });
-    prismaMock.depositTransaction.findMany.mockResolvedValue([
+    prismaMock.depositLedger.findMany.mockResolvedValue([
       { direction: "CREDIT", amount: "100.00" },
     ]);
 
@@ -184,18 +184,18 @@ describe("POST /rentals/:id/deposit/refund", () => {
 
     expect(res.status).toBe(409);
     expect(res.body.error.message).toMatch(/insufficient/);
-    expect(prismaMock.depositTransaction.create).not.toHaveBeenCalled();
+    expect(prismaMock.depositLedger.create).not.toHaveBeenCalled();
   });
 
   it("records a refund when the balance is sufficient", async () => {
     authenticate([{ resource: "deposit", action: "refund" }]);
     prismaMock.deposit.findUnique.mockResolvedValue(deposit());
-    prismaMock.depositTransaction.findUnique.mockResolvedValue(null);
+    prismaMock.depositLedger.findUnique.mockResolvedValue(null);
     prismaMock.deposit.updateMany.mockResolvedValue({ count: 1 });
-    prismaMock.depositTransaction.findMany.mockResolvedValue([
+    prismaMock.depositLedger.findMany.mockResolvedValue([
       { direction: "CREDIT", amount: "2000.00" },
     ]);
-    prismaMock.depositTransaction.create.mockResolvedValue({
+    prismaMock.depositLedger.create.mockResolvedValue({
       id: TRANSACTION_ID,
       type: "REFUND",
       direction: "DEBIT",
@@ -236,9 +236,9 @@ describe("POST /rentals/:id/deposit/adjust", () => {
   it("rejects a debit adjustment above the balance", async () => {
     authenticate([{ resource: "deposit", action: "adjust" }]);
     prismaMock.deposit.findUnique.mockResolvedValue(deposit());
-    prismaMock.depositTransaction.findUnique.mockResolvedValue(null);
+    prismaMock.depositLedger.findUnique.mockResolvedValue(null);
     prismaMock.deposit.updateMany.mockResolvedValue({ count: 1 });
-    prismaMock.depositTransaction.findMany.mockResolvedValue([]);
+    prismaMock.depositLedger.findMany.mockResolvedValue([]);
 
     const res = await request(app)
       .post(`/rentals/${RENTAL_ID}/deposit/adjust`)
@@ -246,6 +246,6 @@ describe("POST /rentals/:id/deposit/adjust", () => {
       .send({ amount: "100", direction: "DEBIT", reason: "Damage" });
 
     expect(res.status).toBe(409);
-    expect(prismaMock.depositTransaction.create).not.toHaveBeenCalled();
+    expect(prismaMock.depositLedger.create).not.toHaveBeenCalled();
   });
 });

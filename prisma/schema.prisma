@@ -121,7 +121,7 @@ enum DepositStatus {
   CLOSED
 }
 
-enum DepositTransactionType {
+enum DepositEntryType {
   RECEIPT
   REFUND
   DEDUCTION
@@ -227,13 +227,16 @@ enum LedgerEntryType {
   PAYOUT
   REVERSAL
   OTHER
+  INCENTIVE // credit to rider, adds to pay
+  REIMBURSEMENT // credit to rider, adds to pay
+  ADVANCE // debit when handed out
+  ADVANCE_RECOVERY // optional, if you ever want a distinct recovery line
 }
 
-
-/*
-- rental side: DEBIT increases what the customer owes, CREDIT reduces it
-- rider side: CREDIT increases what AML owes, DEBIT reduces it
-*/
+/**
+ * - rental side: DEBIT increases what the customer owes, CREDIT reduces it
+ * - rider side: CREDIT increases what AML owes, DEBIT reduces it
+ */
 enum LedgerDirection {
   CREDIT // rental side: amonut recieved. rider side: AML owes more
   DEBIT // rental side: cutomer owns more. rider side: paid/deducted
@@ -359,10 +362,10 @@ model User {
   collectionsReceived   Collection[] @relation("CollectionReceivedBy")
   collectionsReconciled Collection[] @relation("CollectionReconciledBy")
 
-  payoutsApproved    Payout[]             @relation("PayoutApprovedBy")
-  depositsAuthorized DepositTransaction[] @relation("DepositAuthorizedBy")
-  ledgerCreated      LedgerEntry[]        @relation("LedgerCreatedBy")
-  statementsApproved RiderPayStatement[]  @relation("PayStatementApprovedBy")
+  payoutsApproved    Payout[]            @relation("PayoutApprovedBy")
+  depositsAuthorized DepositLedger[]     @relation("DepositAuthorizedBy")
+  ledgerCreated      LedgerEntry[]       @relation("LedgerCreatedBy")
+  statementsApproved RiderPayStatement[] @relation("PayStatementApprovedBy")
 
   assignmentsCreated             VehicleDeployment[]     @relation("AssignmentCreatedBy")
   // serviceStatusChanges           ServiceStatusHistory[]          @relation("ServiceStatusChangedBy")
@@ -743,7 +746,7 @@ model Deposit {
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
-  transactions DepositTransaction[]
+  ledgerEntries DepositLedger[]
 
   @@unique([rentalId])
   @@index([clientId])
@@ -753,30 +756,30 @@ model Deposit {
 }
 
 //deposit ledger p
-model DepositTransaction {
-  id                    String                 @id @default(uuid(7))
-  depositId             String
-  deposit               Deposit                @relation(fields: [depositId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  type                  DepositTransactionType
-  direction             LedgerDirection
-  amount                Decimal                @db.Decimal(14, 2)
-  reference             String?
-  reason                String?
-  authorizedById        String?
-  authorizedBy          User?                  @relation("DepositAuthorizedBy", fields: [authorizedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  collectionId          String?
-  collection            Collection?            @relation(fields: [collectionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  payStatementId        String?
-  payStatement          RiderPayStatement?     @relation("DepositPayStatement", fields: [payStatementId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  reversesTransactionId String?                @unique
-  reversesTransaction   DepositTransaction?    @relation("DepositReversal", fields: [reversesTransactionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  reversedBy            DepositTransaction?    @relation("DepositReversal")
-  idempotencyKey        String?                @unique
-  createdAt             DateTime               @default(now()) @db.Timestamptz(3)
+model DepositLedger {
+  id              String             @id @default(uuid(7))
+  depositId       String
+  deposit         Deposit            @relation(fields: [depositId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  type            DepositEntryType
+  direction       LedgerDirection
+  amount          Decimal            @db.Decimal(14, 2)
+  reference       String?
+  reason          String?
+  authorizedById  String?
+  authorizedBy    User?              @relation("DepositAuthorizedBy", fields: [authorizedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  collectionId    String?
+  collection      Collection?        @relation(fields: [collectionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  payStatementId  String?
+  payStatement    RiderPayStatement? @relation("DepositPayStatement", fields: [payStatementId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  reversesEntryId String?            @unique
+  reversesEntry   DepositLedger?     @relation("DepositReversal", fields: [reversesEntryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  reversedBy      DepositLedger?     @relation("DepositReversal")
+  idempotencyKey  String?            @unique
+  createdAt       DateTime           @default(now()) @db.Timestamptz(3)
 
   @@index([depositId, createdAt])
   @@index([collectionId])
-  @@map("deposit_transactions")
+  @@map("deposit_ledger_entries")
 }
 
 //p
@@ -810,7 +813,7 @@ model Collection {
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
 
-  depositTransactions DepositTransaction[]
+  depositLedgerEntries DepositLedger[]
 
   @@index([clientId, receivedAt])
   @@index([riderId, receivedAt])
@@ -854,8 +857,8 @@ model RentalDue {
  * payStatement code writes RENT_DEDUCTION (rider, DEBIT)
  * and COLLECTION_RECEIVED (rental, CREDIT) for the same amount.
  * Correct, but nothing enforces the pair balances — only idempotencyKey stops duplicates.
- * penalties, incentives, reimbursements are all just entries with a type 
- * and direction until a statement claims them. 
+ * penalties, incentives, reimbursements are all just entries with a type
+ * and direction until a statement claims them.
  */
 model LedgerEntry {
   id          String          @id @default(uuid(7))
@@ -892,6 +895,7 @@ model LedgerEntry {
   @@index([sourceType, sourceId])
   @@map("ledger_entries")
 }
+
 //p
 
 // model PaymentAllocation {
@@ -931,15 +935,16 @@ model RiderPayStatement {
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
 
-  lines               RiderPayStatementLine[]
-  payouts             Payout[]
-  ledgerEntries       LedgerEntry[]
-  depositTransactions DepositTransaction[]    @relation("DepositPayStatement")
+  lines                RiderPayStatementLine[]
+  payouts              Payout[]
+  ledgerEntries        LedgerEntry[]
+  depositLedgerEntries DepositLedger[]         @relation("DepositPayStatement")
 
   @@index([riderId, periodStart, periodEnd])
   @@index([status])
   @@map("rider_pay_statements")
-} //p
+}
+//p
 
 model RiderPayStatementLine {
   id             String               @id @default(uuid(7))
@@ -962,7 +967,8 @@ model RiderPayStatementLine {
   @@index([rentalId])
   @@index([ledgerEntryId])
   @@map("rider_pay_statement_lines")
-}//p
+}
+//p
 
 model Payout {
   id              String             @id @default(uuid(7))
@@ -986,7 +992,8 @@ model Payout {
   @@index([riderId, status])
   @@index([payStatementId])
   @@map("payouts")
-}//p
+}
+//p
 
 /**
  * invoice not yet implemented
