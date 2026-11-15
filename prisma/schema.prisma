@@ -1116,7 +1116,7 @@ model ServiceSpare {
   serviceId           String
   service             Service            @relation(fields: [serviceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   spareId             String
-  spare               Spare              @relation(fields: [spareId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  spare               SparePart              @relation(fields: [spareId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   quantity            Int
   unitCost            Decimal            @db.Decimal(14, 4)
   lineCost            Decimal            @db.Decimal(14, 2)
@@ -1168,7 +1168,7 @@ model ReplacementAssignment {
   @@map("replacement_assignments")
 }
 
-model Spare {
+model SparePart {
   id            String   @id @default(uuid(7))
   partNumber    String   @unique
   name          String
@@ -1189,13 +1189,13 @@ model Spare {
   @@index([name])
   @@index([category])
   @@index([isActive])
-  @@map("spares")
+  @@map("spare_parts")
 }
 
 model InventoryBalance {
   id        String   @id @default(uuid(7))
   spareId   String
-  spare     Spare    @relation(fields: [spareId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  spare     SparePart    @relation(fields: [spareId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   hubId     String
   hub       Hub      @relation(fields: [hubId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   onHand    Int      @default(0)
@@ -1210,7 +1210,7 @@ model InventoryBalance {
 model InventoryMovement {
   id             String                @id @default(uuid(7))
   spareId        String
-  spare          Spare                 @relation(fields: [spareId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  spare          SparePart                 @relation(fields: [spareId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   movementType   InventoryMovementType
   quantity       Int
   quantityDelta  Int

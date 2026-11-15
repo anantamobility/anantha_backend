@@ -17,34 +17,34 @@ import {
 
 const r = Router();
 
-r.post(
-  "/",
-  verifyToken,
-  authorize("collection", "create"),
-  validate(createCollectionSchema),
-  createCollection
-);
-r.get(
-  "/",
-  verifyToken,
-  authorize("collection", "read", { policy: false }),
-  validate(listCollectionsQuerySchema, "query"),
-  getCollections
-);
-r.patch(
-  "/:id/clear",
-  verifyToken,
-  validate(idParamSchema, "params"),
-  authorize("collection", "update"),
-  validate(clearCollectionSchema),
-  clearCollection
-);
-r.get(
-  "/:id",
-  verifyToken,
-  validate(idParamSchema, "params"),
-  authorize("collection", "read"),
-  getCollectionById
-);
+// r.post(
+//   "/",
+//   verifyToken,
+//   authorize("collection", "create"),
+//   validate(createCollectionSchema),
+//   createCollection
+// );
+// r.get(
+//   "/",
+//   verifyToken,
+//   authorize("collection", "read", { policy: false }),
+//   validate(listCollectionsQuerySchema, "query"),
+//   getCollections
+// );
+// r.patch(
+//   "/:id/clear",
+//   verifyToken,
+//   validate(idParamSchema, "params"),
+//   authorize("collection", "update"),
+//   validate(clearCollectionSchema),
+//   clearCollection
+// );
+// r.get(
+//   "/:id",
+//   verifyToken,
+//   validate(idParamSchema, "params"),
+//   authorize("collection", "read"),
+//   getCollectionById
+// );
 
 export default r;

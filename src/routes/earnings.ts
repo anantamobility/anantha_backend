@@ -17,33 +17,33 @@ import {
 
 const r = Router();
 
-r.post(
-  "/",
-  verifyToken,
-  authorize("earning", "create"),
-  validate(recordEarningSchema),
-  recordEarning
-);
-r.post(
-  "/adjustments",
-  verifyToken,
-  authorize("earning", "adjust", { policy: false }),
-  validate(adjustEarningSchema),
-  adjustEarning
-);
-r.get(
-  "/summary",
-  verifyToken,
-  authorize("earning", "read", { policy: false }),
-  validate(earningsSummaryQuerySchema, "query"),
-  getEarningsSummary
-);
-r.get(
-  "/",
-  verifyToken,
-  authorize("earning", "read", { policy: false }),
-  validate(listEarningsQuerySchema, "query"),
-  getEarnings
-);
+// r.post(
+//   "/",
+//   verifyToken,
+//   authorize("earning", "create"),
+//   validate(recordEarningSchema),
+//   recordEarning
+// );
+// r.post(
+//   "/adjustments",
+//   verifyToken,
+//   authorize("earning", "adjust", { policy: false }),
+//   validate(adjustEarningSchema),
+//   adjustEarning
+// );
+// r.get(
+//   "/summary",
+//   verifyToken,
+//   authorize("earning", "read", { policy: false }),
+//   validate(earningsSummaryQuerySchema, "query"),
+//   getEarningsSummary
+// );
+// r.get(
+//   "/",
+//   verifyToken,
+//   authorize("earning", "read", { policy: false }),
+//   validate(listEarningsQuerySchema, "query"),
+//   getEarnings
+// );
 
 export default r;

@@ -7,12 +7,12 @@ import { getAuditLogs } from "../controllers/users/auditLog.js";
 
 const r = Router();
 
-r.get(
-  "/",
-  verifyToken,
-  authorize("auditLog", "read", { policy: false }),
-  validate(listAuditLogsQuerySchema, "query"),
-  getAuditLogs
-);
+// r.get(
+//   "/",
+//   verifyToken,
+//   authorize("auditLog", "read", { policy: false }),
+//   validate(listAuditLogsQuerySchema, "query"),
+//   getAuditLogs
+// );
 
 export default r;

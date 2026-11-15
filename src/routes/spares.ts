@@ -19,45 +19,45 @@ import {
 
 const r = Router();
 
-r.post(
-  "/",
-  verifyToken,
-  authorize("spare", "create"),
-  validate(createSpareSchema),
-  createSpare
-);
-r.get(
-  "/",
-  verifyToken,
-  authorize("spare", "read", { policy: false }),
-  validate(listSparesQuerySchema, "query"),
-  getSpares
-);
+// r.post(
+//   "/",
+//   verifyToken,
+//   authorize("spare", "create"),
+//   validate(createSpareSchema),
+//   createSpare
+// );
+// r.get(
+//   "/",
+//   verifyToken,
+//   authorize("spare", "read", { policy: false }),
+//   validate(listSparesQuerySchema, "query"),
+//   getSpares
+// );
 
-r.patch(
-  "/:id/status",
-  verifyToken,
-  validate(idParamSchema, "params"),
-  authorize("spare", "status:update"),
-  validate(changeSpareStatusSchema),
-  changeSpareStatus
-);
+// r.patch(
+//   "/:id/status",
+//   verifyToken,
+//   validate(idParamSchema, "params"),
+//   authorize("spare", "status:update"),
+//   validate(changeSpareStatusSchema),
+//   changeSpareStatus
+// );
 
-r.patch(
-  "/:id",
-  verifyToken,
-  validate(idParamSchema, "params"),
-  authorize("spare", "update"),
-  validate(updateSpareSchema),
-  updateSpare
-);
+// r.patch(
+//   "/:id",
+//   verifyToken,
+//   validate(idParamSchema, "params"),
+//   authorize("spare", "update"),
+//   validate(updateSpareSchema),
+//   updateSpare
+// );
 
-r.get(
-  "/:id",
-  verifyToken,
-  validate(idParamSchema, "params"),
-  authorize("spare", "read"),
-  getSpareById
-);
+// r.get(
+//   "/:id",
+//   verifyToken,
+//   validate(idParamSchema, "params"),
+//   authorize("spare", "read"),
+//   getSpareById
+// );
 
 export default r;

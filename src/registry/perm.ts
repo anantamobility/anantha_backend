@@ -11,7 +11,7 @@ export const PERMISSION_REGISTRY = [
   },
   {
     resource: 'role',
-    actions: ['read', 'create', 'assign_perm', 'delete']
+    actions: ['read', 'create', 'edit', 'assign_perm', 'delete']
   },
   {
     resource: 'auditLog',
@@ -129,6 +129,7 @@ export const ACTION_DEFINITIONS = {
   update: "Modify an existing record of the resource.",
   delete: "Remove an existing record of the resource.",
   assign_perm: "Attach or detach permissions on a role (the 'set' operation).",
+  edit: "Rename or relabel an existing record without changing its meaning.",
   "role:assign": "Assign or change the role of a user account.",
   "session:revoke": "Revoke all active sessions and refresh tokens for a user.",
   resetPassword: "Administratively reset another user's password.",

@@ -7,12 +7,12 @@ import { getDashboardSummary } from "../controllers/dashboard.js";
 
 const r = Router();
 
-r.get(
-  "/",
-  verifyToken,
-  authorize("dashboard", "read", { policy: false }),
-  validate(dashboardQuerySchema, "query"),
-  getDashboardSummary
-);
+// r.get(
+//   "/",
+//   verifyToken,
+//   authorize("dashboard", "read", { policy: false }),
+//   validate(dashboardQuerySchema, "query"),
+//   getDashboardSummary
+// );
 
 export default r;

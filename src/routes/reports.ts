@@ -27,25 +27,25 @@ import { staffReport } from "../services/reports/staff.js";
 
 const r = Router();
 
-function reportRoute(path: string, schema: Parameters<typeof validate>[0], service: Parameters<typeof reportHandler>[0]) {
-  r.get(
-    path,
-    verifyToken,
-    authorize("report", "read", { policy: false }),
-    validate(schema, "query"),
-    reportHandler(service)
-  );
-}
+// function reportRoute(path: string, schema: Parameters<typeof validate>[0], service: Parameters<typeof reportHandler>[0]) {
+//   r.get(
+//     path,
+//     verifyToken,
+//     authorize("report", "read", { policy: false }),
+//     validate(schema, "query"),
+//     reportHandler(service)
+//   );
+// }
 
-reportRoute("/collections", collectionsReportQuerySchema, collectionsReport);
-reportRoute("/hubs", hubReportQuerySchema, hubReport);
-reportRoute("/b2c", b2cReportQuerySchema, b2cReport);
-reportRoute("/b2b", b2bReportQuerySchema, b2bReport);
-reportRoute("/riders", riderReportQuerySchema, riderReport);
-reportRoute("/vehicles", vehicleReportQuerySchema, vehicleReport);
-reportRoute("/services", serviceReportQuerySchema, serviceReport);
-reportRoute("/spares", sparesReportQuerySchema, sparesReport);
-reportRoute("/inventory", inventoryReportQuerySchema, inventoryReport);
-reportRoute("/staff", staffReportQuerySchema, staffReport);
+// reportRoute("/collections", collectionsReportQuerySchema, collectionsReport);
+// reportRoute("/hubs", hubReportQuerySchema, hubReport);
+// reportRoute("/b2c", b2cReportQuerySchema, b2cReport);
+// reportRoute("/b2b", b2bReportQuerySchema, b2bReport);
+// reportRoute("/riders", riderReportQuerySchema, riderReport);
+// reportRoute("/vehicles", vehicleReportQuerySchema, vehicleReport);
+// reportRoute("/services", serviceReportQuerySchema, serviceReport);
+// reportRoute("/spares", sparesReportQuerySchema, sparesReport);
+// reportRoute("/inventory", inventoryReportQuerySchema, inventoryReport);
+// reportRoute("/staff", staffReportQuerySchema, staffReport);
 
 export default r;

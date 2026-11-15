@@ -1,121 +1,158 @@
-import type { Request, Response, NextFunction } from "express";
+import type { NextFunction, Request, Response } from "express";
 import prisma from "../../database/prismaClient.js";
-import { logAudit } from "../../utils/log.js";
-import { success, error } from "../../utils/http.js";
 import { ErrorCode } from "../../utils/errors.js";
+import { error, success } from "../../utils/http.js";
+import { getAuditActor, logAudit } from "../../utils/log.js";
+import type {
+	AssignRolePermissionsInput,
+	CreateRoleInput,
+	RenameRoleInput,
+} from "../../validation/pbac.js";
 
-export const getRolesAndPerms = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        // 1. Fetch ALL Roles with their currently assigned permissions
-        // This answers: "What is checked right now?"
-        const roles = await prisma.role.findMany({
-            include: { permissions: true },
-        });
+type PermissionEntity = { name: string; actions: { name: string; id: string }[] };
 
-        // 2. Fetch ALL Possible Permissions
-        // This answers: "What checkboxes should exist?"
-        const allPermissions = await prisma.permission.findMany({
-            orderBy: { resource: "asc" }
-        });
+const permissionKey = (permission: { resource: string; action: string }) => `${permission.resource}:${permission.action}`;
 
-        // 3. Transform permissions into 'Entities' format for Frontend
-        // Output: [{ name: "user", actions: [{name: "create", id: "123"}] }]
-        const entities = allPermissions.reduce((acc: any, perm: any) => {
-            const { resource, action, id } = perm;
-            
-            let entity = acc.find((e:any) => e.name === resource);
-            if (!entity) {
-                entity = { name: resource, actions: [] };
-                acc.push(entity);
-            }
-            
-            // We include ID so the frontend can send it back later
-            entity.actions.push({ name: action, id: id });
-            
-            return acc;
-        }, [] as { name: string, actions: { name: string, id: string }[] }[]);
+const isDuplicate = (err: unknown) => typeof err === "object" && err !== null && (err as { code?: string }).code === "P2002";
 
-        return success(res, { roles, entities });
-        
-    } catch (err) {
-        next(err);
-    }
-}
+export const getRolesAndPerms = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+	try {
+		const [roles, permissions] = await Promise.all([
+			prisma.role.findMany({ include: { permissions: true }, orderBy: { name: "asc" } }),
+			prisma.permission.findMany({ orderBy: [{ resource: "asc" }, { action: "asc" }] }),
+		]);
 
-export const updatePermsOnRole = async(req: Request, res: Response, next: NextFunction) =>{
-    try {
-        const { permissions: newPerms } = req.body
-        const { id }  = req.params
-        if (!id) return error(res, 400, ErrorCode.VALIDATION_ERROR, "Role id missing")
+		const entities: PermissionEntity[] = [];
+		for (const permission of permissions) {
+			let entity = entities.find((candidate) => candidate.name === permission.resource);
+			if (!entity) {
+				entity = { name: permission.resource, actions: [] };
+				entities.push(entity);
+			}
+			entity.actions.push({ name: permission.action, id: permission.id });
+		}
 
-        // Validate payload shape: must be an array of permission id strings (empty array is valid = clear all)
-        if (!Array.isArray(newPerms) || !newPerms.every((p) => typeof p === "string")) {
-            return error(res, 400, ErrorCode.VALIDATION_ERROR, "Invalid payload: 'permissions' must be an array of permission id strings.");
-        }
+		success(res, { roles, entities });
+	} catch (err) {
+		next(err);
+	}
+};
 
-        // Verify the role exists (and capture current perms for the audit diff)
-        const role = await prisma.role.findUnique({
-            where: { id: id as string },
-            include: { permissions: true }
-        });
-        if (!role) {
-            return error(res, 404, ErrorCode.NOT_FOUND, "Role not found");
-        }
+export const updatePermsOnRole = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+	try {
+		const roleId = req.params.id as string;
+		const { permissions } = req.body as AssignRolePermissionsInput;
+		const actor = getAuditActor(req);
 
-        // Verify every permission id exists before `set` (otherwise Prisma throws P2025/P2003 -> generic 500)
-        const found = await prisma.permission.findMany({
-            where: { id: { in: newPerms } },
-            select: { id: true }
-        });
-        const foundIds = new Set(found.map((p) => p.id));
-        const missing = newPerms.filter((pid: string) => !foundIds.has(pid));
-        if (missing.length > 0) {
-            return error(res, 400, ErrorCode.VALIDATION_ERROR, `Some permission ids do not exist: ${missing.join(", ")}`);
-        }
+		const role = await prisma.role.findUnique({
+			where: { id: roleId },
+			include: { permissions: true },
+		});
+		if (!role) {
+			error(res, 404, ErrorCode.NOT_FOUND, "Role not found");
+			return;
+		}
 
-        const formattedPermIds = newPerms.map((permId: string)=>({
-            id: permId
-        }))
+		const known = await prisma.permission.findMany({
+			where: { id: { in: permissions } },
+			select: { id: true },
+		});
+		const knownIds = new Set(known.map((permission) => permission.id));
+		const missing = permissions.filter((permissionId) => !knownIds.has(permissionId));
+		if (missing.length > 0) {
+			error(res, 400, ErrorCode.VALIDATION_ERROR, `Unknown permission ids: ${missing.join(", ")}`);
+			return;
+		}
 
-        const updated = await prisma.role.update({
-            where:{
-                id: id as string
-            },
-            data:{
-                permissions: {set: formattedPermIds}
-            },
-            include: { permissions: true }
-        })
+		const updated = await prisma.role.update({
+			where: { id: roleId },
+			data: { permissions: { set: permissions.map((id) => ({ id })) } },
+			include: { permissions: true },
+		});
 
-        void logAudit({
-            req,
-            userId: req.user?.id!,
-            userName: req.user?.name!,
-            userRole: req.user?.role!,
-            action: "UPDATE",
-            resource: "Role",
-            resourceId: role.id,
-            oldData: { permissions: role.permissions.map(p => `${p.resource}:${p.action}`) },
-            newData: { permissions: updated.permissions.map(p => `${p.resource}:${p.action}`) },
-            summary: `${req.user?.name} updated permissions on role ${role.name}.`
-        })
+		await logAudit({
+			...actor,
+			action: "UPDATE",
+			resource: "Role",
+			resourceId: role.id,
+			oldData: { permissions: role.permissions.map(permissionKey) },
+			newData: { permissions: updated.permissions.map(permissionKey) },
+			summary: `${actor.userName} updated permissions on role ${role.name}.`,
+		});
 
-        return success(res, { message: "updated permissions." });
-    } catch (err) {
-        next(err)
-    }
-}
+		success(res, { role: updated });
+	} catch (err) {
+		next(err);
+	}
+};
 
-export const addRole = async(req: Request, res: Response, next: NextFunction) => {
-    try {
-        const { newRoleName } = req.body;
-        const newRole = await prisma.role.create({
-            data:{
-                name: newRoleName
-            }
-        })
-        return success(res, { newRole }, 201);
-    } catch (err) {
-        next(err)
-    }
-}
+export const addRole = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+	try {
+		const { newRoleName } = req.body as CreateRoleInput;
+		const actor = getAuditActor(req);
+
+		const role = await prisma.role.create({ data: { name: newRoleName } });
+
+		await logAudit({
+			...actor,
+			action: "CREATE",
+			resource: "Role",
+			resourceId: role.id,
+			newData: { name: role.name },
+			summary: `${actor.userName} created role ${role.name}.`,
+		});
+
+		success(res, { role }, 201);
+	} catch (err) {
+		if (isDuplicate(err)) {
+			error(res, 409, ErrorCode.CONFLICT, "A role with this name already exists");
+			return;
+		}
+		next(err);
+	}
+};
+
+export const renameRole = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+	try {
+		const roleId = req.params.id as string;
+		const { name } = req.body as RenameRoleInput;
+		const actor = getAuditActor(req);
+
+		const role = await prisma.role.findUnique({
+			where: { id: roleId },
+			select: { id: true, name: true },
+		});
+		if (!role) {
+			error(res, 404, ErrorCode.NOT_FOUND, "Role not found");
+			return;
+		}
+
+		if (role.name === name) {
+			success(res, { role });
+			return;
+		}
+
+		const updated = await prisma.role.update({
+			where: { id: role.id },
+			data: { name },
+		});
+
+		await logAudit({
+			...actor,
+			action: "UPDATE",
+			resource: "Role",
+			resourceId: role.id,
+			oldData: { name: role.name },
+			newData: { name: updated.name },
+			summary: `${actor.userName} renamed role ${role.name} to ${updated.name}.`,
+		});
+
+		success(res, { role: updated });
+	} catch (err) {
+		if (isDuplicate(err)) {
+			error(res, 409, ErrorCode.CONFLICT, "A role with this name already exists");
+			return;
+		}
+		next(err);
+	}
+};

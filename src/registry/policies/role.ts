@@ -1,16 +1,10 @@
 import type { ResourcePolicies } from "../../types/user.js";
 
+const isAdmin = (user: { role: string }) => user.role === "ADMIN";
+
 export const RolePolicies: ResourcePolicies = {
-    'read': (user, targetRole)=>{
-        if (user.role==="ADMIN"){
-            return true
-        }
-        return false
-    },
-    "assign_perm": (user, targetRole) => {
-        if (user.role==="ADMIN"){
-            return true
-        }
-        return false
-    }
-}
+	read: (user) => isAdmin(user),
+	edit: (user) => isAdmin(user),
+	assign_perm: (user) => isAdmin(user),
+	delete: (user) => isAdmin(user),
+};
