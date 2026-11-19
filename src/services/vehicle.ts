@@ -39,11 +39,9 @@ export const vehicleDetailSelect = {
   ...vehicleListSelect,
   vehicleCategory: true,
   vehicleType: true,
-  seats: true,
   batteryType: true,
   batteryCapacity: true,
   nominalRange: true,
-  bootSpace: true,
   chargingOptions: true,
   chargerProvided: true,
   noOfTyres: true,
@@ -59,7 +57,6 @@ export const vehicleDetailSelect = {
   dateOfOperation: true,
   warrantyStartDate: true,
   warrantyEndDate: true,
-  safeCabCertificateExpiryDate: true,
   telematicsExpiryDate: true,
   loanProvider: true,
   emiAmount: true,
@@ -155,11 +152,9 @@ export async function createVehicle(
         isActive: input.isActive ?? true,
         vehicleCategory: input.vehicleCategory ?? null,
         vehicleType: input.vehicleType ?? null,
-        seats: input.seats ?? null,
         batteryType: input.batteryType ?? null,
         batteryCapacity: input.batteryCapacity ?? null,
         nominalRange: input.nominalRange ?? null,
-        bootSpace: input.bootSpace ?? null,
         chargingOptions: input.chargingOptions ?? null,
         chargerProvided: input.chargerProvided ?? null,
         noOfTyres: input.noOfTyres ?? null,
@@ -174,8 +169,6 @@ export async function createVehicle(
         dateOfOperation: input.dateOfOperation ?? null,
         warrantyStartDate: input.warrantyStartDate ?? null,
         warrantyEndDate: input.warrantyEndDate ?? null,
-        safeCabCertificateExpiryDate:
-          input.safeCabCertificateExpiryDate ?? null,
         telematicsExpiryDate: input.telematicsExpiryDate ?? null,
         loanProvider: input.loanProvider ?? null,
         emiAmount: input.emiAmount ?? null,
@@ -321,13 +314,11 @@ export async function updateVehicle(
         data.vehicleCategory = input.vehicleCategory;
       }
       if (input.vehicleType !== undefined) data.vehicleType = input.vehicleType;
-      if (input.seats !== undefined) data.seats = input.seats;
       if (input.batteryType !== undefined) data.batteryType = input.batteryType;
       if (input.batteryCapacity !== undefined) {
         data.batteryCapacity = input.batteryCapacity;
       }
       if (input.nominalRange !== undefined) data.nominalRange = input.nominalRange;
-      if (input.bootSpace !== undefined) data.bootSpace = input.bootSpace;
       if (input.chargingOptions !== undefined) {
         data.chargingOptions = input.chargingOptions;
       }
@@ -365,9 +356,6 @@ export async function updateVehicle(
       }
       if (input.warrantyEndDate !== undefined) {
         data.warrantyEndDate = input.warrantyEndDate;
-      }
-      if (input.safeCabCertificateExpiryDate !== undefined) {
-        data.safeCabCertificateExpiryDate = input.safeCabCertificateExpiryDate;
       }
       if (input.telematicsExpiryDate !== undefined) {
         data.telematicsExpiryDate = input.telematicsExpiryDate;

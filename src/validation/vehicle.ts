@@ -54,11 +54,9 @@ const vehicleBaseSchema = z.object({
 
   vehicleCategory: optionalNullableString(100),
   vehicleType: optionalNullableString(100),
-  seats: z.number().int().positive().nullable().optional(),
   batteryType: optionalNullableString(100),
   batteryCapacity: optionalInt,
   nominalRange: optionalInt,
-  bootSpace: optionalInt,
   chargingOptions: optionalNullableString(50),
   chargerProvided: z.boolean().nullable().optional(),
   noOfTyres: optionalInt,
@@ -75,7 +73,6 @@ const vehicleBaseSchema = z.object({
   dateOfOperation: optionalDate,
   warrantyStartDate: optionalDate,
   warrantyEndDate: optionalDate,
-  safeCabCertificateExpiryDate: optionalDate,
   telematicsExpiryDate: optionalDate,
 
   loanProvider: optionalNullableString(150),

@@ -126,8 +126,6 @@ export async function resolveRentalPricing(
       id: input.rateCardId as string,
       isActive: true,
       deletedAt: null,
-      effectiveFrom: { lte: effectiveAt },
-      OR: [{ effectiveTo: null }, { effectiveTo: { gte: effectiveAt } }],
     },
     select: {
       id: true,
@@ -139,14 +137,12 @@ export async function resolveRentalPricing(
       fortnightlyRate: true,
       monthlyRate: true,
       securityDeposit: true,
-      effectiveFrom: true,
-      effectiveTo: true,
     },
   });
 
   if (!rateCard) {
     throw new AppError(
-      "Ratecard is not active for the requested date",
+      "Ratecard is not active",
       409
     );
   }

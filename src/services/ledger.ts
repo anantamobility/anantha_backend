@@ -108,7 +108,7 @@ export async function getAvailableEarningsBalance(tx: Tx, riderId: string) {
   );
 }
 
-export async function recordEarning(input: RecordEarningInput, actor: AuditActor) {
+export async function recordEarning(input: RecordLedgerInput, actor: AuditActor) {
   try {
     return await prisma.$transaction(async (tx) => {
       const rider = await assertRiderLedgerEntry(tx, input.riderId);
@@ -165,7 +165,7 @@ export async function recordEarning(input: RecordEarningInput, actor: AuditActor
 }
 
 export async function adjustEarning(
-  input: AdjustEarningInput,
+  input: AdjustLedgerInput,
   actor: AuditActor
 ) {
   try {
@@ -229,7 +229,7 @@ export async function adjustEarning(
   }
 }
 
-export async function listEarnings(query: ListEarningsQuery) {
+export async function listEarnings(query: ListLedgerQuery) {
   const { page, limit, search } = query;
   // Earnings are the rider side of the shared ledger; never mix rental entries in.
   const where: Prisma.LedgerEntryWhereInput = { riderId: query.riderId ?? { not: null } };
@@ -278,7 +278,7 @@ export async function listEarnings(query: ListEarningsQuery) {
   };
 }
 
-export async function getEarningsSummary(query: EarningsSummaryQuery) {
+export async function getEarningsSummary(query: LedgerSummaryQuery) {
   const rider = await prisma.rider.findUnique({
     where: { id: query.riderId },
     select: {

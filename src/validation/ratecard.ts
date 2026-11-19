@@ -55,33 +55,11 @@ const rateCardBaseShape = {
   fortnightlyRate: moneySchema(4, "fortnightlyRate").nullable().optional(),
   monthlyRate: moneySchema(4, "monthlyRate").nullable().optional(),
   securityDeposit: moneySchema(2, "securityDeposit").nullable().optional(),
-  effectiveFrom: z.coerce.date(),
-  effectiveTo: z.coerce.date().nullable().optional(),
   terms: z.json().nullable().optional(),
   isActive: z.boolean().optional(),
 };
 
-function validateDateRange(
-  value: { effectiveFrom?: Date; effectiveTo?: Date | null },
-  ctx: z.RefinementCtx
-) {
-  if (
-    value.effectiveTo &&
-    value.effectiveFrom &&
-    value.effectiveTo.getTime() <= value.effectiveFrom.getTime()
-  ) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["effectiveTo"],
-      message: "effectiveTo must be later than effectiveFrom",
-    });
-  }
-}
-
-export const createRateCardSchema = z
-  .object(rateCardBaseShape)
-  .strict()
-  .superRefine(validateDateRange);
+export const createRateCardSchema = z.object(rateCardBaseShape).strict();
 
 // code is an immutable business identifier, and lifecycle status is changed
 // only through the dedicated status endpoint.
@@ -105,13 +83,10 @@ export const listRateCardsQuerySchema = paginationQuerySchema
       .enum(["true", "false"])
       .transform((value) => value === "true")
       .optional(),
-    validOn: z.coerce.date().optional(),
     sortBy: z
       .enum([
         "code",
         "name",
-        "effectiveFrom",
-        "effectiveTo",
         "dailyRate",
         "createdAt",
         "updatedAt",

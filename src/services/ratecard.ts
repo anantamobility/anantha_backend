@@ -22,8 +22,6 @@ export const rateCardListSelect = {
   fortnightlyRate: true,
   monthlyRate: true,
   securityDeposit: true,
-  effectiveFrom: true,
-  effectiveTo: true,
   isActive: true,
   terms: true,
   createdAt: true,
@@ -46,24 +44,12 @@ function termsInput(
   return value as Prisma.InputJsonValue;
 }
 
-function assertDateRange(effectiveFrom: Date, effectiveTo: Date | null) {
-  if (effectiveTo && effectiveTo.getTime() <= effectiveFrom.getTime()) {
-    throw new AppError(
-      "effectiveTo must be later than effectiveFrom",
-      400
-    );
-  }
-}
-
 export async function createRateCard(
   input: CreateRateCardInput,
   actor: AuditActor
 ) {
   try {
     return await prisma.$transaction(async (tx) => {
-      const effectiveTo = input.effectiveTo ?? null;
-      assertDateRange(input.effectiveFrom, effectiveTo);
-
       const data: Prisma.RateCardUncheckedCreateInput = {
         code: input.code ?? generateRateCardCode(),
         name: input.name,
@@ -75,8 +61,6 @@ export async function createRateCard(
         fortnightlyRate: input.fortnightlyRate ?? null,
         monthlyRate: input.monthlyRate ?? null,
         securityDeposit: input.securityDeposit ?? null,
-        effectiveFrom: input.effectiveFrom,
-        effectiveTo,
         isActive: input.isActive ?? true,
       };
 
@@ -113,22 +97,12 @@ function listRateCardsWhere(query: ListRateCardsQuery) {
     vehicleCategory,
     rentalType,
     isActive,
-    validOn,
   } = query;
 
   const where: Prisma.RateCardWhereInput = { deletedAt: null };
   if (vehicleCategory) where.vehicleCategory = vehicleCategory;
   if (rentalType) where.rentalType = rentalType;
   if (typeof isActive === "boolean") where.isActive = isActive;
-
-  if (validOn) {
-    where.effectiveFrom = { lte: validOn };
-    where.AND = [
-      {
-        OR: [{ effectiveTo: null }, { effectiveTo: { gte: validOn } }],
-      },
-    ];
-  }
 
   if (search) {
     where.OR = [
@@ -198,13 +172,6 @@ export async function updateRateCard(
         throw new AppError("Ratecard not found", 404);
       }
 
-      const effectiveFrom = input.effectiveFrom ?? existing.effectiveFrom;
-      const effectiveTo =
-        input.effectiveTo !== undefined
-          ? input.effectiveTo
-          : existing.effectiveTo;
-      assertDateRange(effectiveFrom, effectiveTo);
-
       const data: Prisma.RateCardUncheckedUpdateInput = {};
       if (input.name !== undefined) data.name = input.name;
       if (input.description !== undefined) {
@@ -225,10 +192,6 @@ export async function updateRateCard(
       if (input.securityDeposit !== undefined) {
         data.securityDeposit = input.securityDeposit;
       }
-      if (input.effectiveFrom !== undefined) {
-        data.effectiveFrom = input.effectiveFrom;
-      }
-      if (input.effectiveTo !== undefined) data.effectiveTo = input.effectiveTo;
 
       const terms = termsInput(input.terms);
       if (terms !== undefined) data.terms = terms;
