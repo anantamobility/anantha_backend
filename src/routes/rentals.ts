@@ -28,14 +28,14 @@ import {
   createRental,
   getRentalById,
   getRentals,
-} from "../controllers/rental/rental.controller.js";
+} from "../controllers/rental/rental.js";
 import {
   adjustDeposit,
   getRentalDeposit,
   getRentalDepositLedger,
   receiveDeposit,
   refundDeposit,
-} from "../controllers/rental/deposit.controller.js";
+} from "../controllers/ledger/deposit.js";
 import {
   generateRentalDues,
   getRentalCollections,

@@ -34,7 +34,7 @@ export const ledgerEntryTypeSchema = z.enum([
 
 export const ledgerDirectionSchema = z.enum(["CREDIT", "DEBIT"]);
 
-export const recordEarningSchema = z
+export const recordLedgerSchema = z
   .object({
     riderId: z.string().uuid("riderId must be a valid UUID"),
     rentalId: z.string().uuid("rentalId must be a valid UUID").nullable().optional(),
@@ -46,7 +46,7 @@ export const recordEarningSchema = z
   })
   .strict();
 
-export const adjustEarningSchema = z
+export const adjustLedgerSchema = z
   .object({
     riderId: z.string().uuid("riderId must be a valid UUID"),
     rentalId: z.string().uuid("rentalId must be a valid UUID").nullable().optional(),
@@ -58,7 +58,7 @@ export const adjustEarningSchema = z
   })
   .strict();
 
-export const listEarningsQuerySchema = paginationQuerySchema
+export const listLedgerQuerySchema = paginationQuerySchema
   .extend(searchQuerySchema.shape)
   .extend({
     riderId: z.string().uuid("riderId must be a valid UUID").optional(),
@@ -74,11 +74,11 @@ export const listEarningsQuerySchema = paginationQuerySchema
     sortOrder: z.enum(["asc", "desc"]).default("desc"),
   });
 
-export const earningsSummaryQuerySchema = z.object({
+export const ledgerSummaryQuerySchema = z.object({
   riderId: z.string().uuid("riderId must be a valid UUID"),
 });
 
-export type RecordEarningInput = z.infer<typeof recordEarningSchema>;
-export type AdjustEarningInput = z.infer<typeof adjustEarningSchema>;
-export type ListEarningsQuery = z.infer<typeof listEarningsQuerySchema>;
-export type EarningsSummaryQuery = z.infer<typeof earningsSummaryQuerySchema>;
+export type RecordLedgerInput = z.infer<typeof recordLedgerSchema>;
+export type AdjustLedgerInput = z.infer<typeof adjustLedgerSchema>;
+export type ListLedgerQuery = z.infer<typeof listLedgerQuerySchema>;
+export type LedgerSummaryQuery = z.infer<typeof ledgerSummaryQuerySchema>;

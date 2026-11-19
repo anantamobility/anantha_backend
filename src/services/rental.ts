@@ -8,7 +8,7 @@ import {
   getDepositBalanceByRental,
   getOrCreateDepositForRental,
   recordDepositLedgerEntry,
-} from "./ledger.js";
+} from "./depositLedger.js";
 import {
   generateRentalDues,
   getRentalFinancialSummary,

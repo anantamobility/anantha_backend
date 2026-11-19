@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { success } from "../../utils/http.js";
 import { getAuditActor } from "../../utils/log.js";
-import * as ledgerService from "../../services/ledger.js";
+import * as ledgerService from "../../services/depositLedger.js";
 import type {
   AdjustDepositInput,
   DepositLedgerQuery,

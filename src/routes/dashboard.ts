@@ -3,7 +3,7 @@ import { verifyToken } from "../middleware/verifyToken.js";
 import { authorize } from "../middleware/pbac.js";
 import { validate } from "../middleware/validate.js";
 import { dashboardQuerySchema } from "../validation/dashboard.js";
-import { getDashboardSummary } from "../controllers/dashboard.js";
+import { getDashboardSummary } from "../controllers/dashboard/dashboard.js";
 
 const r = Router();
 

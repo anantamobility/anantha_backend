@@ -4,375 +4,336 @@ import { AppError } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import { toDecimal } from "./rental-schedule.js";
 import type {
-  AdjustDepositInput,
-  DepositLedgerQuery,
-  ReceiveDepositInput,
-  RefundDepositInput,
-} from "../validation/deposit.js";
+  AdjustLedgerInput,
+  LedgerSummaryQuery,
+  ListLedgerQuery,
+  RecordLedgerInput,
+} from "../validation/earnings.js";
 
 type Tx = Prisma.TransactionClient;
 
-export const depositSelect = {
+export const earningSelect = {
   id: true,
-  payerType: true,
-  clientId: true,
   riderId: true,
+  entryType: true,
+  direction: true,
+  amount: true,
+  occurredAt: true,
+  description: true,
+  sourceType: true,
+  sourceId: true,
+  payStatementId: true,
   rentalId: true,
-  amountRequired: true,
-  status: true,
-  dueDate: true,
-  notes: true,
+  reversesEntryId: true,
+  createdById: true,
+  metadata: true,
   createdAt: true,
-  updatedAt: true,
 } as const;
 
-const depositLedgerUserSelect = {
-  id: true,
-  name: true,
+export const earningDetailSelect = {
+  ...earningSelect,
+  rider: { select: { id: true, riderCode: true, fullName: true } },
+  rental: { select: { id: true, rentalNumber: true, status: true } },
+  payStatement: {
+    select: { id: true, statementNumber: true, status: true },
+  },
 } as const;
 
-function deriveDepositStatus(input: {
-  required: Prisma.Decimal;
-  credits: Prisma.Decimal;
-  debits: Prisma.Decimal;
-  balance: Prisma.Decimal;
-}) {
-  const { required, credits, debits, balance } = input;
-  if (required.lte(0) && credits.lte(0) && debits.lte(0)) return "CLOSED";
-
-  if (balance.lte(0)) {
-    if (debits.gt(0)) return "REFUNDED";
-    return required.gt(0) ? "PENDING_RECEIPT" : "CLOSED";
-  }
-
-  if (balance.lt(required)) {
-    return debits.gt(0) ? "PARTIALLY_REFUNDED" : "PARTIALLY_RECEIVED";
-  }
-
-  return "RECEIVED";
-}
-
-async function depositTotals(tx: Tx, depositId: string) {
-  const rows = await tx.depositLedger.findMany({
-    where: { depositId },
-    select: { direction: true, amount: true },
-  });
-
-  return rows.reduce(
-    (acc, row) => {
-      if (row.direction === "CREDIT") acc.credits = acc.credits.add(toDecimal(row.amount));
-      else acc.debits = acc.debits.add(toDecimal(row.amount));
-      acc.balance = acc.credits.sub(acc.debits);
-      return acc;
+async function assertRiderLedgerEntry(tx: Tx, riderId: string) {
+  const rider = await tx.rider.findUnique({
+    where: { id: riderId },
+    select: {
+      id: true,
+      riderCode: true,
+      fullName: true,
+      status: true,
+      rentalType: true,
+      deletedAt: true,
     },
-    {
-      credits: new Prisma.Decimal(0),
-      debits: new Prisma.Decimal(0),
-      balance: new Prisma.Decimal(0),
-    }
-  );
+  });
+
+  if (!rider || rider.deletedAt) {
+    throw new AppError("Rider not found", 404);
+  }
+  if (rider.rentalType && rider.rentalType !== "B2C") {
+    throw new AppError(
+      "Earnings can only be recorded for a B2C rider",
+      409
+    );
+  }
+
+  return rider;
 }
 
-export async function getOrCreateDepositForRental(tx: Tx, rentalId: string) {
-  const existing = await tx.deposit.findUnique({
-    where: { rentalId },
-    select: { ...depositSelect, amountRequired: true },
-  });
-  if (existing) return existing;
-
+async function assertRentalForRider(
+  tx: Tx,
+  rentalId: string,
+  riderId: string
+) {
   const rental = await tx.rental.findUnique({
     where: { id: rentalId },
     select: {
       id: true,
+      rentalNumber: true,
       rentalType: true,
-      clientId: true,
       riderId: true,
-      startDate: true,
-      securityDepositRequired: true,
     },
   });
 
   if (!rental) {
     throw new AppError("Rental not found", 404);
   }
-
-  const amountRequired = toDecimal(rental.securityDepositRequired);
-
-  if (amountRequired.lte(0)) {
+  if (rental.rentalType !== "B2C" || rental.riderId !== riderId) {
     throw new AppError(
-      "Security deposit is not required for this rental",
+      "Rental does not belong to the selected B2C rider",
       409
     );
   }
 
-  const isRiderPayer = rental.rentalType === "B2C";
-
-  return tx.deposit.upsert({
-    where: { rentalId },
-    create: {
-      payerType: isRiderPayer ? "RIDER" : "CLIENT",
-      clientId: isRiderPayer ? null : rental.clientId,
-      riderId: isRiderPayer ? rental.riderId : null,
-      rentalId: rental.id,
-      amountRequired,
-      status: "REQUIRED",
-      dueDate: rental.startDate,
-    },
-    update: {},
-    select: { ...depositSelect, amountRequired: true },
-  });
+  return rental;
 }
 
-export async function getDepositBalance(tx: Tx, depositId: string) {
-  const totals = await depositTotals(tx, depositId);
-  return totals;
-}
-
-export async function getDepositBalanceByRental(tx: Tx, rentalId: string) {
-  const deposit = await tx.deposit.findUnique({
-    where: { rentalId },
-    select: { id: true },
-  });
-  if (!deposit) {
-    return {
-      credits: new Prisma.Decimal(0),
-      debits: new Prisma.Decimal(0),
-      balance: new Prisma.Decimal(0),
-    };
-  }
-  return depositTotals(tx, deposit.id);
-}
-
-export async function recordDepositLedgerEntry(
-  tx: Tx,
-  input: {
-    rentalId: string;
-    type: "RECEIPT" | "REFUND" | "ADJUSTMENT";
-    direction: "CREDIT" | "DEBIT";
-    amount: Prisma.Decimal;
-    reference?: string | null;
-    reason?: string | null;
-    occurredAt?: Date;
-    actor: AuditActor;
-  }
-) {
-  const deposit = await getOrCreateDepositForRental(tx, input.rentalId);
-
-  const before = await depositTotals(tx, deposit.id);
-
-  if (input.direction === "DEBIT" && before.balance.lt(input.amount)) {
-    throw new AppError(
-      "Security deposit balance is insufficient for this transaction",
-      409
-    );
-  }
-
-  const transaction = await tx.depositLedger.create({
-    data: {
-      depositId: deposit.id,
-      type: input.type,
-      direction: input.direction,
-      amount: input.amount,
-      reference: input.reference ?? null,
-      reason: input.reason ?? null,
-      authorizedById: input.actor.userId,
-      ...(input.occurredAt ? { createdAt: input.occurredAt } : {}),
-    },
+export async function getAvailableEarningsBalance(tx: Tx, riderId: string) {
+  const entries = await tx.ledgerEntry.findMany({
+    where: { riderId, payStatementId: null },
+    select: { direction: true, amount: true },
   });
 
-  const afterTotals =
-    input.direction === "CREDIT"
-      ? {
-          credits: before.credits.add(input.amount),
-          debits: before.debits,
-          balance: before.balance.add(input.amount),
-        }
-      : {
-          credits: before.credits,
-          debits: before.debits.add(input.amount),
-          balance: before.balance.sub(input.amount),
-        };
-
-  const status = deriveDepositStatus({
-    required: toDecimal(deposit.amountRequired),
-    ...afterTotals,
-  });
-
-  const updatedDeposit = await tx.deposit.update({
-    where: { id: deposit.id },
-    data: { status },
-    select: depositSelect,
-  });
-
-  await logAudit({
-    ...input.actor,
-    action:
-      input.type === "RECEIPT"
-        ? "DEPOSIT_RECEIPT"
-        : input.type === "REFUND"
-          ? "DEPOSIT_REFUND"
-          : "DEPOSIT_ADJUSTMENT",
-    resource: "Deposit",
-    resourceId: deposit.id,
-    newData: {
-      rentalId: input.rentalId,
-      type: input.type,
-      direction: input.direction,
-      amount: input.amount,
-      reference: input.reference ?? null,
-      reason: input.reason ?? null,
-      balanceAfter: afterTotals.balance,
-    },
-    summary: `${input.actor.userName} recorded ${input.type.toLowerCase()} of ${input.amount} on security deposit ${deposit.id}.`,
-    db: tx,
-    throwOnError: true,
-  });
-
-  return {
-    deposit: updatedDeposit,
-    transaction,
-    balance: afterTotals.balance,
-    credits: afterTotals.credits,
-    debits: afterTotals.debits,
-    duplicate: false,
-  };
-}
-
-export async function receiveDeposit(
-  rentalId: string,
-  input: ReceiveDepositInput,
-  actor: AuditActor
-) {
-  try {
-    return await prisma.$transaction(async (tx) =>
-      recordDepositLedgerEntry(tx, {
-        rentalId,
-        type: "RECEIPT",
-        direction: "CREDIT",
-        amount: new Prisma.Decimal(input.amount),
-        reference: input.reference ?? null,
-        reason: input.reason ?? null,
-        actor,
-      })
-    );
-  } catch (err) {
-    throw AppError.fromPrisma(err, "This deposit transaction already exists") ?? err;
-  }
-}
-
-export async function refundDeposit(
-  rentalId: string,
-  input: RefundDepositInput,
-  actor: AuditActor
-) {
-  try {
-    return await prisma.$transaction(async (tx) =>
-      recordDepositLedgerEntry(tx, {
-        rentalId,
-        type: "REFUND",
-        direction: "DEBIT",
-        amount: new Prisma.Decimal(input.amount),
-        reference: input.reference ?? null,
-        reason: input.reason ?? null,
-        actor,
-      })
-    );
-  } catch (err) {
-    throw AppError.fromPrisma(err, "This deposit transaction already exists") ?? err;
-  }
-}
-
-export async function adjustDeposit(
-  rentalId: string,
-  input: AdjustDepositInput,
-  actor: AuditActor
-) {
-  try {
-    return await prisma.$transaction(async (tx) =>
-      recordDepositLedgerEntry(tx, {
-        rentalId,
-        type: "ADJUSTMENT",
-        direction: input.direction,
-        amount: new Prisma.Decimal(input.amount),
-        reference: input.reference ?? null,
-        reason: input.reason,
-        actor,
-      })
-    );
-  } catch (err) {
-    throw AppError.fromPrisma(err, "This deposit transaction already exists") ?? err;
-  }
-}
-
-export async function getRentalDeposit(rentalId: string) {
-  const deposit = await prisma.deposit.findUnique({
-    where: { rentalId },
-    select: depositSelect,
-  });
-
-  if (!deposit) {
-    throw new AppError(
-      "Security deposit not found for this rental",
-      404
-    );
-  }
-
-  const totals = await prisma.$transaction(async (tx) =>
-    depositTotals(tx, deposit.id)
+  return entries.reduce(
+    (total, entry) =>
+      entry.direction === "CREDIT"
+        ? total.add(toDecimal(entry.amount))
+        : total.sub(toDecimal(entry.amount)),
+    new Prisma.Decimal(0)
   );
-
-  return {
-    deposit,
-    balance: totals.balance,
-    totalCredits: totals.credits,
-    totalDebits: totals.debits,
-  };
 }
 
-export async function getRentalDepositLedger(
-  rentalId: string,
-  query: DepositLedgerQuery
-) {
-  const deposit = await prisma.deposit.findUnique({
-    where: { rentalId },
-    select: { id: true },
-  });
+export async function recordEarning(input: RecordEarningInput, actor: AuditActor) {
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const rider = await assertRiderLedgerEntry(tx, input.riderId);
 
-  if (!deposit) {
-    throw new AppError(
-      "Security deposit not found for this rental",
-      404
-    );
+      if (input.rentalId) {
+        await assertRentalForRider(tx, input.rentalId, input.riderId);
+      }
+
+      const amount = new Prisma.Decimal(input.amount);
+      const occurredAt = input.occurredAt ?? new Date();
+
+      const entry = await tx.ledgerEntry.create({
+        data: {
+          riderId: rider.id,
+          entryType: "DELIVERY_EARNING",
+          direction: "CREDIT",
+          amount,
+          occurredAt,
+          description:
+            input.description ??
+            `Delivery earning for rider ${rider.riderCode}`,
+          sourceType: "DeliveryEarning",
+          sourceId: input.referenceNumber ?? null,
+          rentalId: input.rentalId ?? null,
+          createdById: actor.userId,
+          metadata: (input.metadata ?? undefined) as Prisma.InputJsonValue,
+        },
+        select: earningDetailSelect,
+      });
+
+      await logAudit({
+        ...actor,
+        action: "CREATE",
+        resource: "LedgerEntry",
+        resourceId: entry.id,
+        newData: {
+          riderId: rider.id,
+          riderCode: rider.riderCode,
+          rentalId: input.rentalId ?? null,
+          amount,
+          occurredAt,
+          referenceNumber: input.referenceNumber ?? null,
+        },
+        summary: `${actor.userName} recorded a delivery earning of ${amount} for rider ${rider.riderCode}.`,
+        db: tx,
+        throwOnError: true,
+      });
+
+      return { entry, duplicate: false };
+    });
+  } catch (err) {
+    throw AppError.fromPrisma(err, "An earning with this reference already exists") ?? err;
+  }
+}
+
+export async function adjustEarning(
+  input: AdjustEarningInput,
+  actor: AuditActor
+) {
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const rider = await assertRiderLedgerEntry(tx, input.riderId);
+
+      if (input.rentalId) {
+        await assertRentalForRider(tx, input.rentalId, input.riderId);
+      }
+
+      const amount = new Prisma.Decimal(input.amount);
+
+      if (input.direction === "DEBIT") {
+        const available = await getAvailableEarningsBalance(tx, rider.id);
+        if (amount.gt(available)) {
+          throw new AppError(
+            "Earning adjustment exceeds the available balance",
+            409
+          );
+        }
+      }
+
+      const entry = await tx.ledgerEntry.create({
+        data: {
+          riderId: rider.id,
+          entryType: "ADJUSTMENT",
+          direction: input.direction,
+          amount,
+          occurredAt: input.occurredAt ?? new Date(),
+          description: input.reason,
+          sourceType: "EarningsAdjustment",
+          sourceId: null,
+          rentalId: input.rentalId ?? null,
+          createdById: actor.userId,
+          metadata: (input.metadata ?? undefined) as Prisma.InputJsonValue,
+        },
+        select: earningDetailSelect,
+      });
+
+      await logAudit({
+        ...actor,
+        action: "ADJUST",
+        resource: "LedgerEntry",
+        resourceId: entry.id,
+        newData: {
+          riderId: rider.id,
+          riderCode: rider.riderCode,
+          amount,
+          direction: input.direction,
+          reason: input.reason,
+        },
+        summary: `${actor.userName} recorded a ${input.direction} earning adjustment of ${amount} for rider ${rider.riderCode}.`,
+        db: tx,
+        throwOnError: true,
+      });
+
+      return { entry, duplicate: false };
+    });
+  } catch (err) {
+    throw AppError.fromPrisma(err, "An earning adjustment with this key already exists") ?? err;
+  }
+}
+
+export async function listEarnings(query: ListEarningsQuery) {
+  const { page, limit, search } = query;
+  // Earnings are the rider side of the shared ledger; never mix rental entries in.
+  const where: Prisma.LedgerEntryWhereInput = { riderId: query.riderId ?? { not: null } };
+
+  if (query.rentalId) where.rentalId = query.rentalId;
+  if (query.payStatementId) where.payStatementId = query.payStatementId;
+  if (query.entryType) where.entryType = query.entryType;
+  if (query.direction) where.direction = query.direction;
+  if (query.from || query.to) {
+    where.occurredAt = {};
+    if (query.from) where.occurredAt.gte = query.from;
+    if (query.to) where.occurredAt.lte = query.to;
+  }
+  if (search) {
+    where.OR = [
+      { description: { contains: search, mode: "insensitive" } },
+      { rider: { fullName: { contains: search, mode: "insensitive" } } },
+      { rider: { riderCode: { contains: search, mode: "insensitive" } } },
+      { rental: { rentalNumber: { contains: search, mode: "insensitive" } } },
+    ];
   }
 
-  const { page, limit } = query;
-  const where: Prisma.DepositLedgerWhereInput = {
-    depositId: deposit.id,
+  const orderBy: Prisma.LedgerEntryOrderByWithRelationInput = {
+    [query.sortBy]: query.sortOrder,
   };
 
-  const [transactions, total, totals] = await Promise.all([
-    prisma.depositLedger.findMany({
+  const [entries, total] = await Promise.all([
+    prisma.ledgerEntry.findMany({
       where,
-      include: { authorizedBy: { select: depositLedgerUserSelect } },
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: earningDetailSelect,
+      orderBy,
       skip: (page - 1) * limit,
       take: limit,
     }),
-    prisma.depositLedger.count({ where }),
-    depositTotals(prisma as unknown as Tx, deposit.id),
+    prisma.ledgerEntry.count({ where }),
   ]);
 
   return {
-    depositId: deposit.id,
-    balance: totals.balance,
-    totalCredits: totals.credits,
-    totalDebits: totals.debits,
-    transactions,
+    entries,
     pagination: {
       page,
       limit,
       total,
       totalPages: Math.ceil(total / limit),
     },
+  };
+}
+
+export async function getEarningsSummary(query: EarningsSummaryQuery) {
+  const rider = await prisma.rider.findUnique({
+    where: { id: query.riderId },
+    select: {
+      id: true,
+      riderCode: true,
+      fullName: true,
+      rentalType: true,
+      deletedAt: true,
+    },
+  });
+
+  if (!rider || rider.deletedAt) {
+    throw new AppError("Rider not found", 404);
+  }
+
+  const entries = await prisma.ledgerEntry.findMany({
+    where: { riderId: rider.id },
+    select: {
+      direction: true,
+      amount: true,
+      payStatementId: true,
+      entryType: true,
+    },
+  });
+
+  const totals = entries.reduce(
+    (acc, entry) => {
+      const amount = toDecimal(entry.amount);
+      if (entry.direction === "CREDIT") acc.totalCredits = acc.totalCredits.add(amount);
+      else acc.totalDebits = acc.totalDebits.add(amount);
+
+      if (entry.payStatementId === null) {
+        if (entry.direction === "CREDIT") {
+          acc.availableBalance = acc.availableBalance.add(amount);
+        } else {
+          acc.availableBalance = acc.availableBalance.sub(amount);
+        }
+        acc.unsettledEntryCount += 1;
+      } else if (entry.direction === "CREDIT") {
+        acc.settledCredits = acc.settledCredits.add(amount);
+      }
+
+      return acc;
+    },
+    {
+      totalCredits: new Prisma.Decimal(0),
+      totalDebits: new Prisma.Decimal(0),
+      settledCredits: new Prisma.Decimal(0),
+      availableBalance: new Prisma.Decimal(0),
+      unsettledEntryCount: 0,
+    }
+  );
+
+  return {
+    rider,
+    ...totals,
   };
 }

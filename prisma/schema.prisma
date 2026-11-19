@@ -465,7 +465,7 @@ model Rider {
   bankIfsc            String?
   bankHolderName      String?
 
-  rentalType   RentalType?
+  rentalType   RentalType
   b2cMode      B2CMode?
   b2bRiderMgmt B2BRiderMgmt?
 
@@ -541,7 +541,7 @@ model Vehicle {
   year               Int?
   color              String?
 
-  vehicleType      String? // e.g. EV scooter / cargo
+  vehicleType      String?
   vehicleCategory  String?
   batteryType      String?
   batteryCapacity  Int?
@@ -677,13 +677,13 @@ model RateCard {
   vehicleCategory String?
   vehicleModel    String?
   rentalType      RentalType?
+
   dailyRate       Decimal     @db.Decimal(14, 4)
   weeklyRate      Decimal?    @db.Decimal(14, 4)
   fortnightlyRate Decimal?    @db.Decimal(14, 4)
   monthlyRate     Decimal?    @db.Decimal(14, 4)
   securityDeposit Decimal?    @db.Decimal(14, 2)
-  effectiveFrom   DateTime    @db.Timestamptz(3)
-  effectiveTo     DateTime?   @db.Timestamptz(3)
+
   isActive        Boolean     @default(true)
   terms           Json?       @db.JsonB
   createdAt       DateTime    @default(now()) @db.Timestamptz(3)

@@ -3,27 +3,22 @@ import { verifyToken } from "../middleware/verifyToken.js";
 import { authorize } from "../middleware/pbac.js";
 import { validate } from "../middleware/validate.js";
 import {
-  adjustEarningSchema,
-  earningsSummaryQuerySchema,
-  listEarningsQuerySchema,
-  recordEarningSchema,
+  adjustLedgerSchema,
+  ledgerSummaryQuerySchema,
+  listLedgerQuerySchema,
+  recordLedgerSchema,
 } from "../validation/earnings.js";
 import {
   adjustEarning,
   getEarnings,
   getEarningsSummary,
   recordEarning,
-} from "../controllers/earnings/earnings.controller.js";
+} from "../controllers/ledger/mainLedger.js";
 
 const r = Router();
 
-// r.post(
-//   "/",
-//   verifyToken,
-//   authorize("earning", "create"),
-//   validate(recordEarningSchema),
-//   recordEarning
-// );
+r.post("/",  verifyToken,  authorize("ledgerEntry", "create"),  validate(recordLedgerSchema),  recordEarning);
+
 // r.post(
 //   "/adjustments",
 //   verifyToken,
