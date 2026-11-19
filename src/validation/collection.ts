@@ -54,7 +54,6 @@ export const createCollectionSchema = z
     referenceNumber: z.string().trim().min(1).max(200).nullable().optional(),
     receivedAt: z.coerce.date().optional(),
     status: z.enum(["PENDING", "CLEARED"]).optional(),
-    idempotencyKey: z.string().trim().min(1).max(200).optional(),
     notes: z.string().trim().min(1).max(2000).nullable().optional(),
   })
   .strict();

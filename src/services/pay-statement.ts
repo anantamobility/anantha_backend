@@ -51,7 +51,6 @@ export const payStatementSelect = {
   shortfallAmount: true,
   requiresManualReview: true,
   calculationSnapshot: true,
-  version: true,
   approvedById: true,
   approvedAt: true,
   paidById: true,
@@ -375,7 +374,6 @@ export async function generatePayStatement(
             receivedById: actor.userId,
             reconciledAt: now,
             reconciledById: actor.userId,
-            idempotencyKey: `payStatement-rent:${payStatement.id}:${due.id}`,
             notes: `Rent deducted from pay statement ${payStatement.statementNumber}`,
           },
           select: { id: true },
@@ -391,7 +389,6 @@ export async function generatePayStatement(
             description: `Rent deducted from pay statement ${payStatement.statementNumber}`,
             sourceType: "Collection",
             sourceId: collection.id,
-            idempotencyKey: `collection:${collection.id}`,
             createdById: actor.userId,
           },
         });
@@ -409,7 +406,6 @@ export async function generatePayStatement(
             payStatementId: payStatement.id,
             rentalId: due.rentalId,
             createdById: actor.userId,
-            idempotencyKey: `payStatement-rent:${payStatement.id}:${due.id}`,
           },
           select: { id: true },
         });
@@ -462,7 +458,6 @@ export async function generatePayStatement(
             payStatementId: payStatement.id,
             rentalId: deduction.rentalId ?? null,
             createdById: actor.userId,
-            idempotencyKey: `payStatement-manual:${payStatement.id}:${index}`,
           },
           select: { id: true },
         });
@@ -508,7 +503,6 @@ export async function generatePayStatement(
           shortfallAmount,
           requiresManualReview,
           paidAt: zeroNetStatement ? now : undefined,
-          version: { increment: 1 },
           calculationSnapshot: {
             periodStart: periodStart.toISOString(),
             periodEnd: periodEnd.toISOString(),
@@ -573,7 +567,6 @@ export async function approvePayStatement(
           netPayable: true,
           shortfallAmount: true,
           requiresManualReview: true,
-          version: true,
         },
       });
 
@@ -623,7 +616,6 @@ export async function approvePayStatement(
           status: "APPROVED",
           approvedById: actor.userId,
           approvedAt,
-          version: { increment: 1 },
         },
         select: payStatementDetailSelect,
       });
@@ -714,7 +706,6 @@ export async function payPayStatement(
           sourceId: payStatement.id,
           payStatementId: payStatement.id,
           createdById: actor.userId,
-          idempotencyKey: `payStatement-payout:${payStatement.id}`,
         },
       });
 
@@ -726,7 +717,6 @@ export async function payPayStatement(
           paidAt,
           paymentMethod: input.paymentMethod,
           referenceNumber: input.referenceNumber ?? null,
-          version: { increment: 1 },
         },
         select: payStatementDetailSelect,
       });

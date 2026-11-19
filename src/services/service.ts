@@ -48,7 +48,6 @@ const serviceVehicleSelect = {
   status: true,
   hubId: true,
   isActive: true,
-  version: true,
 } as const;
 
 const serviceRentalSelect = {
@@ -92,7 +91,6 @@ const serviceChargeSelect = {
   description: true,
   sourceType: true,
   sourceId: true,
-  idempotencyKey: true,
   serviceSpareId: true,
   createdAt: true,
   updatedAt: true,
@@ -160,7 +158,6 @@ export const serviceListSelect = {
   responsibilityApprovedAt: true,
   responsibilityInvestigationNotes: true,
   replacementVehicleId: true,
-  version: true,
   createdAt: true,
   updatedAt: true,
   vehicle: { select: serviceVehicleSelect },
@@ -219,7 +216,6 @@ async function assertVehicle(tx: Tx, vehicleId: string, requireAvailable = false
       status: true,
       hubId: true,
       isActive: true,
-      version: true,
       deletedAt: true,
     },
   });
@@ -251,7 +247,6 @@ async function assertRental(tx: Tx, rentalId: string) {
       id: true,
       rentalNumber: true,
       status: true,
-      version: true,
       rentalType: true,
       clientId: true,
       riderId: true,
@@ -308,13 +303,12 @@ async function moveVehicleForService(
       | "UNDER_REPAIR"
       | "OUT_OF_SERVICE"
       | "RETIRED";
-    expectedVersion?: number;
     previousVehicleStatus?: string | null;
   }
 ) {
   const vehicle = await tx.vehicle.findUnique({
     where: { id: input.vehicleId },
-    select: { id: true, registrationNumber: true, status: true, version: true },
+    select: { id: true, registrationNumber: true, status: true },
   });
   if (!vehicle) {
     throw new AppError("Vehicle not found", 404, ErrorCode.NOT_FOUND);
@@ -334,13 +328,11 @@ async function moveVehicleForService(
     where: {
       id: vehicle.id,
       status: input.expectedStatus ?? vehicle.status,
-      version: input.expectedVersion ?? vehicle.version,
       deletedAt: null,
     },
     data: {
       status: target,
       statusChangedAt: new Date(),
-      version: { increment: 1 },
     },
   });
 
@@ -656,7 +648,6 @@ export async function updateService(
     }
 
     const data: Prisma.ServiceUncheckedUpdateInput = {
-      version: { increment: 1 },
     };
     if (input.description !== undefined) data.description = input.description;
     if (input.diagnosis !== undefined) data.diagnosis = input.diagnosis;
@@ -672,7 +663,7 @@ export async function updateService(
     }
 
     const updated = await tx.service.updateMany({
-      where: { id, version: existing.version },
+      where: { id },
       data,
     });
     if (updated.count === 0) {
@@ -721,7 +712,6 @@ export async function startService(
           rentalId: true,
           previousVehicleStatus: true,
           downtimeStart: true,
-          version: true,
         },
       });
       if (!service) {
@@ -743,7 +733,7 @@ export async function startService(
       const vehicle = await assertVehicle(tx, service.vehicleId, true);
 
       const updated = await tx.service.updateMany({
-        where: { id, version: service.version },
+        where: { id },
         data: {
           status: "IN_PROGRESS",
           statusChangedAt: startedAt,
@@ -754,7 +744,6 @@ export async function startService(
             service.downtimeStart === null
               ? vehicle.status
               : service.previousVehicleStatus ?? vehicle.status,
-          version: { increment: 1 },
         },
       });
       if (updated.count === 0) {
@@ -769,7 +758,6 @@ export async function startService(
         vehicleId: service.vehicleId,
         targetStatus: "IN_SERVICE",
         expectedStatus: vehicle.status,
-        expectedVersion: vehicle.version,
         reason: input.reason ?? `Service ${service.serviceNumber} started`,
         actor,
       });
@@ -813,7 +801,6 @@ export async function markServiceAwaitingParts(
         id: true,
         serviceNumber: true,
         status: true,
-        version: true,
       },
     });
     if (!service) {
@@ -830,11 +817,10 @@ export async function markServiceAwaitingParts(
     }
 
     const updated = await tx.service.updateMany({
-      where: { id, version: service.version },
+      where: { id },
       data: {
         status: "AWAITING_PARTS",
         statusChangedAt: new Date(),
-        version: { increment: 1 },
       },
     });
     if (updated.count === 0) {
@@ -877,7 +863,6 @@ export async function resumeServiceWork(
         id: true,
         serviceNumber: true,
         status: true,
-        version: true,
       },
     });
     if (!service) {
@@ -894,11 +879,10 @@ export async function resumeServiceWork(
     }
 
     const updated = await tx.service.updateMany({
-      where: { id, version: service.version },
+      where: { id },
       data: {
         status: "IN_PROGRESS",
         statusChangedAt: new Date(),
-        version: { increment: 1 },
       },
     });
     if (updated.count === 0) {
@@ -946,7 +930,6 @@ export async function completeService(
         previousVehicleStatus: true,
         startedAt: true,
         downtimeStart: true,
-        version: true,
       },
     });
     if (!service) {
@@ -975,7 +958,7 @@ export async function completeService(
     }
 
     const updated = await tx.service.updateMany({
-      where: { id, version: service.version },
+      where: { id },
       data: {
         status: "COMPLETED",
         statusChangedAt: completedAt,
@@ -987,7 +970,6 @@ export async function completeService(
         ...(input.resolutionNotes !== undefined
           ? { resolutionNotes: input.resolutionNotes }
           : {}),
-        version: { increment: 1 },
       },
     });
     if (updated.count === 0) {
@@ -1037,7 +1019,6 @@ export async function closeService(
         id: true,
         serviceNumber: true,
         status: true,
-        version: true,
       },
     });
     if (!service) {
@@ -1055,12 +1036,11 @@ export async function closeService(
 
     const closedAt = new Date();
     const updated = await tx.service.updateMany({
-      where: { id, version: service.version },
+      where: { id },
       data: {
         status: "CLOSED",
         statusChangedAt: closedAt,
         closedAt,
-        version: { increment: 1 },
       },
     });
     if (updated.count === 0) {
@@ -1107,7 +1087,6 @@ export async function cancelService(
         rentalId: true,
         previousVehicleStatus: true,
         downtimeStart: true,
-        version: true,
       },
     });
     if (!service) {
@@ -1125,14 +1104,13 @@ export async function cancelService(
 
     const cancelledAt = new Date();
     const updated = await tx.service.updateMany({
-      where: { id, version: service.version },
+      where: { id },
       data: {
         status: "CANCELLED",
         statusChangedAt: cancelledAt,
         cancelledAt,
         cancellationReason: input.reason,
         downtimeEnd: service.downtimeStart ? cancelledAt : null,
-        version: { increment: 1 },
       },
     });
     if (updated.count === 0) {
@@ -1193,7 +1171,6 @@ export async function approveServiceResponsibility(
         serviceNumber: true,
         status: true,
         responsibleParty: true,
-        version: true,
       },
     });
     if (!service) {
@@ -1209,7 +1186,7 @@ export async function approveServiceResponsibility(
 
     const approvedAt = new Date();
     const updated = await tx.service.updateMany({
-      where: { id, version: service.version },
+      where: { id },
       data: {
         responsibleParty: input.responsibility,
         responsibilityApprovedAt: approvedAt,
@@ -1223,7 +1200,6 @@ export async function approveServiceResponsibility(
             }
           : {}),
         approvedById: actor.userId,
-        version: { increment: 1 },
       },
     });
     if (updated.count === 0) {
@@ -1408,7 +1384,6 @@ export async function assignReplacement(
         where: { id: service.id },
         data: {
           replacementVehicleId: replacementVehicle.id,
-          version: { increment: 1 },
         },
       });
 
@@ -1416,7 +1391,6 @@ export async function assignReplacement(
         vehicleId: replacementVehicle.id,
         targetStatus: "DEPLOYED",
         expectedStatus: "IDLE",
-        expectedVersion: replacementVehicle.version,
         reason: input.reason ?? `Replacement for service ${service.serviceNumber}`,
         actor,
       });
@@ -1522,7 +1496,7 @@ export async function returnReplacement(
 
     const vehicle = await tx.vehicle.findUnique({
       where: { id: assignment.replacementVehicleId },
-      select: { id: true, status: true, version: true, registrationNumber: true },
+      select: { id: true, status: true, registrationNumber: true },
     });
 
     if (vehicle && vehicle.status === "DEPLOYED") {
@@ -1530,13 +1504,11 @@ export async function returnReplacement(
         where: {
           id: vehicle.id,
           status: "DEPLOYED",
-          version: vehicle.version,
           deletedAt: null,
         },
         data: {
           status: "IDLE",
           statusChangedAt: new Date(),
-          version: { increment: 1 },
         },
       });
       if (vehicleUpdated.count === 0) {
@@ -1564,13 +1536,6 @@ export async function returnReplacement(
       });
 
       if (replacementRental) {
-        const idempotencyKey = `replacement-charge:${assignment.id}`;
-        const existingCharge = await tx.serviceCharge.findUnique({
-          where: { idempotencyKey },
-          select: { id: true },
-        });
-
-        if (!existingCharge) {
           const amount = calculateDueAmount({
             period: replacementRental.collectionPeriod,
             periodStart: assignment.assignedAt,
@@ -1607,18 +1572,16 @@ export async function returnReplacement(
                   .slice(0, 10)} to ${returnedAt.toISOString().slice(0, 10)}`,
                 sourceType: "ReplacementAssignment",
                 sourceId: assignment.id,
-                idempotencyKey,
               },
               select: serviceChargeSelect,
             });
           }
-        }
       }
     }
 
     await tx.service.updateMany({
       where: { id: service.id, replacementVehicleId: assignment.replacementVehicleId },
-      data: { replacementVehicleId: null, version: { increment: 1 } },
+      data: { replacementVehicleId: null },
     });
 
     await logAudit({
@@ -1671,16 +1634,6 @@ export async function createServiceCharge(
         );
       }
 
-      if (input.idempotencyKey) {
-        const existing = await tx.serviceCharge.findUnique({
-          where: { idempotencyKey: input.idempotencyKey },
-          select: serviceChargeSelect,
-        });
-        if (existing) {
-          return { charge: existing, duplicate: true };
-        }
-      }
-
       const costAmount = new Prisma.Decimal(input.costAmount);
       const allocation = deriveServiceChargeAllocation({
         responsibility: service.responsibleParty,
@@ -1702,7 +1655,6 @@ export async function createServiceCharge(
             | "UNKNOWN",
           status: allocation.status,
           description: input.description ?? null,
-          idempotencyKey: input.idempotencyKey ?? null,
           sourceType: "Manual",
           sourceId: service.id,
         },

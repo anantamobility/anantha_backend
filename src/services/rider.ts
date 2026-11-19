@@ -60,7 +60,6 @@ export const riderListSelect = {
   hubId: true,
   status: true,
   onboardedAt: true,
-  version: true,
   createdAt: true,
   updatedAt: true,
   user: { select: riderUserSelect },
@@ -497,13 +496,11 @@ export async function changeRiderStatus(
         where: {
           id,
           status: previousStatus,
-          version: rider.version,
           deletedAt: null,
         },
         data: {
           status: nextStatus,
           statusChangedAt,
-          version: { increment: 1 },
         },
       });
 
@@ -520,7 +517,6 @@ export async function changeRiderStatus(
         ...currentRider,
         status: nextStatus,
         statusChangedAt,
-        version: rider.version + 1,
       };
       const { address: _oldAddress, ...riderBefore } = rider;
       const { address: _newAddress, ...riderAfter } = updatedRider;

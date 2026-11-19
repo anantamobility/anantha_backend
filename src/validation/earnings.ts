@@ -42,7 +42,6 @@ export const recordEarningSchema = z
     occurredAt: z.coerce.date().optional(),
     description: z.string().trim().min(1).max(500).optional(),
     referenceNumber: z.string().trim().min(1).max(200).nullable().optional(),
-    idempotencyKey: z.string().trim().min(1).max(200).optional(),
     metadata: z.record(z.string(), z.unknown()).nullable().optional(),
   })
   .strict();
@@ -55,7 +54,6 @@ export const adjustEarningSchema = z
     direction: ledgerDirectionSchema,
     reason: z.string().trim().min(1).max(500),
     occurredAt: z.coerce.date().optional(),
-    idempotencyKey: z.string().trim().min(1).max(200).optional(),
     metadata: z.record(z.string(), z.unknown()).nullable().optional(),
   })
   .strict();

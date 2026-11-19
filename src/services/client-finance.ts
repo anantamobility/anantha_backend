@@ -1,4 +1,3 @@
-import { v4 as uuidv4 } from "uuid";
 import { Prisma } from "../generated/prisma/client.js";
 import prisma from "../database/prismaClient.js";
 import {
@@ -339,26 +338,6 @@ export async function recordClientPayment(
 
       const amount = new Prisma.Decimal(input.amount);
       const receivedAt = input.receivedAt ?? new Date();
-      const baseKey =
-        input.idempotencyKey ??
-        (input.referenceNumber
-          ? `client-payment:${client.id}:${input.referenceNumber}`
-          : `client-payment:${client.id}:${uuidv4()}`);
-
-      const existing = await tx.collection.findFirst({
-        where: { idempotencyKey: { startsWith: `${baseKey}:` } },
-        select: collectionSelect,
-      });
-
-      if (existing) {
-        const summary = await buildClientFinancialSummary(tx, client);
-        return {
-          collections: [],
-          allocations: [],
-          summary,
-          duplicate: true,
-        };
-      }
 
       let rentals: Array<{
         id: string;
@@ -490,7 +469,6 @@ export async function recordClientPayment(
             referenceNumber: input.referenceNumber ?? null,
             receivedAt,
             status: "CLEARED",
-            idempotencyKey: `${baseKey}:${due.id}`,
             notes: input.notes ?? null,
           },
           actor

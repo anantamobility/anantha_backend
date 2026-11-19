@@ -1,4 +1,3 @@
-import { v4 as uuidv4 } from "uuid";
 import { Prisma } from "../generated/prisma/client.js";
 import prisma from "../database/prismaClient.js";
 import {
@@ -25,7 +24,6 @@ export const depositSelect = {
   amountRequired: true,
   status: true,
   dueDate: true,
-  version: true,
   notes: true,
   createdAt: true,
   updatedAt: true,
@@ -159,45 +157,10 @@ export async function recordDepositLedgerEntry(
     reference?: string | null;
     reason?: string | null;
     occurredAt?: Date;
-    idempotencyKey?: string;
     actor: AuditActor;
   }
 ) {
   const deposit = await getOrCreateDepositForRental(tx, input.rentalId);
-
-  const idempotencyKey =
-    input.idempotencyKey ??
-    (input.reference
-      ? `deposit-${input.type}:${deposit.id}:${input.reference}`
-      : `deposit-${input.type}:${deposit.id}:${uuidv4()}`);
-
-  const duplicate = await tx.depositLedger.findUnique({
-    where: { idempotencyKey },
-  });
-  if (duplicate) {
-    const totals = await depositTotals(tx, deposit.id);
-    return {
-      deposit,
-      transaction: duplicate,
-      balance: totals.balance,
-      credits: totals.credits,
-      debits: totals.debits,
-      duplicate: true,
-    };
-  }
-
-  const lock = await tx.deposit.updateMany({
-    where: { id: deposit.id, version: deposit.version },
-    data: { version: { increment: 1 } },
-  });
-
-  if (lock.count === 0) {
-    throw new AppError(
-      "Security deposit was modified concurrently; please retry",
-      409,
-      ErrorCode.CONFLICT
-    );
-  }
 
   const before = await depositTotals(tx, deposit.id);
 
@@ -218,7 +181,6 @@ export async function recordDepositLedgerEntry(
       reference: input.reference ?? null,
       reason: input.reason ?? null,
       authorizedById: input.actor.userId,
-      idempotencyKey,
       ...(input.occurredAt ? { createdAt: input.occurredAt } : {}),
     },
   });
@@ -295,7 +257,6 @@ export async function receiveDeposit(
         amount: new Prisma.Decimal(input.amount),
         reference: input.reference ?? null,
         reason: input.reason ?? null,
-        idempotencyKey: input.idempotencyKey,
         actor,
       })
     );
@@ -318,7 +279,6 @@ export async function refundDeposit(
         amount: new Prisma.Decimal(input.amount),
         reference: input.reference ?? null,
         reason: input.reason ?? null,
-        idempotencyKey: input.idempotencyKey,
         actor,
       })
     );
@@ -341,7 +301,6 @@ export async function adjustDeposit(
         amount: new Prisma.Decimal(input.amount),
         reference: input.reference ?? null,
         reason: input.reason,
-        idempotencyKey: input.idempotencyKey,
         actor,
       })
     );

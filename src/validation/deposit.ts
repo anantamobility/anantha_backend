@@ -27,7 +27,6 @@ export const receiveDepositSchema = z
     amount: moneySchema(2, "amount"),
     reference: z.string().trim().min(1).max(200).nullable().optional(),
     reason: z.string().trim().min(1).max(500).nullable().optional(),
-    idempotencyKey: z.string().trim().min(1).max(200).optional(),
   })
   .strict();
 
@@ -36,7 +35,6 @@ export const refundDepositSchema = z
     amount: moneySchema(2, "amount"),
     reference: z.string().trim().min(1).max(200).nullable().optional(),
     reason: z.string().trim().min(1).max(500).nullable().optional(),
-    idempotencyKey: z.string().trim().min(1).max(200).optional(),
   })
   .strict();
 
@@ -46,7 +44,6 @@ export const adjustDepositSchema = z
     direction: z.enum(["CREDIT", "DEBIT"]),
     reason: z.string().trim().min(1).max(500),
     reference: z.string().trim().min(1).max(200).nullable().optional(),
-    idempotencyKey: z.string().trim().min(1).max(200).optional(),
   })
   .strict();
 

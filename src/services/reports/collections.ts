@@ -49,7 +49,6 @@ export async function collectionsReport(
   if (query.search) {
     where.OR = [
       { referenceNumber: { contains: query.search, mode: "insensitive" } },
-      { idempotencyKey: { contains: query.search, mode: "insensitive" } },
       { notes: { contains: query.search, mode: "insensitive" } },
       { client: { name: { contains: query.search, mode: "insensitive" } } },
       { client: { clientCode: { contains: query.search, mode: "insensitive" } } },

@@ -63,7 +63,6 @@ export const inventoryMovementSelect = {
   movedById: true,
   referenceType: true,
   referenceId: true,
-  idempotencyKey: true,
   notes: true,
   movedAt: true,
   createdAt: true,
@@ -222,7 +221,6 @@ export type MovementInput = {
   vehicleId?: string | null;
   referenceType?: string | null;
   referenceId?: string | null;
-  idempotencyKey?: string | null;
   notes?: string | null;
   movedAt?: Date;
   requireActiveSpare?: boolean;
@@ -233,16 +231,6 @@ export async function recordInventoryMovement(
   input: MovementInput,
   actor: AuditActor
 ) {
-  if (input.idempotencyKey) {
-    const existing = await tx.inventoryMovement.findUnique({
-      where: { idempotencyKey: input.idempotencyKey },
-      select: inventoryMovementSelect,
-    });
-    if (existing) {
-      return { movement: existing, duplicate: true };
-    }
-  }
-
   await assertHub(tx, input.hubId);
   await assertSpare(tx, input.spareId, {
     requireActive: input.requireActiveSpare,
@@ -280,7 +268,6 @@ export async function recordInventoryMovement(
       movedById: actor.userId,
       referenceType: input.referenceType ?? null,
       referenceId: input.referenceId ?? null,
-      idempotencyKey: input.idempotencyKey ?? null,
       notes: input.notes ?? null,
       ...(input.movedAt ? { movedAt: input.movedAt } : {}),
     },
@@ -524,8 +511,6 @@ export async function recordOpeningStock(
         quantity: input.quantity,
         direction: "IN",
         unitCost: input.unitCost ?? null,
-        idempotencyKey:
-          input.idempotencyKey ?? `opening-stock:${input.spareId}:${input.hubId}`,
         notes: input.reason ?? input.notes ?? null,
         movedAt: input.movedAt,
       },
@@ -560,7 +545,6 @@ export async function recordStockIn(input: StockInInput, actor: AuditActor) {
         unitCost: input.unitCost ?? null,
         referenceType: input.referenceType ?? null,
         referenceId: input.referenceId ?? null,
-        idempotencyKey: input.idempotencyKey ?? null,
         notes: input.notes ?? null,
         movedAt: input.movedAt,
       },
@@ -596,7 +580,6 @@ export async function recordAdjustment(
         quantity: input.quantity,
         direction: input.direction,
         unitCost: input.unitCost ?? null,
-        idempotencyKey: input.idempotencyKey ?? null,
         notes: input.reason,
         movedAt: input.movedAt,
       },
@@ -632,7 +615,6 @@ export async function recordDamagedStock(
         quantity: input.quantity,
         direction: "OUT",
         unitCost: input.unitCost ?? null,
-        idempotencyKey: input.idempotencyKey ?? null,
         notes: input.reason ?? input.notes ?? null,
         movedAt: input.movedAt,
       },
@@ -723,28 +705,6 @@ export async function consumeSpareForService(
     );
   }
 
-  const idempotencyKey =
-    input.idempotencyKey ??
-    `service-consume:${input.serviceId}:${input.spareId}:${input.quantity}`;
-
-  const existing = await tx.serviceSpare.findUnique({
-    where: { idempotencyKey },
-    select: {
-      id: true,
-      serviceId: true,
-      spareId: true,
-      quantity: true,
-      unitCost: true,
-      lineCost: true,
-      inventoryMovementId: true,
-      createdAt: true,
-    },
-  });
-
-  if (existing) {
-    return { serviceSpare: existing, duplicate: true };
-  }
-
   const unitCost = new Prisma.Decimal(input.unitCost ?? spare.unitCost);
   const lineCost = unitCost.mul(input.quantity).toDecimalPlaces(2);
 
@@ -759,7 +719,6 @@ export async function consumeSpareForService(
       unitCost: unitCost.toString(),
       serviceId: service.id,
       vehicleId: service.vehicleId,
-      idempotencyKey: `movement:${idempotencyKey}`,
       notes: input.notes ?? null,
     },
     actor
@@ -772,7 +731,6 @@ export async function consumeSpareForService(
       quantity: input.quantity,
       unitCost,
       lineCost,
-      idempotencyKey,
       inventoryMovementId: movementResult.movement.id,
     },
     select: {
@@ -810,7 +768,6 @@ export async function consumeSpareForService(
       sourceType: "ServiceSpare",
       sourceId: serviceSpare.id,
       serviceSpareId: serviceSpare.id,
-      idempotencyKey: `spare-charge:${serviceSpare.id}`,
     },
   });
 
@@ -880,18 +837,6 @@ export async function returnServiceSpare(
       );
     }
 
-    const idempotencyKey =
-      input.idempotencyKey ??
-      `service-return:${input.serviceId}:${input.spareId}:${input.quantity}`;
-
-    const existing = await tx.serviceSpare.findUnique({
-      where: { idempotencyKey },
-      select: { id: true },
-    });
-    if (existing) {
-      return { serviceSpare: existing, duplicate: true };
-    }
-
     const unitCost = new Prisma.Decimal(input.unitCost ?? spare.unitCost);
     const lineCost = unitCost.mul(input.quantity).toDecimalPlaces(2).neg();
 
@@ -906,7 +851,6 @@ export async function returnServiceSpare(
         unitCost: unitCost.toString(),
         serviceId: service.id,
         vehicleId: service.vehicleId,
-        idempotencyKey: `movement:${idempotencyKey}`,
         notes: input.reason ?? input.notes ?? null,
       },
       actor
@@ -919,7 +863,6 @@ export async function returnServiceSpare(
         quantity: -Math.abs(input.quantity),
         unitCost,
         lineCost,
-        idempotencyKey,
         inventoryMovementId: movementResult.movement.id,
       },
       select: {

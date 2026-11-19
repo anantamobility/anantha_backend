@@ -33,7 +33,6 @@ export const vehicleListSelect = {
   acquiredAt: true,
   retiredAt: true,
   isActive: true,
-  version: true,
   createdAt: true,
   updatedAt: true,
   hub: { select: vehicleHubSelect },
@@ -557,19 +556,17 @@ export async function changeVehicleStatus(
         nextStatus === VehicleStatus.RETIRED ? new Date() : undefined;
       const statusChangedAt = new Date();
 
-      // Conditional update on the version we read guarantees that a concurrent
+      // Conditional update on the status we read guarantees that a concurrent
       // status change cannot silently overwrite a newer status.
       const updateResult = await tx.vehicle.updateMany({
         where: {
           id,
           status: previousStatus,
-          version: vehicle.version,
           deletedAt: null,
         },
         data: {
           status: nextStatus,
           statusChangedAt,
-          version: { increment: 1 },
           ...(retiredAt ? { retiredAt } : {}),
         },
       });
@@ -587,7 +584,6 @@ export async function changeVehicleStatus(
         ...currentVehicle,
         status: nextStatus,
         statusChangedAt,
-        version: vehicle.version + 1,
         ...(retiredAt ? { retiredAt } : {}),
       };
 

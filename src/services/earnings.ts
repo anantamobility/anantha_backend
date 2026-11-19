@@ -1,4 +1,3 @@
-import { v4 as uuidv4 } from "uuid";
 import { Prisma } from "../generated/prisma/client.js";
 import prisma from "../database/prismaClient.js";
 import {
@@ -30,7 +29,6 @@ export const earningSelect = {
   rentalId: true,
   reversesEntryId: true,
   createdById: true,
-  idempotencyKey: true,
   metadata: true,
   createdAt: true,
 } as const;
@@ -127,20 +125,6 @@ export async function recordEarning(
         await assertRentalForRider(tx, input.rentalId, input.riderId);
       }
 
-      const idempotencyKey =
-        input.idempotencyKey ??
-        (input.referenceNumber
-          ? `earning:${input.riderId}:${input.referenceNumber}`
-          : `earning:${input.riderId}:${uuidv4()}`);
-
-      const existing = await tx.ledgerEntry.findUnique({
-        where: { idempotencyKey },
-        select: earningDetailSelect,
-      });
-      if (existing) {
-        return { entry: existing, duplicate: true };
-      }
-
       const amount = new Prisma.Decimal(input.amount);
       const occurredAt = input.occurredAt ?? new Date();
 
@@ -158,7 +142,6 @@ export async function recordEarning(
           sourceId: input.referenceNumber ?? null,
           rentalId: input.rentalId ?? null,
           createdById: actor.userId,
-          idempotencyKey,
           metadata: (input.metadata ?? undefined) as Prisma.InputJsonValue,
         },
         select: earningDetailSelect,
@@ -203,18 +186,6 @@ export async function adjustEarning(
 
       const amount = new Prisma.Decimal(input.amount);
 
-      const idempotencyKey =
-        input.idempotencyKey ??
-        `earning-adjust:${input.riderId}:${uuidv4()}`;
-
-      const existing = await tx.ledgerEntry.findUnique({
-        where: { idempotencyKey },
-        select: earningDetailSelect,
-      });
-      if (existing) {
-        return { entry: existing, duplicate: true };
-      }
-
       if (input.direction === "DEBIT") {
         const available = await getAvailableEarningsBalance(tx, rider.id);
         if (amount.gt(available)) {
@@ -235,10 +206,9 @@ export async function adjustEarning(
           occurredAt: input.occurredAt ?? new Date(),
           description: input.reason,
           sourceType: "EarningsAdjustment",
-          sourceId: input.idempotencyKey ?? null,
+          sourceId: null,
           rentalId: input.rentalId ?? null,
           createdById: actor.userId,
-          idempotencyKey,
           metadata: (input.metadata ?? undefined) as Prisma.InputJsonValue,
         },
         select: earningDetailSelect,
@@ -285,7 +255,6 @@ export async function listEarnings(query: ListEarningsQuery) {
   if (search) {
     where.OR = [
       { description: { contains: search, mode: "insensitive" } },
-      { idempotencyKey: { contains: search, mode: "insensitive" } },
       { rider: { fullName: { contains: search, mode: "insensitive" } } },
       { rider: { riderCode: { contains: search, mode: "insensitive" } } },
       { rental: { rentalNumber: { contains: search, mode: "insensitive" } } },

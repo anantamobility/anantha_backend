@@ -93,7 +93,7 @@ const vehicleBaseSchema = z.object({
   insuranceThirdParty: optionalNullableString(100),
 });
 
-// Strict objects reject system-managed fields (id, status, version, timestamps,
+// Strict objects reject system-managed fields (id, status, timestamps,
 // deletedAt, retiredAt) instead of silently accepting and discarding them.
 export const createVehicleSchema = vehicleBaseSchema.strict();
 

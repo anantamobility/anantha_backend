@@ -42,7 +42,6 @@ const baseMovementFields = {
   quantity: positiveQuantity,
   unitCost: moneySchema(4, "unitCost").nullable().optional(),
   movedAt: z.coerce.date().optional(),
-  idempotencyKey: z.string().trim().min(1).max(200).optional(),
   notes: z.string().trim().min(1).max(2000).nullable().optional(),
 };
 
@@ -76,7 +75,6 @@ export const serviceConsumptionSchema = z
     hubId: z.string().uuid("hubId must be a valid UUID").optional(),
     quantity: positiveQuantity,
     unitCost: moneySchema(4, "unitCost").nullable().optional(),
-    idempotencyKey: z.string().trim().min(1).max(200).optional(),
     notes: z.string().trim().min(1).max(2000).nullable().optional(),
   })
   .strict();
@@ -89,7 +87,6 @@ export const serviceReturnSchema = z
     quantity: positiveQuantity,
     unitCost: moneySchema(4, "unitCost").nullable().optional(),
     reason: z.string().trim().min(1).max(500).optional(),
-    idempotencyKey: z.string().trim().min(1).max(200).optional(),
     notes: z.string().trim().min(1).max(2000).nullable().optional(),
   })
   .strict();

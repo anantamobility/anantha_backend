@@ -73,7 +73,6 @@ const rentalVehicleSelect = {
   make: true,
   model: true,
   status: true,
-  version: true,
 } as const;
 
 export const rentalListSelect = {
@@ -96,7 +95,6 @@ export const rentalListSelect = {
   fortnightlyRate: true,
   monthlyRate: true,
   securityDepositRequired: true,
-  version: true,
   notes: true,
   activatedAt: true,
   closedAt: true,
@@ -135,7 +133,6 @@ export const rentalDetailSelect = {
       amountRequired: true,
       status: true,
       dueDate: true,
-      version: true,
     },
   },
   _count: {
@@ -338,7 +335,6 @@ async function assignVehicleWithinTransaction(
       registrationNumber: true,
       status: true,
       isActive: true,
-      version: true,
       deletedAt: true,
     },
   });
@@ -391,13 +387,11 @@ async function assignVehicleWithinTransaction(
     where: {
       id: vehicle.id,
       status: "IDLE",
-      version: vehicle.version,
       deletedAt: null,
     },
     data: {
       status: "DEPLOYED",
       statusChangedAt: new Date(),
-      version: { increment: 1 },
     },
   });
 
@@ -716,11 +710,10 @@ export async function activateRental(
       }
 
       const updated = await tx.rental.updateMany({
-        where: { id, status: rental.status, version: rental.version },
+        where: { id, status: rental.status },
         data: {
           status: "ACTIVE",
           activatedAt,
-          version: { increment: 1 },
         },
       });
 
@@ -772,7 +765,6 @@ export async function closeRental(
           hubId: true,
           startDate: true,
           endDate: true,
-          version: true,
           notes: true,
           collectionPeriod: true,
         },
@@ -785,18 +777,6 @@ export async function closeRental(
       if (rental.status !== "ACTIVE" && rental.status !== "ON_HOLD") {
         throw new AppError(
           `Only an ACTIVE or ON_HOLD rental can be closed (current status: ${rental.status})`,
-          409,
-          ErrorCode.CONFLICT
-        );
-      }
-
-      const lock = await tx.rental.updateMany({
-        where: { id, version: rental.version },
-        data: { version: { increment: 1 } },
-      });
-      if (lock.count === 0) {
-        throw new AppError(
-          "Rental was modified concurrently; please retry",
           409,
           ErrorCode.CONFLICT
         );
@@ -823,7 +803,6 @@ export async function closeRental(
           amount: new Prisma.Decimal(input.rentAdjustment.amount),
           direction: input.rentAdjustment.direction,
           reason: input.rentAdjustment.reason,
-          idempotencyKey: input.rentAdjustment.idempotencyKey,
           actor,
         });
       }
@@ -835,7 +814,6 @@ export async function closeRental(
           direction: input.depositAdjustment.direction,
           amount: new Prisma.Decimal(input.depositAdjustment.amount),
           reason: input.depositAdjustment.reason,
-          idempotencyKey: input.depositAdjustment.idempotencyKey,
           actor,
         });
       }
@@ -848,7 +826,6 @@ export async function closeRental(
           amount: new Prisma.Decimal(input.depositRefund.amount),
           reference: input.depositRefund.reference ?? null,
           reason: input.depositRefund.reason ?? "Rental closure refund",
-          idempotencyKey: input.depositRefund.idempotencyKey,
           actor,
         });
       }
@@ -866,7 +843,6 @@ export async function closeRental(
               id: true,
               registrationNumber: true,
               status: true,
-              version: true,
               deletedAt: true,
             },
           },
@@ -905,13 +881,11 @@ export async function closeRental(
             where: {
               id: vehicle.id,
               status: vehicle.status,
-              version: vehicle.version,
               deletedAt: null,
             },
             data: {
               status: returnStatus,
               statusChangedAt: new Date(),
-              version: { increment: 1 },
             },
           });
 

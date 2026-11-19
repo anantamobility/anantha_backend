@@ -1,4 +1,3 @@
-import { v4 as uuidv4 } from "uuid";
 import { Prisma } from "../generated/prisma/client.js";
 import prisma from "../database/prismaClient.js";
 import {
@@ -41,7 +40,6 @@ export const collectionSelect = {
   receivedById: true,
   reconciledAt: true,
   reconciledById: true,
-  idempotencyKey: true,
   notes: true,
   createdAt: true,
   updatedAt: true,
@@ -69,9 +67,8 @@ export async function createCollectionLedgerEntry(
     description: string;
   }
 ) {
-  await tx.ledgerEntry.upsert({
-    where: { idempotencyKey: `collection:${input.collectionId}` },
-    create: {
+  await tx.ledgerEntry.create({
+    data: {
       rentalId: input.rentalId,
       entryType: "COLLECTION_RECEIVED",
       direction: "CREDIT",
@@ -80,10 +77,8 @@ export async function createCollectionLedgerEntry(
       description: input.description,
       sourceType: "Collection",
       sourceId: input.collectionId,
-      idempotencyKey: `collection:${input.collectionId}`,
       createdById: input.actor.userId,
     },
-    update: {},
   });
 }
 
@@ -186,7 +181,7 @@ export async function createCollection(
   } catch (err) {
     throw AppError.fromPrisma(
       err,
-      "A collection with this reference or idempotency key already exists"
+      "A collection with this reference already exists"
     ) ?? err;
   }
 }
@@ -201,21 +196,6 @@ export async function createCollectionWithinTransaction(
   const amount = new Prisma.Decimal(input.amount);
   const status = input.status ?? "CLEARED";
   const receivedAt = input.receivedAt ?? new Date();
-  const idempotencyKey =
-    input.idempotencyKey ??
-    (input.referenceNumber
-      ? `collection:${due.id}:${input.referenceNumber}`
-      : `collection:${due.id}:${uuidv4()}`);
-
-  const existing = await tx.collection.findUnique({
-    where: { idempotencyKey },
-    select: collectionDetailSelect,
-  });
-
-  if (existing) {
-    const summary = await getRentalFinancialSummary(tx, rental.id);
-    return { collection: existing, summary, duplicate: true };
-  }
 
   const applied =
     status === "CLEARED"
@@ -239,7 +219,6 @@ export async function createCollectionWithinTransaction(
       receivedById: actor.userId,
       reconciledAt: status === "CLEARED" ? receivedAt : null,
       reconciledById: status === "CLEARED" ? actor.userId : null,
-      idempotencyKey,
       notes: input.notes ?? null,
     },
     select: collectionDetailSelect,
@@ -401,7 +380,6 @@ export async function listCollections(query: ListCollectionsQuery) {
     where.OR = [
       { referenceNumber: { contains: search, mode: "insensitive" } },
       { notes: { contains: search, mode: "insensitive" } },
-      { idempotencyKey: { contains: search, mode: "insensitive" } },
       {
         rentalDue: {
           rental: {

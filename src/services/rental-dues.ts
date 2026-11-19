@@ -1,4 +1,3 @@
-import { v4 as uuidv4 } from "uuid";
 import { Prisma } from "../generated/prisma/client.js";
 import { AppError, ErrorCode } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
@@ -164,11 +163,8 @@ export async function generateRentalDues(
 
     if (!existingKeys.has(key)) generated += 1;
 
-    await tx.ledgerEntry.upsert({
-      where: {
-        idempotencyKey: `rental-due:${due.id}`,
-      },
-      create: {
+    await tx.ledgerEntry.create({
+      data: {
         rentalId: rental.id,
         entryType: "RENT_CHARGED",
         direction: "DEBIT",
@@ -179,10 +175,8 @@ export async function generateRentalDues(
           .slice(0, 10)} to ${period.periodEnd.toISOString().slice(0, 10)}`,
         sourceType: "RentalDue",
         sourceId: due.id,
-        idempotencyKey: `rental-due:${due.id}`,
         createdById: input.actor?.userId ?? null,
       },
-      update: {},
     });
   }
 
@@ -404,7 +398,6 @@ export async function recordRentAdjustment(
     direction: "CREDIT" | "DEBIT";
     reason: string;
     occurredAt?: Date;
-    idempotencyKey?: string;
     actor: AuditActor;
   }
 ) {
@@ -419,17 +412,6 @@ export async function recordRentAdjustment(
 
   if (!rental) {
     throw new AppError("Rental not found", 404, ErrorCode.NOT_FOUND);
-  }
-
-  const idempotencyKey =
-    input.idempotencyKey ?? `rent-adjust:${input.rentalId}:${uuidv4()}`;
-
-  const existing = await tx.ledgerEntry.findUnique({
-    where: { idempotencyKey },
-  });
-
-  if (existing) {
-    return { entry: existing, applied: new Prisma.Decimal(0), duplicate: true };
   }
 
   const applied =
@@ -447,7 +429,6 @@ export async function recordRentAdjustment(
       description: input.reason,
       sourceType: "RentalAdjustment",
       sourceId: input.rentalId,
-      idempotencyKey,
       createdById: input.actor.userId,
     },
   });

@@ -38,7 +38,6 @@ export const recordClientPaymentSchema = z
     referenceNumber: z.string().trim().min(1).max(200).nullable().optional(),
     receivedAt: z.coerce.date().optional(),
     rentalId: z.string().uuid("rentalId must be a valid UUID").nullable().optional(),
-    idempotencyKey: z.string().trim().min(1).max(200).optional(),
     notes: z.string().trim().min(1).max(2000).nullable().optional(),
   })
   .strict();
