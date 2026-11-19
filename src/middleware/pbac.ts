@@ -2,7 +2,6 @@ import type { Request, Response, NextFunction } from "express";
 import prisma from "../database/prismaClient.js";
 import { type AppResource, type AppAction } from "../registry/perm.js";
 import { PolicyRegistry } from "../registry/policy.js";
-import { getModelDelegate } from "../registry/models.js";
 import { error } from "../utils/http.js";
 
 
@@ -75,10 +74,10 @@ export const authorize = (
             }
 
             // Dynamic DB Fetch
-            const modelDelegate = getModelDelegate(resource);
-            if (!modelDelegate) {
-                return error(res, 400, "Unknown resource");
-            }
+            const modelDelegate = (prisma as any)[resource];
+            if (!modelDelegate){
+                return res.status(500).json({ message: "Invalid resource type" });
+            } 
 
             contextData = await modelDelegate.findFirst({
                 where: { [lookupField]: resourceId }
@@ -105,8 +104,8 @@ export const authorize = (
             }
         }
 
-        // 4. ATTACH CONTEXT (Optimization)
-        // We attach this so your Controller doesn't have to fetch the same data again.
+        // 4. ATTACH CONTEXT
+        // We attach this so the Controller doesn't have to fetch the same data again.
         if (action !== 'create') {
             req.resource = contextData;
         }

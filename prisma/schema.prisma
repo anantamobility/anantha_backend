@@ -543,11 +543,9 @@ model Vehicle {
 
   vehicleType      String? // e.g. EV scooter / cargo
   vehicleCategory  String?
-  seats            Int?
   batteryType      String?
   batteryCapacity  Int?
   nominalRange     Int?
-  bootSpace        Int? // in litres
   chargingOptions  String? // slow | fast
   chargerProvided  Boolean?
   noOfTyres        Int?
@@ -564,7 +562,6 @@ model Vehicle {
   dateOfOperation     DateTime? @db.Timestamptz(3)
   warrantyStartDate   DateTime? @db.Timestamptz(3)
   warrantyEndDate     DateTime? @db.Timestamptz(3)
-  safeCabCertificateExpiryDate DateTime? @db.Timestamptz(3)
   telematicsExpiryDate         DateTime? @db.Timestamptz(3)
 
   // Current finance and insurance only; no history.

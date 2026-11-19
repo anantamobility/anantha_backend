@@ -20,49 +20,11 @@ import {
 
 const r = Router();
 
-r.post(
-  "/",
-  verifyToken,
-  authorize("ratecard", "create"),
-  validate(createRateCardSchema),
-  createRateCard
-);
-r.get(
-  "/",
-  verifyToken,
-  authorize("ratecard", "read", { policy: false }),
-  validate(listRateCardsQuerySchema, "query"),
-  getRateCards
-);
-r.patch(
-  "/:id/status",
-  verifyToken,
-  validate(idParamSchema, "params"),
-  authorize("ratecard", "status:update"),
-  validate(changeRateCardStatusSchema),
-  changeRateCardStatus
-);
-r.get(
-  "/:id",
-  verifyToken,
-  validate(idParamSchema, "params"),
-  authorize("ratecard", "read"),
-  getRateCardById
-);
-r.patch(
-  "/:id",
-  verifyToken,
-  validate(idParamSchema, "params"),
-  authorize("ratecard", "update"),
-  validate(updateRateCardSchema),
-  updateRateCard
-);
-r.delete(
-  "/:id",
-  verifyToken,
-  validate(idParamSchema, "params"),
-  authorize("ratecard", "delete"),
-  deleteRateCard
-);
+r.post("/", verifyToken, authorize("rateCard", "create"), validate(createRateCardSchema), createRateCard);
+r.get("/",verifyToken,authorize("rateCard", "read", { policy: false }),validate(listRateCardsQuerySchema, "query"),getRateCards);
+r.patch( "/:id/status", verifyToken, validate(idParamSchema, "params"), authorize("rateCard", "status:update"), validate(changeRateCardStatusSchema), changeRateCardStatus);
+r.get( "/:id", verifyToken, validate(idParamSchema, "params"), authorize("rateCard", "read"), getRateCardById);
+r.patch( "/:id", verifyToken, validate(idParamSchema, "params"), authorize("rateCard", "update"), validate(updateRateCardSchema), updateRateCard);
+r.delete( "/:id", verifyToken, validate(idParamSchema, "params"), authorize("rateCard", "delete"), deleteRateCard);
 
 export default r;

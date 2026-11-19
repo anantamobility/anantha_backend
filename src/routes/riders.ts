@@ -31,90 +31,26 @@ import {
 
 const r = Router();
 
-r.post(
-  "/",
-  verifyToken,
-  authorize("rider", "create"),
-  validate(createRiderSchema),
-  createRider
-);
-r.get(
-  "/",
-  verifyToken,
-  authorize("rider", "read", { policy: false }),
-  validate(listRidersQuerySchema, "query"),
-  getRiders
-);
+r.post("/", verifyToken, authorize("rider", "create"), validate(createRiderSchema), createRider);
 
-r.patch(
-  "/:id/status",
-  verifyToken,
-  validate(idParamSchema, "params"),
-  authorize("rider", "status:update"),
-  validate(changeRiderStatusSchema),
-  changeRiderStatus
-);
+r.get("/", verifyToken, authorize("rider", "read", { policy: false }), validate(listRidersQuerySchema, "query"), getRiders);
 
-r.post(
-  "/:id/documents",
-  verifyToken,
-  validate(idParamSchema, "params"),
-  authorize("rider", "document:upload"),
-  uploadRiderDocument,
-  validate(riderDocumentMetadataSchema),
-  uploadRiderDocumentController
-);
-r.get(
-  "/:id/documents",
-  verifyToken,
-  validate(idParamSchema, "params"),
-  authorize("rider", "document:read"),
-  validate(listRiderDocumentsQuerySchema, "query"),
-  listRiderDocuments
-);
-r.get(
-  "/:id/documents/:documentId/download",
-  verifyToken,
-  validate(riderDocumentParamSchema, "params"),
-  authorize("rider", "document:read"),
-  downloadRiderDocument
-);
-r.get(
-  "/:id/documents/:documentId",
-  verifyToken,
-  validate(riderDocumentParamSchema, "params"),
-  authorize("rider", "document:read"),
-  getRiderDocument
-);
-r.delete(
-  "/:id/documents/:documentId",
-  verifyToken,
-  validate(riderDocumentParamSchema, "params"),
-  authorize("rider", "document:delete"),
-  deleteRiderDocument
-);
+r.patch("/:id/status", verifyToken, validate(idParamSchema, "params"), authorize("rider", "status:update"), validate(changeRiderStatusSchema), changeRiderStatus);
 
-r.get(
-  "/:id",
-  verifyToken,
-  validate(idParamSchema, "params"),
-  authorize("rider", "read"),
-  getRiderById
-);
-r.patch(
-  "/:id",
-  verifyToken,
-  validate(idParamSchema, "params"),
-  authorize("rider", "update"),
-  validate(updateRiderSchema),
-  updateRider
-);
-r.delete(
-  "/:id",
-  verifyToken,
-  validate(idParamSchema, "params"),
-  authorize("rider", "delete"),
-  deleteRiderById
-);
+r.post("/:id/documents", verifyToken, validate(idParamSchema, "params"), authorize("rider", "document:upload"), uploadRiderDocument, validate(riderDocumentMetadataSchema), uploadRiderDocumentController);
+
+r.get("/:id/documents", verifyToken, validate(idParamSchema, "params"), authorize("rider", "document:read"), validate(listRiderDocumentsQuerySchema, "query"), listRiderDocuments);
+
+r.get( "/:id/documents/:documentId/download",  verifyToken,  validate(riderDocumentParamSchema, "params"),  authorize("rider", "document:read"),  downloadRiderDocument);
+
+r.get("/:id/documents/:documentId",  verifyToken,  validate(riderDocumentParamSchema, "params"),  authorize("rider", "document:read"),  getRiderDocument);
+
+r.delete("/:id/documents/:documentId", verifyToken, validate(riderDocumentParamSchema, "params"), authorize("rider", "document:delete"), deleteRiderDocument);
+
+r.get("/:id", verifyToken, validate(idParamSchema, "params"), authorize("rider", "read"), getRiderById);
+
+r.patch("/:id", verifyToken, validate(idParamSchema, "params"), authorize("rider", "update"), validate(updateRiderSchema), updateRider);
+
+r.delete("/:id", verifyToken, validate(idParamSchema, "params"), authorize("rider", "delete"), deleteRiderById);
 
 export default r;

@@ -48,7 +48,7 @@ export function getRolePermissionBuckets(
       if (
         [
           'client',
-          'ratecard',
+          'rateCard',
           'rental',
           'deposit',
           'collection',
@@ -64,7 +64,7 @@ export function getRolePermissionBuckets(
 
       // SUPERVISOR owns the full operational service, spares and inventory
       // workflow, including damage responsibility approval.
-      if (['service', 'spare', 'inventory'].includes(group.resource)) {
+      if (['service', 'sparePart', 'inventoryMovement'].includes(group.resource)) {
         buckets.SUPERVISOR.push(key);
       }
 

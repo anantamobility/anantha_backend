@@ -19,33 +19,13 @@ import {
 const r = Router();
 
 r.post("/", verifyToken, authorize("hub", "create"), validate(createHubSchema), createHub);
-r.get("/",
-  verifyToken,
-  authorize("hub", "read", { policy: false }),
-  validate(listHubsQuerySchema, "query"),
-  getHubs
-);
-r.get(
-  "/:id",
-  verifyToken,
-  validate(idParamSchema, "params"),
-  authorize("hub", "read"),
-  getHubById
-);
-r.patch(
-  "/:id",
-  verifyToken,
-  validate(idParamSchema, "params"),
-  authorize("hub", "update"),
-  validate(updateHubSchema),
-  updateHub
-);
-r.delete(
-  "/:id",
-  verifyToken,
-  validate(idParamSchema, "params"),
-  authorize("hub", "delete"),
-  deleteHub
-);
+
+r.get("/", verifyToken, authorize("hub", "read", { policy: false }), validate(listHubsQuerySchema, "query"), getHubs);
+
+r.get("/:id", verifyToken, validate(idParamSchema, "params"), authorize("hub", "read"), getHubById);
+
+r.patch("/:id", verifyToken, validate(idParamSchema, "params"), authorize("hub", "update"), validate(updateHubSchema), updateHub);
+
+r.delete( "/:id", verifyToken, validate(idParamSchema, "params"), authorize("hub", "delete"), deleteHub);
 
 export default r;

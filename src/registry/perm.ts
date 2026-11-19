@@ -47,7 +47,7 @@ export const PERMISSION_REGISTRY = [
     actions: ['create', 'read', 'update', 'delete', 'status:update']
   },
   {
-    resource: 'ratecard',
+    resource: 'rateCard',
     actions: ['create', 'read', 'update', 'delete', 'status:update']
   },
   {
@@ -71,11 +71,11 @@ export const PERMISSION_REGISTRY = [
     ]
   },
   {
-    resource: 'earning',
+    resource: 'ledgerEntry',
     actions: ['create', 'read', 'adjust']
   },
   {
-    resource: 'payStatement',
+    resource: 'riderPayStatement',
     actions: ['generate', 'read', 'approve', 'pay', 'reconcile']
   },
   {
@@ -97,11 +97,11 @@ export const PERMISSION_REGISTRY = [
     ]
   },
   {
-    resource: 'spare',
+    resource: 'sparePart',
     actions: ['create', 'read', 'update', 'status:update']
   },
   {
-    resource: 'inventory',
+    resource: 'inventoryMovement',
     actions: [
       'read',
       'opening-stock',
