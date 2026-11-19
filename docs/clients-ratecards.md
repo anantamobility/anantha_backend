@@ -137,18 +137,17 @@ curl -X POST "$BASE_URL/ratecards" \
 
 ```json
 {
-  "code": "CONFLICT",
   "message": "Ratecard is not active for the requested date"
 }
 ```
 
-| Status | Code | Typical causes |
-| --- | --- | --- |
-| `400` | `VALIDATION_ERROR` | Invalid UUID, money, dates, enum, unknown/immutable field, missing pricing source |
-| `401` | `UNAUTHORIZED` | Missing or invalid bearer token |
-| `403` | `FORBIDDEN` | Role lacks the required permission |
-| `404` | `NOT_FOUND` | Client or ratecard does not exist or client is soft-deleted |
-| `409` | `CONFLICT` | Duplicate code, frozen commercial terms, redundant/concurrent status change, inactive ratecard for a rental |
+| Status | Typical causes |
+| --- | --- |
+| `400` | Invalid UUID, money, dates, enum, unknown/immutable field, missing pricing source |
+| `401` | Missing or invalid bearer token |
+| `403` | Role lacks the required permission |
+| `404` | Client or ratecard does not exist or client is soft-deleted |
+| `409` | Duplicate code, frozen commercial terms, redundant/concurrent status change, inactive ratecard for a rental |
 
 ## Permissions
 

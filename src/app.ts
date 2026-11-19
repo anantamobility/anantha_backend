@@ -35,7 +35,7 @@ app.use(morgan('dev'))
 const options = {
     origin: ['http://localhost:8080', 'http://localhost:5173', envConfig.frontendUrl],
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'idempotency-key'],
     credentials: true
 };
 app.use(cors(options))

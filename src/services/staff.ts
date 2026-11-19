@@ -1,9 +1,6 @@
 import prisma from "../database/prismaClient.js";
 import type { Prisma } from "../generated/prisma/client.js";
-import {
-  AppError,
-  ErrorCode,
-} from "../utils/errors.js";
+import { AppError } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import { createUserRecord, resolveRole } from "./user.js";
 import { addressInput } from "./rider.js";
@@ -26,7 +23,7 @@ async function assertHubExists(
 ) {
   const hub = await tx.hub.findUnique({ where: { id: hubId } });
   if (!hub) {
-    throw new AppError("Hub not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Hub not found", 404);
   }
 }
 
@@ -39,8 +36,7 @@ export async function createStaff(input: CreateStaffInput, actor: AuditActor) {
       if (role.name === "ADMIN" && actor.userRole !== "ADMIN") {
         throw new AppError(
           "Only an administrator can assign the ADMIN role",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -157,7 +153,7 @@ export async function getStaffById(id: string) {
   });
 
   if (!staff || staff.deletedAt) {
-    throw new AppError("Staff not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Staff not found", 404);
   }
 
   return staff;
@@ -172,7 +168,7 @@ export async function updateStaff(
     return await prisma.$transaction(async (tx) => {
       const existing = await tx.staff.findUnique({ where: { id }, include: { user: { select: staffUserSelect } } });
       if (!existing || existing.deletedAt) {
-        throw new AppError("Staff not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Staff not found", 404);
       }
       if (
         input.hubId !== undefined &&
@@ -276,7 +272,7 @@ export async function deleteStaff(id: string, actor: AuditActor) {
     return await prisma.$transaction(async (tx) => {
       const existing = await tx.staff.findUnique({ where: { id }, include: { user: { select: staffUserSelect } } });
       if (!existing || existing.deletedAt) {
-        throw new AppError("Staff not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Staff not found", 404);
       }
 
       // Soft delete preserves payouts, documents, and other historical records.

@@ -1,9 +1,6 @@
 import prisma from "../database/prismaClient.js";
 import { Prisma, VehicleStatus } from "../generated/prisma/client.js";
-import {
-  AppError,
-  ErrorCode,
-} from "../utils/errors.js";
+import { AppError } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import type {
   ChangeVehicleStatusInput,
@@ -133,7 +130,7 @@ function tyresInput(tyres: unknown[] | null | undefined) {
 async function assertHubExists(tx: Prisma.TransactionClient, hubId: string) {
   const hub = await tx.hub.findUnique({ where: { id: hubId } });
   if (!hub) {
-    throw new AppError("Hub not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Hub not found", 404);
   }
 }
 
@@ -279,7 +276,7 @@ export async function getVehicleById(id: string) {
   });
 
   if (!vehicle || vehicle.deletedAt) {
-    throw new AppError("Vehicle not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Vehicle not found", 404);
   }
 
   const { deletedAt: _deletedAt, ...safeVehicle } = vehicle;
@@ -295,7 +292,7 @@ export async function updateVehicle(
     return await prisma.$transaction(async (tx) => {
       const existing = await tx.vehicle.findUnique({ where: { id } });
       if (!existing || existing.deletedAt) {
-        throw new AppError("Vehicle not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Vehicle not found", 404);
       }
       if (input.hubId !== undefined && input.hubId !== null) {
       }
@@ -445,7 +442,7 @@ export async function deleteVehicle(id: string, actor: AuditActor) {
     return await prisma.$transaction(async (tx) => {
       const existing = await tx.vehicle.findUnique({ where: { id } });
       if (!existing || existing.deletedAt) {
-        throw new AppError("Vehicle not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Vehicle not found", 404);
       }
 
       const [activeAssignments, openServices] = await Promise.all([
@@ -463,16 +460,14 @@ export async function deleteVehicle(id: string, actor: AuditActor) {
       if (activeAssignments > 0) {
         throw new AppError(
           "Vehicle cannot be deleted while it has an active assignment",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
       if (openServices > 0) {
         throw new AppError(
           "Vehicle cannot be deleted while it has an open service record",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -515,7 +510,7 @@ export async function changeVehicleStatus(
     return await prisma.$transaction(async (tx) => {
       const vehicle = await tx.vehicle.findUnique({ where: { id } });
       if (!vehicle || vehicle.deletedAt) {
-        throw new AppError("Vehicle not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Vehicle not found", 404);
       }
 
       const previousStatus = vehicle.status;
@@ -524,16 +519,14 @@ export async function changeVehicleStatus(
       if (previousStatus === nextStatus) {
         throw new AppError(
           `Vehicle already has status ${nextStatus}`,
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
       if (!ALLOWED_VEHICLE_STATUS_TRANSITIONS[previousStatus].includes(nextStatus)) {
         throw new AppError(
           `Invalid status transition from ${previousStatus} to ${nextStatus}`,
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -547,8 +540,7 @@ export async function changeVehicleStatus(
       ) {
         throw new AppError(
           "Vehicle has an active assignment and cannot change to this status",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -574,8 +566,7 @@ export async function changeVehicleStatus(
       if (updateResult.count === 0) {
         throw new AppError(
           "Vehicle status was modified concurrently; please retry",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 

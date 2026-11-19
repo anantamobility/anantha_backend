@@ -1,5 +1,5 @@
 import prisma from "../database/prismaClient.js";
-import { AppError, ErrorCode } from "../utils/errors.js";
+import { AppError } from "../utils/errors.js";
 
 export type ManualRentalPricingInput = {
   dailyRate: string | number;
@@ -34,8 +34,7 @@ function decimalString(
     if (options.required) {
       throw new AppError(
         `${field} is required for manual rental pricing`,
-        400,
-        ErrorCode.VALIDATION_ERROR
+        400
       );
     }
     return null;
@@ -46,16 +45,14 @@ function decimalString(
   if (!pattern.test(text)) {
     throw new AppError(
       `${field} must be a non-negative decimal with at most ${scale} decimal places`,
-      400,
-      ErrorCode.VALIDATION_ERROR
+      400
     );
   }
 
   if (options.positive && Number(text) <= 0) {
     throw new AppError(
       `${field} must be greater than 0`,
-      400,
-      ErrorCode.VALIDATION_ERROR
+      400
     );
   }
 
@@ -100,16 +97,14 @@ export async function resolveRentalPricing(
   if (hasRateCard && hasManualPricing) {
     throw new AppError(
       "Provide either a ratecard or explicit manual pricing, not both",
-      400,
-      ErrorCode.VALIDATION_ERROR
+      400
     );
   }
 
   if (!hasRateCard && !hasManualPricing) {
     throw new AppError(
       "A ratecard or explicit manual pricing is required; a missing ratecard does not mean zero rental price",
-      400,
-      ErrorCode.VALIDATION_ERROR
+      400
     );
   }
 
@@ -119,7 +114,7 @@ export async function resolveRentalPricing(
   });
 
   if (!client || client.deletedAt) {
-    throw new AppError("Client not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Client not found", 404);
   }
 
   if (input.manualPricing) {
@@ -152,8 +147,7 @@ export async function resolveRentalPricing(
   if (!rateCard) {
     throw new AppError(
       "Ratecard is not active for the requested date",
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
 

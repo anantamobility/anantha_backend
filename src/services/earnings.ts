@@ -1,9 +1,6 @@
 import { Prisma } from "../generated/prisma/client.js";
 import prisma from "../database/prismaClient.js";
-import {
-  AppError,
-  ErrorCode,
-} from "../utils/errors.js";
+import { AppError } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import { toDecimal } from "./rental-schedule.js";
 import type {
@@ -56,13 +53,12 @@ async function assertEarningRider(tx: Tx, riderId: string) {
   });
 
   if (!rider || rider.deletedAt) {
-    throw new AppError("Rider not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Rider not found", 404);
   }
   if (rider.rentalType && rider.rentalType !== "B2C") {
     throw new AppError(
       "Earnings can only be recorded for a B2C rider",
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
 
@@ -85,13 +81,12 @@ async function assertRentalForRider(
   });
 
   if (!rental) {
-    throw new AppError("Rental not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Rental not found", 404);
   }
   if (rental.rentalType !== "B2C" || rental.riderId !== riderId) {
     throw new AppError(
       "Rental does not belong to the selected B2C rider",
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
 
@@ -191,8 +186,7 @@ export async function adjustEarning(
         if (amount.gt(available)) {
           throw new AppError(
             "Earning adjustment exceeds the available balance",
-            409,
-            ErrorCode.CONFLICT
+            409
           );
         }
       }
@@ -300,7 +294,7 @@ export async function getEarningsSummary(query: EarningsSummaryQuery) {
   });
 
   if (!rider || rider.deletedAt) {
-    throw new AppError("Rider not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Rider not found", 404);
   }
 
   const entries = await prisma.ledgerEntry.findMany({

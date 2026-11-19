@@ -1,10 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import prisma from "../database/prismaClient.js";
 import { Prisma } from "../generated/prisma/client.js";
-import {
-  AppError,
-  ErrorCode,
-} from "../utils/errors.js";
+import { AppError } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import type {
   ChangeRateCardStatusInput,
@@ -53,8 +50,7 @@ function assertDateRange(effectiveFrom: Date, effectiveTo: Date | null) {
   if (effectiveTo && effectiveTo.getTime() <= effectiveFrom.getTime()) {
     throw new AppError(
       "effectiveTo must be later than effectiveFrom",
-      400,
-      ErrorCode.VALIDATION_ERROR
+      400
     );
   }
 }
@@ -183,7 +179,7 @@ export async function getRateCardById(id: string) {
   });
 
   if (!rateCard || rateCard.deletedAt) {
-    throw new AppError("Ratecard not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Ratecard not found", 404);
   }
 
   const { deletedAt: _deletedAt, ...safeRateCard } = rateCard;
@@ -199,7 +195,7 @@ export async function updateRateCard(
     return await prisma.$transaction(async (tx) => {
       const existing = await tx.rateCard.findUnique({ where: { id } });
       if (!existing || existing.deletedAt) {
-        throw new AppError("Ratecard not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Ratecard not found", 404);
       }
 
       const effectiveFrom = input.effectiveFrom ?? existing.effectiveFrom;
@@ -274,14 +270,13 @@ export async function changeRateCardStatus(
     return await prisma.$transaction(async (tx) => {
       const existing = await tx.rateCard.findUnique({ where: { id } });
       if (!existing || existing.deletedAt) {
-        throw new AppError("Ratecard not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Ratecard not found", 404);
       }
 
       if (existing.isActive === input.isActive) {
         throw new AppError(
           `Ratecard is already ${input.isActive ? "active" : "inactive"}`,
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -296,8 +291,7 @@ export async function changeRateCardStatus(
       if (updateResult.count === 0) {
         throw new AppError(
           "Ratecard status was modified concurrently; please retry",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -338,7 +332,7 @@ export async function deleteRateCard(id: string, actor: AuditActor) {
     return await prisma.$transaction(async (tx) => {
       const existing = await tx.rateCard.findUnique({ where: { id } });
       if (!existing || existing.deletedAt) {
-        throw new AppError("Ratecard not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Ratecard not found", 404);
       }
 
       const deletedAt = new Date();

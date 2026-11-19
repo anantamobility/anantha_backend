@@ -1,9 +1,6 @@
 import { Prisma } from "../generated/prisma/client.js";
 import prisma from "../database/prismaClient.js";
-import {
-  AppError,
-  ErrorCode,
-} from "../utils/errors.js";
+import { AppError } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import { toDecimal } from "./rental-schedule.js";
 import {
@@ -64,20 +61,18 @@ async function assertClient(
   });
 
   if (!client || client.deletedAt) {
-    throw new AppError("Client not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Client not found", 404);
   }
   if (options.requireActive && !client.isActive) {
     throw new AppError(
       "Client is inactive and cannot be used for financial operations",
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
   if (options.requireCorporate && client.type !== "CORPORATE") {
     throw new AppError(
       "Consolidated client financials require a CORPORATE client",
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
 
@@ -267,8 +262,7 @@ export async function generateClientDues(
       if (rentals.length === 0) {
         throw new AppError(
           "Client has no B2B rentals eligible for due generation",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -357,13 +351,12 @@ export async function recordClientPayment(
         });
 
         if (!rental) {
-          throw new AppError("Rental not found", 404, ErrorCode.NOT_FOUND);
+          throw new AppError("Rental not found", 404);
         }
         if (rental.clientId !== client.id || rental.rentalType !== "B2B") {
           throw new AppError(
             "Rental does not belong to the selected B2B client",
-            409,
-            ErrorCode.CONFLICT
+            409
           );
         }
         if (
@@ -373,8 +366,7 @@ export async function recordClientPayment(
         ) {
           throw new AppError(
             `Client payments can only be recorded against an ACTIVE or ON_HOLD rental (current status: ${rental.status})`,
-            409,
-            ErrorCode.CONFLICT
+            409
           );
         }
 
@@ -399,8 +391,7 @@ export async function recordClientPayment(
       if (rentals.length === 0) {
         throw new AppError(
           "Client has no active B2B rentals to receive a payment",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -431,15 +422,13 @@ export async function recordClientPayment(
       if (totalOutstanding.lte(0)) {
         throw new AppError(
           "Client has no outstanding collection dues",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
       if (amount.gt(totalOutstanding)) {
         throw new AppError(
           "Client payment exceeds the total outstanding balance",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -488,8 +477,7 @@ export async function recordClientPayment(
       if (remaining.gt(0)) {
         throw new AppError(
           "Client payment could not be fully allocated; please retry",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 

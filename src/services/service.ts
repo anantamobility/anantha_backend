@@ -1,10 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import { Prisma } from "../generated/prisma/client.js";
 import prisma from "../database/prismaClient.js";
-import {
-  AppError,
-  ErrorCode,
-} from "../utils/errors.js";
+import { AppError } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import { deriveServiceChargeAllocation } from "./inventory.js";
 import { calculateDueAmount } from "./rental-schedule.js";
@@ -221,20 +218,18 @@ async function assertVehicle(tx: Tx, vehicleId: string, requireAvailable = false
   });
 
   if (!vehicle || vehicle.deletedAt) {
-    throw new AppError("Vehicle not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Vehicle not found", 404);
   }
   if (!vehicle.isActive) {
     throw new AppError(
       "Vehicle is inactive and cannot be used for service",
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
   if (requireAvailable && ["RETIRED", "OUT_OF_SERVICE"].includes(vehicle.status)) {
     throw new AppError(
       `Vehicle is not serviceable in status ${vehicle.status}`,
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
   return vehicle;
@@ -254,13 +249,12 @@ async function assertRental(tx: Tx, rentalId: string) {
     },
   });
   if (!rental) {
-    throw new AppError("Rental not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Rental not found", 404);
   }
   if (TERMINAL_RENTAL_STATUSES.includes(rental.status)) {
     throw new AppError(
       `Service cannot be attached to a ${rental.status} rental`,
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
   return rental;
@@ -283,8 +277,7 @@ async function assertNoOtherActiveDowntime(
   if (active > 0) {
     throw new AppError(
       "Vehicle already has an active service downtime; complete or cancel it first",
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
 }
@@ -311,7 +304,7 @@ async function moveVehicleForService(
     select: { id: true, registrationNumber: true, status: true },
   });
   if (!vehicle) {
-    throw new AppError("Vehicle not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Vehicle not found", 404);
   }
 
   const target =
@@ -339,8 +332,7 @@ async function moveVehicleForService(
   if (updated.count === 0) {
     throw new AppError(
       "Vehicle status was modified concurrently; please retry",
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
 
@@ -411,8 +403,7 @@ export async function createService(
         if (activeAssignment === 0) {
           throw new AppError(
             "Vehicle is not actively assigned to the selected rental",
-            409,
-            ErrorCode.CONFLICT
+            409
           );
         }
       }
@@ -425,8 +416,7 @@ export async function createService(
         if (!assignee || assignee.status !== "ACTIVE") {
           throw new AppError(
             "Assigned user not found or inactive",
-            404,
-            ErrorCode.NOT_FOUND
+            404
           );
         }
       }
@@ -609,7 +599,7 @@ export async function getServiceById(id: string) {
     select: serviceDetailSelect,
   });
   if (!service) {
-    throw new AppError("Service order not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Service order not found", 404);
   }
 
   return { service, costSummary: summarizeServiceCost(service) };
@@ -623,13 +613,12 @@ export async function updateService(
   return prisma.$transaction(async (tx) => {
     const existing = await tx.service.findUnique({ where: { id } });
     if (!existing) {
-      throw new AppError("Service order not found", 404, ErrorCode.NOT_FOUND);
+      throw new AppError("Service order not found", 404);
     }
     if (isTerminal(existing.status)) {
       throw new AppError(
         `Cannot update a ${existing.status} service order`,
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
@@ -641,8 +630,7 @@ export async function updateService(
       if (!assignee || assignee.status !== "ACTIVE") {
         throw new AppError(
           "Assigned user not found or inactive",
-          404,
-          ErrorCode.NOT_FOUND
+          404
         );
       }
     }
@@ -669,8 +657,7 @@ export async function updateService(
     if (updated.count === 0) {
       throw new AppError(
         "Service order was modified concurrently; please retry",
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
@@ -715,15 +702,14 @@ export async function startService(
         },
       });
       if (!service) {
-        throw new AppError("Service order not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Service order not found", 404);
       }
 
       const allowed = SERVICE_STATUS_TRANSITIONS[service.status] as readonly string[];
       if (!allowed.includes("IN_PROGRESS")) {
         throw new AppError(
           `Service cannot be started from status ${service.status}`,
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -749,8 +735,7 @@ export async function startService(
       if (updated.count === 0) {
         throw new AppError(
           "Service order was modified concurrently; please retry",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -804,15 +789,14 @@ export async function markServiceAwaitingParts(
       },
     });
     if (!service) {
-      throw new AppError("Service order not found", 404, ErrorCode.NOT_FOUND);
+      throw new AppError("Service order not found", 404);
     }
 
     const allowed = SERVICE_STATUS_TRANSITIONS[service.status] as readonly string[];
     if (!allowed.includes("AWAITING_PARTS")) {
       throw new AppError(
         `Service cannot await parts from status ${service.status}`,
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
@@ -826,8 +810,7 @@ export async function markServiceAwaitingParts(
     if (updated.count === 0) {
       throw new AppError(
         "Service order was modified concurrently; please retry",
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
@@ -866,15 +849,14 @@ export async function resumeServiceWork(
       },
     });
     if (!service) {
-      throw new AppError("Service order not found", 404, ErrorCode.NOT_FOUND);
+      throw new AppError("Service order not found", 404);
     }
 
     const allowed = SERVICE_STATUS_TRANSITIONS[service.status] as readonly string[];
     if (!allowed.includes("IN_PROGRESS")) {
       throw new AppError(
         `Service work cannot resume from status ${service.status}`,
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
@@ -888,8 +870,7 @@ export async function resumeServiceWork(
     if (updated.count === 0) {
       throw new AppError(
         "Service order was modified concurrently; please retry",
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
@@ -933,15 +914,14 @@ export async function completeService(
       },
     });
     if (!service) {
-      throw new AppError("Service order not found", 404, ErrorCode.NOT_FOUND);
+      throw new AppError("Service order not found", 404);
     }
 
     const allowed = SERVICE_STATUS_TRANSITIONS[service.status] as readonly string[];
     if (!allowed.includes("COMPLETED")) {
       throw new AppError(
         `Service cannot be completed from status ${service.status}`,
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
@@ -952,8 +932,7 @@ export async function completeService(
     ) {
       throw new AppError(
         "completedAt cannot be before the service start",
-        400,
-        ErrorCode.VALIDATION_ERROR
+        400
       );
     }
 
@@ -975,8 +954,7 @@ export async function completeService(
     if (updated.count === 0) {
       throw new AppError(
         "Service order was modified concurrently; please retry",
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
@@ -1022,15 +1000,14 @@ export async function closeService(
       },
     });
     if (!service) {
-      throw new AppError("Service order not found", 404, ErrorCode.NOT_FOUND);
+      throw new AppError("Service order not found", 404);
     }
 
     const allowed = SERVICE_STATUS_TRANSITIONS[service.status] as readonly string[];
     if (!allowed.includes("CLOSED")) {
       throw new AppError(
         `Service cannot be closed from status ${service.status}`,
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
@@ -1046,8 +1023,7 @@ export async function closeService(
     if (updated.count === 0) {
       throw new AppError(
         "Service order was modified concurrently; please retry",
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
@@ -1090,15 +1066,14 @@ export async function cancelService(
       },
     });
     if (!service) {
-      throw new AppError("Service order not found", 404, ErrorCode.NOT_FOUND);
+      throw new AppError("Service order not found", 404);
     }
 
     const allowed = SERVICE_STATUS_TRANSITIONS[service.status] as readonly string[];
     if (!allowed.includes("CANCELLED")) {
       throw new AppError(
         `Service cannot be cancelled from status ${service.status}`,
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
@@ -1116,8 +1091,7 @@ export async function cancelService(
     if (updated.count === 0) {
       throw new AppError(
         "Service order was modified concurrently; please retry",
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
@@ -1158,8 +1132,7 @@ export async function approveServiceResponsibility(
   if (!RESPONSIBILITY_APPROVER_ROLES.includes(actor.userRole)) {
     throw new AppError(
       "Only ADMIN or SUPERVISOR users can approve service responsibility",
-      403,
-      ErrorCode.FORBIDDEN
+      403
     );
   }
 
@@ -1174,13 +1147,12 @@ export async function approveServiceResponsibility(
       },
     });
     if (!service) {
-      throw new AppError("Service order not found", 404, ErrorCode.NOT_FOUND);
+      throw new AppError("Service order not found", 404);
     }
     if (isTerminal(service.status)) {
       throw new AppError(
         `Responsibility cannot be approved for a ${service.status} service order`,
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
@@ -1205,8 +1177,7 @@ export async function approveServiceResponsibility(
     if (updated.count === 0) {
       throw new AppError(
         "Service order was modified concurrently; please retry",
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
@@ -1290,21 +1261,19 @@ export async function assignReplacement(
         },
       });
       if (!service) {
-        throw new AppError("Service order not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Service order not found", 404);
       }
       if (isTerminal(service.status)) {
         throw new AppError(
           `Replacement cannot be assigned for a ${service.status} service order`,
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
       if (input.replacementVehicleId === service.vehicleId) {
         throw new AppError(
           "Replacement vehicle must be different from the vehicle under service",
-          400,
-          ErrorCode.VALIDATION_ERROR
+          400
         );
       }
 
@@ -1317,8 +1286,7 @@ export async function assignReplacement(
       if (replacementVehicle.status !== "IDLE") {
         throw new AppError(
           `Replacement vehicle must be IDLE (current status: ${replacementVehicle.status})`,
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -1328,8 +1296,7 @@ export async function assignReplacement(
       if (activeForService > 0) {
         throw new AppError(
           "Service already has an active replacement vehicle",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -1339,8 +1306,7 @@ export async function assignReplacement(
       if (activeForVehicle > 0) {
         throw new AppError(
           "Replacement vehicle already has an active replacement assignment",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -1350,8 +1316,7 @@ export async function assignReplacement(
         if (replacementRental.id === service.rentalId) {
           throw new AppError(
             "replacementRentalId must reference a different rental from the original",
-            400,
-            ErrorCode.VALIDATION_ERROR
+            400
           );
         }
       }
@@ -1441,13 +1406,12 @@ export async function returnReplacement(
       },
     });
     if (!service) {
-      throw new AppError("Service order not found", 404, ErrorCode.NOT_FOUND);
+      throw new AppError("Service order not found", 404);
     }
     if (isTerminal(service.status)) {
       throw new AppError(
         `Replacement cannot be returned for a ${service.status} service order`,
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
@@ -1463,8 +1427,7 @@ export async function returnReplacement(
     if (!assignment) {
       throw new AppError(
         "Service has no active replacement assignment",
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
@@ -1472,8 +1435,7 @@ export async function returnReplacement(
     if (returnedAt.getTime() < assignment.assignedAt.getTime()) {
       throw new AppError(
         "returnedAt cannot be before the replacement assignment",
-        400,
-        ErrorCode.VALIDATION_ERROR
+        400
       );
     }
 
@@ -1489,8 +1451,7 @@ export async function returnReplacement(
     if (updated.count === 0) {
       throw new AppError(
         "Replacement assignment was modified concurrently; please retry",
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
@@ -1514,8 +1475,7 @@ export async function returnReplacement(
       if (vehicleUpdated.count === 0) {
         throw new AppError(
           "Vehicle status was modified concurrently; please retry",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
     }
@@ -1624,13 +1584,12 @@ export async function createServiceCharge(
         },
       });
       if (!service) {
-        throw new AppError("Service order not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Service order not found", 404);
       }
       if (isTerminal(service.status)) {
         throw new AppError(
           `Charges cannot be added to a ${service.status} service order`,
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 

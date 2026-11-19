@@ -6,7 +6,7 @@ import envConfig from "../../config/env.js"
 import { v4 as uuidv4 } from "uuid";
 import { redisGet, redisSet, redisDel } from "../../config/redis.js";
 import { validatePasswordStrength } from "../../validation/auth.js";
-import { AppError, ErrorCode } from "../../utils/errors.js";
+import { AppError } from "../../utils/errors.js";
 import { success } from "../../utils/http.js";
 import { getAuditActor, logAudit } from "../../utils/log.js";
 import { displayName } from "../../services/user.js";
@@ -286,8 +286,7 @@ export const adminResetPassword = async (
     if (actor.userId === userId) {
       throw new AppError(
         "Use change-password to update your own password",
-        400,
-        ErrorCode.VALIDATION_ERROR
+        400
       );
     }
 
@@ -304,7 +303,7 @@ export const adminResetPassword = async (
     });
 
     if (!target || target.deletedAt) {
-      throw new AppError("User not found", 404, ErrorCode.NOT_FOUND);
+      throw new AppError("User not found", 404);
     }
 
     const passwordHash = await bcrypt.hash(newPassword, 10);

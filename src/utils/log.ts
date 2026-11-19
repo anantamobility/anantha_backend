@@ -2,7 +2,7 @@ import prisma from "../database/prismaClient.js";
 import type { Request } from "express";
 import type { Prisma } from "../generated/prisma/client.js";
 import type { UserContext } from "../types/express.js";
-import { AppError, ErrorCode } from "./errors.js";
+import { AppError } from "./errors.js";
 
 export interface AuditActor {
   req: Request;
@@ -19,7 +19,7 @@ export interface AuditActor {
 export function getAuditActor(req: Request): AuditActor {
   const user = req.user;
   if (!user) {
-    throw new AppError("Unauthenticated audit actor", 401, ErrorCode.UNAUTHORIZED);
+    throw new AppError("Unauthenticated audit actor", 401);
   }
   return {
     req,
@@ -105,7 +105,7 @@ export const logAudit = async({
     } catch (error) {
         console.error("FAILED TO LOG AUDIT:", error);
         if (throwOnError) {
-          throw new AppError("The change was not saved because the audit record failed", 500, ErrorCode.INTERNAL_ERROR);
+          throw new AppError("The change was not saved because the audit record failed", 500);
         }
     }
 }

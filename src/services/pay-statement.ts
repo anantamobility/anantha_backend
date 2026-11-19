@@ -1,10 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import { Prisma } from "../generated/prisma/client.js";
 import prisma from "../database/prismaClient.js";
-import {
-  AppError,
-  ErrorCode,
-} from "../utils/errors.js";
+import { AppError } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import {
   addDaysUtc,
@@ -135,13 +132,12 @@ async function assertStatementRider(tx: Tx, riderId: string) {
   });
 
   if (!rider || rider.deletedAt) {
-    throw new AppError("Rider not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Rider not found", 404);
   }
   if (rider.rentalType && rider.rentalType !== "B2C") {
     throw new AppError(
       "Settlements can only be generated for a B2C rider",
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
 
@@ -192,8 +188,7 @@ export async function generatePayStatement(
       if (earnings.length === 0) {
         throw new AppError(
           "No unsettled earnings were found for the pay statement period",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -356,8 +351,7 @@ export async function generatePayStatement(
         if (updated.count === 0) {
           throw new AppError(
             "Collection due was modified concurrently; please retry",
-            409,
-            ErrorCode.CONFLICT
+            409
           );
         }
 
@@ -571,7 +565,7 @@ export async function approvePayStatement(
       });
 
       if (!payStatement) {
-        throw new AppError("Pay statement not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Pay statement not found", 404);
       }
 
       if (payStatement.status === "APPROVED") {
@@ -585,8 +579,7 @@ export async function approvePayStatement(
       if (payStatement.status !== "PAYABLE") {
         throw new AppError(
           `Only a PAYABLE payStatement can be approved (current status: ${payStatement.status})`,
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -596,16 +589,14 @@ export async function approvePayStatement(
       ) {
         throw new AppError(
           "Pay statement requires manual review before it can be approved",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
       if (toDecimal(payStatement.netPayable).lte(0)) {
         throw new AppError(
           "Pay statement has no payable amount",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -664,7 +655,7 @@ export async function payPayStatement(
       });
 
       if (!payStatement) {
-        throw new AppError("Pay statement not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Pay statement not found", 404);
       }
 
       if (payStatement.status === "PAID") {
@@ -678,8 +669,7 @@ export async function payPayStatement(
       if (payStatement.status !== "APPROVED") {
         throw new AppError(
           `Only an APPROVED payStatement can be paid (current status: ${payStatement.status})`,
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -687,8 +677,7 @@ export async function payPayStatement(
       if (amount.lte(0)) {
         throw new AppError(
           "Pay statement has no payable amount",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -800,7 +789,7 @@ export async function getPayStatementById(id: string) {
   });
 
   if (!payStatement) {
-    throw new AppError("Pay statement not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Pay statement not found", 404);
   }
 
   return payStatement;

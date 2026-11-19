@@ -1,5 +1,5 @@
 import { Prisma } from "../generated/prisma/client.js";
-import { AppError, ErrorCode } from "../utils/errors.js";
+import { AppError } from "../utils/errors.js";
 import type { CollectionPeriod } from "../validation/rental.js";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -128,8 +128,7 @@ export function calculateDueAmount(input: {
   if (rates.dailyRate == null) {
     throw new AppError(
       "Rental has no daily rate and no matching period rate for due generation",
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
 

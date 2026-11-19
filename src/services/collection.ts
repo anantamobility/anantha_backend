@@ -1,9 +1,6 @@
 import { Prisma } from "../generated/prisma/client.js";
 import prisma from "../database/prismaClient.js";
-import {
-  AppError,
-  ErrorCode,
-} from "../utils/errors.js";
+import { AppError } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import { deriveDueStatus, toDecimal } from "./rental-schedule.js";
 import {
@@ -106,7 +103,7 @@ async function assertCollectibleDue(tx: Tx, rentalDueId: string) {
   });
 
   if (!due) {
-    throw new AppError("Rental due not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Rental due not found", 404);
   }
 
   if (
@@ -116,8 +113,7 @@ async function assertCollectibleDue(tx: Tx, rentalDueId: string) {
   ) {
     throw new AppError(
       `Collections can only be recorded against an ACTIVE or ON_HOLD rental (current status: ${due.rental.status})`,
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
 
@@ -138,8 +134,7 @@ async function applyCollectionToDue(
   if (amount.gt(outstanding)) {
     throw new AppError(
       "Collection amount exceeds the due outstanding balance",
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
 
@@ -162,8 +157,7 @@ async function applyCollectionToDue(
   if (updated.count === 0) {
     throw new AppError(
       "Collection due was modified concurrently; please retry",
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
 
@@ -286,22 +280,20 @@ export async function clearCollection(
       });
 
       if (!collection) {
-        throw new AppError("Collection not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Collection not found", 404);
       }
 
       if (!collection.rentalDueId) {
         throw new AppError(
           "Collection is not linked to a rental due",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
       if (collection.status === "CLEARED") {
         throw new AppError(
           "Collection is already cleared",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -423,7 +415,7 @@ export async function getCollectionById(id: string) {
   });
 
   if (!collection) {
-    throw new AppError("Collection not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Collection not found", 404);
   }
 
   return collection;
@@ -435,7 +427,7 @@ async function assertRentalExists(rentalId: string) {
     select: { id: true, rentalNumber: true, status: true },
   });
   if (!rental) {
-    throw new AppError("Rental not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Rental not found", 404);
   }
   return rental;
 }

@@ -1,17 +1,8 @@
 import prisma from "../database/prismaClient.js";
 import { Prisma } from "../generated/prisma/client.js";
 import {
-  B2BRiderMgmt,
-  B2CMode,
-  RentalStatus,
-  RentalType,
-  RiderStatus,
-  PayStatementStatus,
-} from "../generated/prisma/client.js";
-import {
-  AppError,
-  ErrorCode,
-} from "../utils/errors.js";
+  B2BRiderMgmt, B2CMode, RentalStatus, RentalType, RiderStatus, PayStatementStatus, } from "../generated/prisma/client.js";
+import { AppError } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import { createUserRecord, resolveRole } from "./user.js";
 import { generateRiderId } from "../utils/idGenerator.js";
@@ -114,15 +105,13 @@ function validateClassification(
     if (!b2cMode) {
       throw new AppError(
         "b2cMode is required for B2C riders",
-        400,
-        ErrorCode.VALIDATION_ERROR
+        400
       );
     }
     if (b2bRiderMgmt) {
       throw new AppError(
         "b2bRiderMgmt is not applicable to B2C riders",
-        400,
-        ErrorCode.VALIDATION_ERROR
+        400
       );
     }
   }
@@ -131,22 +120,19 @@ function validateClassification(
     if (!b2bRiderMgmt) {
       throw new AppError(
         "b2bRiderMgmt is required for B2B riders",
-        400,
-        ErrorCode.VALIDATION_ERROR
+        400
       );
     }
     if (!clientId) {
       throw new AppError(
         "clientId is required for B2B riders",
-        400,
-        ErrorCode.VALIDATION_ERROR
+        400
       );
     }
     if (b2cMode) {
       throw new AppError(
         "b2cMode is not applicable to B2B riders",
-        400,
-        ErrorCode.VALIDATION_ERROR
+        400
       );
     }
   }
@@ -155,7 +141,7 @@ function validateClassification(
 async function assertHubExists(tx: Prisma.TransactionClient, hubId: string) {
   const hub = await tx.hub.findUnique({ where: { id: hubId } });
   if (!hub) {
-    throw new AppError("Hub not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Hub not found", 404);
   }
 }
 
@@ -165,7 +151,7 @@ async function assertClientExists(
 ) {
   const client = await tx.client.findUnique({ where: { id: clientId } });
   if (!client) {
-    throw new AppError("Client not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Client not found", 404);
   }
 }
 
@@ -323,7 +309,7 @@ export async function getRiderById(id: string) {
   });
 
   if (!rider || rider.deletedAt) {
-    throw new AppError("Rider not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Rider not found", 404);
   }
 
   const { deletedAt: _deletedAt, ...safeRider } = rider;
@@ -339,7 +325,7 @@ export async function updateRider(
     return await prisma.$transaction(async (tx) => {
       const existing = await tx.rider.findUnique({ where: { id } });
       if (!existing || existing.deletedAt) {
-        throw new AppError("Rider not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Rider not found", 404);
       }
       if (input.hubId !== undefined && input.hubId !== null) {
       }
@@ -467,7 +453,7 @@ export async function changeRiderStatus(
     return await prisma.$transaction(async (tx) => {
       const rider = await tx.rider.findUnique({ where: { id } });
       if (!rider || rider.deletedAt) {
-        throw new AppError("Rider not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Rider not found", 404);
       }
 
       const previousStatus = rider.status;
@@ -476,8 +462,7 @@ export async function changeRiderStatus(
       if (previousStatus === nextStatus) {
         throw new AppError(
           `Rider already has status ${nextStatus}`,
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -486,8 +471,7 @@ export async function changeRiderStatus(
       ) {
         throw new AppError(
           `Invalid status transition from ${previousStatus} to ${nextStatus}`,
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -507,8 +491,7 @@ export async function changeRiderStatus(
       if (updateResult.count === 0) {
         throw new AppError(
           "Rider status was modified concurrently; please retry",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -548,7 +531,7 @@ export async function deleteRider(id: string, actor: AuditActor) {
     return await prisma.$transaction(async (tx) => {
       const existing = await tx.rider.findUnique({ where: { id } });
       if (!existing || existing.deletedAt) {
-        throw new AppError("Rider not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Rider not found", 404);
       }
 
       const activeRentals = await tx.rental.count({
@@ -567,8 +550,7 @@ export async function deleteRider(id: string, actor: AuditActor) {
       if (activeRentals > 0) {
         throw new AppError(
           "Rider cannot be deleted while they have open rentals",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -588,8 +570,7 @@ export async function deleteRider(id: string, actor: AuditActor) {
       if (openPayStatements > 0) {
         throw new AppError(
           "Rider cannot be deleted while they have open pay statements",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -599,8 +580,7 @@ export async function deleteRider(id: string, actor: AuditActor) {
       if (openPayouts > 0) {
         throw new AppError(
           "Rider cannot be deleted while they have approved pay statements awaiting payment",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 

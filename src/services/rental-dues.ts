@@ -1,5 +1,5 @@
 import { Prisma } from "../generated/prisma/client.js";
-import { AppError, ErrorCode } from "../utils/errors.js";
+import { AppError } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import {
   buildDuePeriods,
@@ -71,7 +71,7 @@ export async function generateRentalDues(
   });
 
   if (!rental) {
-    throw new AppError("Rental not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Rental not found", 404);
   }
 
   if (
@@ -81,16 +81,14 @@ export async function generateRentalDues(
   ) {
     throw new AppError(
       `Collection dues cannot be generated for a ${rental.status} rental`,
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
 
   if (input.throughDate.getTime() < rental.startDate.getTime()) {
     throw new AppError(
       "throughDate cannot be before the rental start date",
-      400,
-      ErrorCode.VALIDATION_ERROR
+      400
     );
   }
 
@@ -293,8 +291,7 @@ async function applyCreditToDues(
   if (totalOutstanding.lt(amount)) {
     throw new AppError(
       "Adjustment exceeds the rental outstanding balance",
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
 
@@ -327,8 +324,7 @@ async function applyCreditToDues(
     if (updated.count === 0) {
       throw new AppError(
         "Collection due was modified concurrently; please retry",
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
@@ -358,8 +354,7 @@ async function applyDebitToDues(
   if (!due) {
     throw new AppError(
       "A debit rent adjustment requires at least one generated collection due",
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
 
@@ -382,8 +377,7 @@ async function applyDebitToDues(
   if (updated.count === 0) {
     throw new AppError(
       "Collection due was modified concurrently; please retry",
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
 
@@ -411,7 +405,7 @@ export async function recordRentAdjustment(
   });
 
   if (!rental) {
-    throw new AppError("Rental not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Rental not found", 404);
   }
 
   const applied =

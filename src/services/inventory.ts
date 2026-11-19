@@ -1,9 +1,6 @@
 import { Prisma } from "../generated/prisma/client.js";
 import prisma from "../database/prismaClient.js";
-import {
-  AppError,
-  ErrorCode,
-} from "../utils/errors.js";
+import { AppError } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import type {
   AdjustStockInput,
@@ -124,13 +121,12 @@ async function assertHub(tx: Tx, hubId: string) {
     select: { id: true, isActive: true },
   });
   if (!hub) {
-    throw new AppError("Hub not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Hub not found", 404);
   }
   if (!hub.isActive) {
     throw new AppError(
       "Hub is inactive and cannot hold inventory movements",
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
   return hub;
@@ -146,13 +142,12 @@ async function assertSpare(
     select: { id: true, partNumber: true, name: true, unitCost: true, isActive: true },
   });
   if (!spare) {
-    throw new AppError("Spare not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Spare not found", 404);
   }
   if (options.requireActive && !spare.isActive) {
     throw new AppError(
       "Spare is inactive and cannot be used for this operation",
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
   return spare;
@@ -198,8 +193,7 @@ async function applyOutbound(
   if (result.count === 0) {
     throw new AppError(
       "Insufficient stock for this spare at the selected hub",
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
 }
@@ -240,8 +234,7 @@ export async function recordInventoryMovement(
   if (!Number.isInteger(quantity) || quantity <= 0) {
     throw new AppError(
       "quantity must be a positive integer",
-      400,
-      ErrorCode.VALIDATION_ERROR
+      400
     );
   }
 
@@ -381,7 +374,7 @@ export async function getSpareById(id: string) {
     select: spareSelect,
   });
   if (!spare) {
-    throw new AppError("Spare not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Spare not found", 404);
   }
   return withSku(spare);
 }
@@ -404,7 +397,7 @@ export async function updateSpare(
     return await prisma.$transaction(async (tx) => {
       const existing = await tx.sparePart.findUnique({ where: { id } });
       if (!existing) {
-        throw new AppError("Spare not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Spare not found", 404);
       }
 
       const data: Prisma.SparePartUncheckedUpdateInput = {};
@@ -461,7 +454,7 @@ export async function changeSpareStatus(
   return prisma.$transaction(async (tx) => {
     const existing = await tx.sparePart.findUnique({ where: { id } });
     if (!existing) {
-      throw new AppError("Spare not found", 404, ErrorCode.NOT_FOUND);
+      throw new AppError("Spare not found", 404);
     }
 
     const spare = await tx.sparePart.update({
@@ -680,7 +673,7 @@ export async function consumeSpareForService(
   });
 
   if (!service) {
-    throw new AppError("Service order not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Service order not found", 404);
   }
   if (
     !CONSUMABLE_SERVICE_STATUSES.includes(
@@ -689,8 +682,7 @@ export async function consumeSpareForService(
   ) {
     throw new AppError(
       `Spare parts cannot be consumed for a service in status ${service.status}`,
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
 
@@ -700,8 +692,7 @@ export async function consumeSpareForService(
   if (!hubId) {
     throw new AppError(
       "A hubId is required because the vehicle has no hub and no hubId was supplied",
-      400,
-      ErrorCode.VALIDATION_ERROR
+      400
     );
   }
 
@@ -816,13 +807,12 @@ export async function returnServiceSpare(
     });
 
     if (!service) {
-      throw new AppError("Service order not found", 404, ErrorCode.NOT_FOUND);
+      throw new AppError("Service order not found", 404);
     }
     if (["CLOSED", "CANCELLED"].includes(service.status)) {
       throw new AppError(
         `Spare parts cannot be returned for a service in status ${service.status}`,
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
@@ -832,8 +822,7 @@ export async function returnServiceSpare(
     if (!hubId) {
       throw new AppError(
         "A hubId is required because the vehicle has no hub and no hubId was supplied",
-        400,
-        ErrorCode.VALIDATION_ERROR
+        400
       );
     }
 
@@ -977,7 +966,7 @@ export async function getSpareMovements(
     select: { id: true, partNumber: true, name: true, unitOfMeasure: true },
   });
   if (!spare) {
-    throw new AppError("Spare not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Spare not found", 404);
   }
 
   const result = await listInventoryMovements({ ...query, spareId });
@@ -1011,7 +1000,7 @@ export async function getStockBalance(spareId: string, hubId: string) {
   ]);
 
   if (!spare) {
-    throw new AppError("Spare not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Spare not found", 404);
   }
 
   return {

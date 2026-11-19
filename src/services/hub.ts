@@ -1,9 +1,6 @@
 import prisma from "../database/prismaClient.js";
 import { Prisma } from "../generated/prisma/client.js";
-import {
-  AppError,
-  ErrorCode,
-} from "../utils/errors.js";
+import { AppError } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import { stateCodeFor } from "../utils/indianStates.js";
 import type {
@@ -37,8 +34,7 @@ function hubCodePrefix(state: string, city: string) {
   if (!stateCode) {
     throw new AppError(
       `Unknown state "${state}". Use the full Indian state or union territory name.`,
-      400,
-      ErrorCode.VALIDATION_ERROR
+      400
     );
   }
 
@@ -142,7 +138,7 @@ export async function getHubById(id: string) {
   });
 
   if (!hub) {
-    throw new AppError("Hub not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Hub not found", 404);
   }
 
   return hub;
@@ -153,7 +149,7 @@ export async function updateHub(id: string, input: UpdateHubInput, actor: AuditA
     return await prisma.$transaction(async (tx) => {
       const existing = await tx.hub.findUnique({ where: { id } });
       if (!existing) {
-        throw new AppError("Hub not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Hub not found", 404);
       }
 
       const data: Prisma.HubUpdateInput = {};
@@ -202,7 +198,7 @@ export async function deleteHub(id: string, actor: AuditActor) {
       });
 
       if (!hub) {
-        throw new AppError("Hub not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Hub not found", 404);
       }
 
       const dependencyCount = Object.values(hub._count).reduce(
@@ -213,8 +209,7 @@ export async function deleteHub(id: string, actor: AuditActor) {
       if (dependencyCount > 0) {
         throw new AppError(
           "Hub cannot be deleted while it has associated records",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 

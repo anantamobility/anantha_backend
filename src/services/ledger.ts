@@ -1,9 +1,6 @@
 import { Prisma } from "../generated/prisma/client.js";
 import prisma from "../database/prismaClient.js";
-import {
-  AppError,
-  ErrorCode,
-} from "../utils/errors.js";
+import { AppError } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import { toDecimal } from "./rental-schedule.js";
 import type {
@@ -96,7 +93,7 @@ export async function getOrCreateDepositForRental(tx: Tx, rentalId: string) {
   });
 
   if (!rental) {
-    throw new AppError("Rental not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Rental not found", 404);
   }
 
   const amountRequired = toDecimal(rental.securityDepositRequired);
@@ -104,8 +101,7 @@ export async function getOrCreateDepositForRental(tx: Tx, rentalId: string) {
   if (amountRequired.lte(0)) {
     throw new AppError(
       "Security deposit is not required for this rental",
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
 
@@ -167,8 +163,7 @@ export async function recordDepositLedgerEntry(
   if (input.direction === "DEBIT" && before.balance.lt(input.amount)) {
     throw new AppError(
       "Security deposit balance is insufficient for this transaction",
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
 
@@ -318,8 +313,7 @@ export async function getRentalDeposit(rentalId: string) {
   if (!deposit) {
     throw new AppError(
       "Security deposit not found for this rental",
-      404,
-      ErrorCode.NOT_FOUND
+      404
     );
   }
 
@@ -347,8 +341,7 @@ export async function getRentalDepositLedger(
   if (!deposit) {
     throw new AppError(
       "Security deposit not found for this rental",
-      404,
-      ErrorCode.NOT_FOUND
+      404
     );
   }
 
