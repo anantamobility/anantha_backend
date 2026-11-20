@@ -1,6 +1,6 @@
 # Anantha Vehicle Rental Backend
 
-REST API for Anantha's vehicle rental operations: riders, clients, ratecards, rentals, deposits, collections, earnings, pay statements, services, spares, inventory, reporting, and administrative user management.
+REST API for Anantha's vehicle rental operations: riders, clients, ratecards, rentals, deposits, collections, ledger entries, pay statements, services, spares, inventory, reporting, and administrative user management.
 
 ## Stack
 
@@ -60,7 +60,7 @@ Routers are mounted in `src/app.ts`:
 - `/users` - account read/update, role/status changes, session revocation
 - `/audit-logs` - audit log read API
 - `/hubs`, `/staff`, `/vehicles`, `/riders`, `/clients`, `/ratecards`
-- `/rentals`, `/deposits`, `/collections`, `/earnings`, `/pay-statements`
+- `/rentals`, `/deposits`, `/collections`, `/ledger-entries`, `/pay-statements`
 - `/services`, `/spares`, `/inventory`, `/dashboard`, `/reports`
 
 Detailed domain documentation lives in [`docs/`](docs). Start with:

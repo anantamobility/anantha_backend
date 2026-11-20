@@ -38,18 +38,8 @@ export const refundDepositSchema = z
   })
   .strict();
 
-export const adjustDepositSchema = z
-  .object({
-    amount: moneySchema(2, "amount"),
-    direction: z.enum(["CREDIT", "DEBIT"]),
-    reason: z.string().trim().min(1).max(500),
-    reference: z.string().trim().min(1).max(200).nullable().optional(),
-  })
-  .strict();
-
 export const depositLedgerQuerySchema = paginationQuerySchema;
 
 export type ReceiveDepositInput = z.infer<typeof receiveDepositSchema>;
 export type RefundDepositInput = z.infer<typeof refundDepositSchema>;
-export type AdjustDepositInput = z.infer<typeof adjustDepositSchema>;
 export type DepositLedgerQuery = z.infer<typeof depositLedgerQuerySchema>;

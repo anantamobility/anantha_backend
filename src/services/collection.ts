@@ -3,6 +3,7 @@ import prisma from "../database/prismaClient.js";
 import { AppError } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import { deriveDueStatus, toDecimal } from "./rental-schedule.js";
+import { recordLedgerEntry } from "./ledger.js";
 import {
   generateRentalDues,
   getRentalFinancialSummary,
@@ -64,8 +65,9 @@ export async function createCollectionLedgerEntry(
     description: string;
   }
 ) {
-  await tx.ledgerEntry.create({
-    data: {
+  await recordLedgerEntry(
+    tx,
+    {
       rentalId: input.rentalId,
       entryType: "COLLECTION_RECEIVED",
       direction: "CREDIT",
@@ -74,9 +76,9 @@ export async function createCollectionLedgerEntry(
       description: input.description,
       sourceType: "Collection",
       sourceId: input.collectionId,
-      createdById: input.actor.userId,
     },
-  });
+    input.actor.userId
+  );
 }
 
 async function assertCollectibleDue(tx: Tx, rentalDueId: string) {

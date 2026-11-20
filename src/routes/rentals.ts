@@ -11,7 +11,6 @@ import {
   listRentalsQuerySchema,
 } from "../validation/rental.js";
 import {
-  adjustDepositSchema,
   depositLedgerQuerySchema,
   receiveDepositSchema,
   refundDepositSchema,
@@ -30,7 +29,6 @@ import {
   getRentals,
 } from "../controllers/rental/rental.js";
 import {
-  adjustDeposit,
   getRentalDeposit,
   getRentalDepositLedger,
   receiveDeposit,
@@ -90,14 +88,6 @@ const r = Router();
 //   authorize("deposit", "refund", { policy: false }),
 //   validate(refundDepositSchema),
 //   refundDeposit
-// );
-// r.post(
-//   "/:id/deposit/adjust",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("deposit", "adjust", { policy: false }),
-//   validate(adjustDepositSchema),
-//   adjustDeposit
 // );
 
 // Collection dues and rental collections

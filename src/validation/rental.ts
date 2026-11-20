@@ -193,14 +193,6 @@ export const activateRentalSchema = z
   .strict()
   .default({});
 
-const adjustmentSchema = z
-  .object({
-    amount: moneySchema(2, "amount", { positive: true }),
-    direction: z.enum(["CREDIT", "DEBIT"]),
-    reason: z.string().trim().min(1).max(500),
-  })
-  .strict();
-
 const refundSchema = z
   .object({
     amount: moneySchema(2, "amount", { positive: true }),
@@ -214,8 +206,6 @@ export const closeRentalSchema = z
     endDate: z.coerce.date().optional(),
     vehicleReturnStatus: vehicleStatusOnReturnSchema.optional(),
     depositRefund: refundSchema.nullable().optional(),
-    depositAdjustment: adjustmentSchema.nullable().optional(),
-    rentAdjustment: adjustmentSchema.nullable().optional(),
     notes: z.string().trim().min(1).max(2000).optional(),
   })
   .strict()

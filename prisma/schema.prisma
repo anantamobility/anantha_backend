@@ -140,7 +140,7 @@ enum DepositEntryType {
   REFUND
   DEDUCTION
   FORFEIT
-  ADJUSTMENT
+  // ADJUSTMENT
   REVERSAL
 }
 
@@ -211,10 +211,10 @@ enum PayStatementStatus {
 }
 
 enum PayStatementLineType {
-  DELIVERY_EARNING
+  DELIVERY_PAY
   RENT_DEDUCTION
   DEPOSIT_DEDUCTION
-  ADJUSTMENT
+  // ADJUSTMENT
   OTHER_DEDUCTION
   PAYOUT_REVERSAL
   INCENTIVE
@@ -224,15 +224,16 @@ enum PayStatementLineType {
 }
 
 // One ledger for both directions: money owed to AML by a client/rider
-// (rent) and money owed by AML to a rider (earnings). entryType says which.
+// (rent) and money owed by AML to a rider (delivery pay and other credits).
+// entryType says which.
 enum LedgerEntryType {
   RENT_CHARGED
   COLLECTION_RECEIVED
-  RENT_ADJUSTMENT
-  DELIVERY_EARNING
+  // RENT_ADJUSTMENT
+  DELIVERY_PAY
   RENT_DEDUCTION
   DEPOSIT_DEDUCTION
-  ADJUSTMENT
+  // ADJUSTMENT
   PAYOUT
   REVERSAL
   OTHER
@@ -911,7 +912,7 @@ model RentalDue {
  * - rental side (client/rider owes AML): rentalId set
  * - rider side (AML owes rider): riderId set, payStatementId when closed out
  * One economic event can still be two rows.
- * When rent is deducted from rider earnings,
+ * When rent is deducted from rider pay,
  * payStatement code writes RENT_DEDUCTION (rider, DEBIT)
  * and COLLECTION_RECEIVED (rental, CREDIT) for the same amount.
  * penalties, incentives, reimbursements are all just entries with a type
@@ -932,13 +933,13 @@ model LedgerEntry {
   payStatementId String?
   payStatement   RiderPayStatement? @relation(fields: [payStatementId], references: [id], onDelete: Restrict)
 
-  sourceType      String? //add enum 
+  //It is a soft pointer to the business row that caused the entry. sourceType says what kind of row, sourceId says which one.
+  sourceType      String?   
   sourceId        String?
   reversesEntryId String?      @unique
   reversesEntry   LedgerEntry? @relation("LedgerEntryReversal", fields: [reversesEntryId], references: [id], onDelete: Restrict)
   reversedBy      LedgerEntry? @relation("LedgerEntryReversal")
 
-  metadata       Json?    @db.JsonB
   createdById    String?
   createdBy      User?    @relation("LedgerCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   createdAt      DateTime @default(now()) @db.Timestamptz(3)
@@ -960,10 +961,10 @@ model RiderPayStatement {
   periodStart          DateTime           @db.Timestamptz(3)
   periodEnd            DateTime           @db.Timestamptz(3)
   status               PayStatementStatus @default(DRAFT)
-  grossEarnings        Decimal            @default(0) @db.Decimal(14, 2)
+  grossCredits         Decimal            @default(0) @db.Decimal(14, 2)
   totalDeductions      Decimal            @default(0) @db.Decimal(14, 2)
   netPayable           Decimal            @default(0) @db.Decimal(14, 2)
-  shortfallAmount      Decimal            @default(0) @db.Decimal(14, 2) //increase if deductions exceed earnings
+  shortfallAmount      Decimal            @default(0) @db.Decimal(14, 2) //increase if deductions exceed credits
   requiresManualReview Boolean            @default(false)
   calculationSnapshot  Json?              @db.JsonB
   approvedById         String?
@@ -1078,6 +1079,68 @@ model InvoiceLine {
   @@index([rentalId])
   @@map("invoice_lines")
 }
+
+//p
+model Document {
+  id             String       @id @default(uuid(7))
+  documentType   DocumentType
+  title          String
+  fileName       String?
+  mimeType       String?
+  fileSize       Int?
+  url            String
+  issueDate      DateTime?    @db.Timestamptz(3)
+  expiryDate     DateTime?    @db.Timestamptz(3)
+  documentNumber String?
+
+  riderId String?
+  rider   Rider?  @relation(fields: [riderId], references: [id], onDelete: Restrict)
+
+  staffId String?
+  staff   Staff?  @relation(fields: [staffId], references: [id], onDelete: Restrict)
+
+  vehicleId String?
+  vehicle   Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+
+  notes    String?
+  metadata Json?   @db.JsonB
+
+  deletedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@index([riderId])
+  @@index([staffId])
+  @@index([vehicleId])
+  @@index([documentType, documentNumber])
+  @@index([expiryDate])
+  @@index([deletedAt])
+  @@map("documents")
+}
+
+//done
+model AuditLog {
+  id         String   @id @default(uuid(7))
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  userName   String
+  userRole   String
+  action     String
+  ipAddress  String?
+  userAgent  String?
+  status     String   @default("SUCCESS")
+  resource   String
+  resourceId String
+  changes    Json?    @db.JsonB
+  summary    String?
+
+  @@index([userId])
+  @@index([resourceId])
+  @@index([resource])
+  @@map("audit_logs")
+}
+
 
 // model Vendor {
 //   id            String   @id @default(uuid(7))
@@ -1303,63 +1366,4 @@ model InventoryMovement {
   @@map("inventory_movements")
 }
 
-//p
-model Document {
-  id             String       @id @default(uuid(7))
-  documentType   DocumentType
-  title          String
-  fileName       String?
-  mimeType       String?
-  fileSize       Int?
-  url            String
-  issueDate      DateTime?    @db.Timestamptz(3)
-  expiryDate     DateTime?    @db.Timestamptz(3)
-  documentNumber String?
 
-  riderId String?
-  rider   Rider?  @relation(fields: [riderId], references: [id], onDelete: Restrict)
-
-  staffId String?
-  staff   Staff?  @relation(fields: [staffId], references: [id], onDelete: Restrict)
-
-  vehicleId String?
-  vehicle   Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
-
-  notes    String?
-  metadata Json?   @db.JsonB
-
-  deletedAt DateTime? @db.Timestamptz(3)
-  createdAt DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
-
-  @@index([riderId])
-  @@index([staffId])
-  @@index([vehicleId])
-  @@index([documentType, documentNumber])
-  @@index([expiryDate])
-  @@index([deletedAt])
-  @@map("documents")
-}
-
-//done
-model AuditLog {
-  id         String   @id @default(uuid(7))
-  createdAt  DateTime @default(now()) @db.Timestamptz(3)
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Restrict)
-  userName   String
-  userRole   String
-  action     String
-  ipAddress  String?
-  userAgent  String?
-  status     String   @default("SUCCESS")
-  resource   String
-  resourceId String
-  changes    Json?    @db.JsonB
-  summary    String?
-
-  @@index([userId])
-  @@index([resourceId])
-  @@index([resource])
-  @@map("audit_logs")
-}

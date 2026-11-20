@@ -4,7 +4,6 @@ import { AppError } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import { toDecimal } from "./rental-schedule.js";
 import type {
-  AdjustDepositInput,
   DepositLedgerQuery,
   ReceiveDepositInput,
   RefundDepositInput,
@@ -147,7 +146,7 @@ export async function recordDepositLedgerEntry(
   tx: Tx,
   input: {
     rentalId: string;
-    type: "RECEIPT" | "REFUND" | "ADJUSTMENT";
+    type: "RECEIPT" | "REFUND";
     direction: "CREDIT" | "DEBIT";
     amount: Prisma.Decimal;
     reference?: string | null;
@@ -209,9 +208,7 @@ export async function recordDepositLedgerEntry(
     action:
       input.type === "RECEIPT"
         ? "DEPOSIT_RECEIPT"
-        : input.type === "REFUND"
-          ? "DEPOSIT_REFUND"
-          : "DEPOSIT_ADJUSTMENT",
+        : "DEPOSIT_REFUND",
     resource: "Deposit",
     resourceId: deposit.id,
     newData: {
@@ -274,28 +271,6 @@ export async function refundDeposit(
         amount: new Prisma.Decimal(input.amount),
         reference: input.reference ?? null,
         reason: input.reason ?? null,
-        actor,
-      })
-    );
-  } catch (err) {
-    throw AppError.fromPrisma(err, "This deposit transaction already exists") ?? err;
-  }
-}
-
-export async function adjustDeposit(
-  rentalId: string,
-  input: AdjustDepositInput,
-  actor: AuditActor
-) {
-  try {
-    return await prisma.$transaction(async (tx) =>
-      recordDepositLedgerEntry(tx, {
-        rentalId,
-        type: "ADJUSTMENT",
-        direction: input.direction,
-        amount: new Prisma.Decimal(input.amount),
-        reference: input.reference ?? null,
-        reason: input.reason,
         actor,
       })
     );

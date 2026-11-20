@@ -1,49 +1,18 @@
 import type { NextFunction, Request, Response } from "express";
 import { success } from "../../utils/http.js";
-import { getAuditActor } from "../../utils/log.js";
-import * as earningsService from "../../services/ledger.js";
+import * as ledgerService from "../../services/ledger.js";
 import type {
-  AdjustLedgerInput,
   LedgerSummaryQuery,
   ListLedgerQuery,
-  RecordLedgerInput,
-} from "../../validation/earnings.js";
+} from "../../validation/ledger.js";
 
-export const recordEarning = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const result = await earningsService.recordEarning(
-      req.body as RecordLedgerInput,
-      getAuditActor(req)
-    );
-    return success(res, result, result.duplicate ? 200 : 201);
-  } catch (err) {
-    next(err);
-  }
-};
-
-export const adjustEarning = async (
+export const getLedgerEntries = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    const result = await earningsService.adjustEarning(
-      req.body as AdjustLedgerInput,
-      getAuditActor(req)
-    );
-    return success(res, result, result.duplicate ? 200 : 201);
-  } catch (err) {
-    next(err);
-  }
-};
-
-export const getEarnings = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const result = await earningsService.listEarnings(
+    const result = await ledgerService.listLedgerEntries(
       req.query as unknown as ListLedgerQuery
     );
     return success(res, result);
@@ -52,13 +21,13 @@ export const getEarnings = async (
   }
 };
 
-export const getEarningsSummary = async (
+export const getRiderLedgerSummary = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    const result = await earningsService.getEarningsSummary(
+    const result = await ledgerService.getRiderLedgerSummary(
       req.query as unknown as LedgerSummaryQuery
     );
     return success(res, result);

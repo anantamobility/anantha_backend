@@ -12,7 +12,6 @@ import {
 import {
   generateRentalDues,
   getRentalFinancialSummary,
-  recordRentAdjustment,
 } from "./rental-dues.js";
 import { toDecimal } from "./rental-schedule.js";
 import type {
@@ -772,27 +771,6 @@ export async function closeRental(
         throughDate: endDate,
         actor,
       });
-
-      if (input.rentAdjustment) {
-        await recordRentAdjustment(tx, {
-          rentalId: rental.id,
-          amount: new Prisma.Decimal(input.rentAdjustment.amount),
-          direction: input.rentAdjustment.direction,
-          reason: input.rentAdjustment.reason,
-          actor,
-        });
-      }
-
-      if (input.depositAdjustment) {
-        await recordDepositLedgerEntry(tx, {
-          rentalId: rental.id,
-          type: "ADJUSTMENT",
-          direction: input.depositAdjustment.direction,
-          amount: new Prisma.Decimal(input.depositAdjustment.amount),
-          reason: input.depositAdjustment.reason,
-          actor,
-        });
-      }
 
       if (input.depositRefund) {
         await recordDepositLedgerEntry(tx, {
