@@ -23,13 +23,13 @@ export const getRentalDeposit = async (
   }
 };
 
-export const getRentalDepositLedger = async (
+export const getDepositLedger = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    const result = await ledgerService.getRentalDepositLedger(
+    const result = await ledgerService.getDepositLedger(
       req.params.id as string,
       req.query as unknown as DepositLedgerQuery
     );

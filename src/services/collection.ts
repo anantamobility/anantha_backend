@@ -11,7 +11,6 @@ import {
   rentalDueSelect,
 } from "./rental-dues.js";
 import type {
-  ClearCollectionInput,
   CreateCollectionInput,
   GenerateDuesInput,
   ListCollectionsQuery,
@@ -34,10 +33,7 @@ export const collectionSelect = {
   paymentMethod: true,
   referenceNumber: true,
   receivedAt: true,
-  status: true,
   receivedById: true,
-  reconciledAt: true,
-  reconciledById: true,
   notes: true,
   createdAt: true,
   updatedAt: true,
@@ -175,10 +171,7 @@ export async function createCollection(
       createCollectionWithinTransaction(tx, input, actor)
     );
   } catch (err) {
-    throw AppError.fromPrisma(
-      err,
-      "A collection with this reference already exists"
-    ) ?? err;
+    throw AppError.fromPrisma(err, "Collection could not be recorded") ?? err;
   }
 }
 
@@ -190,13 +183,9 @@ export async function createCollectionWithinTransaction(
   const due = await assertCollectibleDue(tx, input.rentalDueId);
   const rental = due.rental;
   const amount = new Prisma.Decimal(input.amount);
-  const status = input.status ?? "CLEARED";
   const receivedAt = input.receivedAt ?? new Date();
 
-  const applied =
-    status === "CLEARED"
-      ? await applyCollectionToDue(tx, due, amount)
-      : null;
+  const applied = await applyCollectionToDue(tx, due, amount);
 
   const isRiderPayer = rental.rentalType === "B2C";
 
@@ -211,27 +200,22 @@ export async function createCollectionWithinTransaction(
       paymentMethod: input.paymentMethod,
       referenceNumber: input.referenceNumber ?? null,
       receivedAt,
-      status,
       receivedById: actor.userId,
-      reconciledAt: status === "CLEARED" ? receivedAt : null,
-      reconciledById: status === "CLEARED" ? actor.userId : null,
       notes: input.notes ?? null,
     },
     select: collectionDetailSelect,
   });
 
-  if (status === "CLEARED") {
-    await createCollectionLedgerEntry(tx, {
-      rentalId: rental.id,
-      collectionId: collection.id,
-      amount,
-      occurredAt: receivedAt,
-      actor,
-      description: input.notes
-        ? `Collection received: ${input.notes}`
-        : `Collection received for rental ${rental.rentalNumber}`,
-    });
-  }
+  await createCollectionLedgerEntry(tx, {
+    rentalId: rental.id,
+    collectionId: collection.id,
+    amount,
+    occurredAt: receivedAt,
+    actor,
+    description: input.notes
+      ? `Collection received: ${input.notes}`
+      : `Collection received for rental ${rental.rentalNumber}`,
+  });
 
   const summary = await getRentalFinancialSummary(tx, rental.id);
 
@@ -247,9 +231,8 @@ export async function createCollectionWithinTransaction(
       amount,
       paymentMethod: input.paymentMethod,
       referenceNumber: input.referenceNumber ?? null,
-      status,
     },
-    summary: `${actor.userName} recorded a ${status.toLowerCase()} collection of ${amount} for rental ${rental.rentalNumber}.`,
+    summary: `${actor.userName} recorded a collection of ${amount} for rental ${rental.rentalNumber}.`,
     db: tx,
     throwOnError: true,
   });
@@ -263,107 +246,14 @@ export async function createCollectionWithinTransaction(
   };
 }
 
-export async function clearCollection(
-  id: string,
-  input: ClearCollectionInput,
-  actor: AuditActor
-) {
-  try {
-    return await prisma.$transaction(async (tx) => {
-      const collection = await tx.collection.findUnique({
-        where: { id },
-        select: {
-          id: true,
-          rentalDueId: true,
-          amount: true,
-          status: true,
-          notes: true,
-        },
-      });
-
-      if (!collection) {
-        throw new AppError("Collection not found", 404);
-      }
-
-      if (!collection.rentalDueId) {
-        throw new AppError(
-          "Collection is not linked to a rental due",
-          409
-        );
-      }
-
-      if (collection.status === "CLEARED") {
-        throw new AppError(
-          "Collection is already cleared",
-          409
-        );
-      }
-
-      const due = await assertCollectibleDue(tx, collection.rentalDueId);
-      const rental = due.rental;
-      const amount = toDecimal(collection.amount);
-      const applied = await applyCollectionToDue(tx, due, amount);
-
-      const reconciledAt = input.reconciledAt ?? new Date();
-      const updated = await tx.collection.update({
-        where: { id },
-        data: {
-          status: "CLEARED",
-          reconciledAt,
-          reconciledById: actor.userId,
-        },
-        select: collectionDetailSelect,
-      });
-
-      await createCollectionLedgerEntry(tx, {
-        rentalId: rental.id,
-        collectionId: collection.id,
-        amount,
-        occurredAt: reconciledAt,
-        actor,
-        description: collection.notes
-          ? `Collection cleared: ${collection.notes}`
-          : `Collection cleared for rental ${rental.rentalNumber}`,
-      });
-
-      const summary = await getRentalFinancialSummary(tx, rental.id);
-
-      await logAudit({
-        ...actor,
-        action: "COLLECTION_CLEARED",
-        resource: "Collection",
-        resourceId: collection.id,
-        oldData: { status: collection.status },
-        newData: {
-          status: "CLEARED",
-          rentalId: rental.id,
-          rentalDueId: due.id,
-        },
-        summary: `${actor.userName} cleared collection ${collection.id} for rental ${rental.rentalNumber}.`,
-        db: tx,
-        throwOnError: true,
-      });
-
-      return {
-        collection: updated,
-        summary,
-        outstandingBefore: applied.outstandingBefore,
-        outstandingAfter: applied.outstandingAfter,
-      };
-    });
-  } catch (err) {
-    throw AppError.fromPrisma(err, "Collection could not be cleared") ?? err;
-  }
-}
-
 export async function listCollections(query: ListCollectionsQuery) {
   const { page, limit, search } = query;
 
-  const where: Prisma.CollectionWhereInput = { purpose: "RENT" };
+  const where: Prisma.CollectionWhereInput = {};
+  if (query.purpose) where.purpose = query.purpose;
   if (query.rentalId) where.rentalDue = { rentalId: query.rentalId };
   if (query.clientId) where.clientId = query.clientId;
   if (query.riderId) where.riderId = query.riderId;
-  if (query.status) where.status = query.status;
   if (query.paymentMethod) where.paymentMethod = query.paymentMethod;
   if (query.from || query.to) {
     where.receivedAt = {};
@@ -442,7 +332,6 @@ export async function listRentalCollections(
   const { page, limit } = query;
 
   const where: Prisma.CollectionWhereInput = { rentalDue: { rentalId } };
-  if (query.status) where.status = query.status;
 
   const orderBy: Prisma.CollectionOrderByWithRelationInput = {
     [query.sortBy]: query.sortOrder,

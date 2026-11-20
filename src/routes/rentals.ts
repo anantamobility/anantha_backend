@@ -11,11 +11,6 @@ import {
   listRentalsQuerySchema,
 } from "../validation/rental.js";
 import {
-  depositLedgerQuerySchema,
-  receiveDepositSchema,
-  refundDepositSchema,
-} from "../validation/deposit.js";
-import {
   generateDuesSchema,
   listRentalCollectionsQuerySchema,
   listRentalDuesQuerySchema,
@@ -28,12 +23,6 @@ import {
   getRentalById,
   getRentals,
 } from "../controllers/rental/rental.js";
-import {
-  getRentalDeposit,
-  getRentalDepositLedger,
-  receiveDeposit,
-  refundDeposit,
-} from "../controllers/ledger/deposit.js";
 import {
   generateRentalDues,
   getRentalCollections,
@@ -55,39 +44,6 @@ const r = Router();
 //   authorize("rental", "read", { policy: false }),
 //   validate(listRentalsQuerySchema, "query"),
 //   getRentals
-// );
-
-// Security deposit
-// r.get(
-//   "/:id/deposit",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("deposit", "read", { policy: false }),
-//   getRentalDeposit
-// );
-// r.get(
-//   "/:id/deposit/ledger",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("deposit", "read", { policy: false }),
-//   validate(depositLedgerQuerySchema, "query"),
-//   getRentalDepositLedger
-// );
-// r.post(
-//   "/:id/deposit/receive",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("deposit", "receive", { policy: false }),
-//   validate(receiveDepositSchema),
-//   receiveDeposit
-// );
-// r.post(
-//   "/:id/deposit/refund",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("deposit", "refund", { policy: false }),
-//   validate(refundDepositSchema),
-//   refundDeposit
 // );
 
 // Collection dues and rental collections

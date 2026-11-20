@@ -1,4 +1,4 @@
-import { Prisma } from "../generated/prisma/client.js";
+import { Prisma, type PaymentMethod } from "../generated/prisma/client.js";
 import prisma from "../database/prismaClient.js";
 import { AppError } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
@@ -122,11 +122,6 @@ export async function getOrCreateDepositForRental(tx: Tx, rentalId: string) {
   });
 }
 
-export async function getDepositBalance(tx: Tx, depositId: string) {
-  const totals = await depositTotals(tx, depositId);
-  return totals;
-}
-
 export async function getDepositBalanceByRental(tx: Tx, rentalId: string) {
   const deposit = await tx.deposit.findUnique({
     where: { rentalId },
@@ -149,6 +144,7 @@ export async function recordDepositLedgerEntry(
     type: "RECEIPT" | "REFUND";
     direction: "CREDIT" | "DEBIT";
     amount: Prisma.Decimal;
+    paymentMethod?: PaymentMethod;
     reference?: string | null;
     reason?: string | null;
     occurredAt?: Date;
@@ -156,6 +152,10 @@ export async function recordDepositLedgerEntry(
   }
 ) {
   const deposit = await getOrCreateDepositForRental(tx, input.rentalId);
+
+  if (input.direction === "DEBIT") {
+    await tx.$queryRaw`SELECT id FROM deposits WHERE id = ${deposit.id} FOR UPDATE`;
+  }
 
   const before = await depositTotals(tx, deposit.id);
 
@@ -166,6 +166,32 @@ export async function recordDepositLedgerEntry(
     );
   }
 
+  if (input.type === "RECEIPT" && !input.paymentMethod) {
+    throw new AppError("Payment method is required for a deposit receipt", 400);
+  }
+
+  const receivedAt = input.occurredAt ?? new Date();
+
+  const collection =
+    input.type === "RECEIPT"
+      ? await tx.collection.create({
+          data: {
+            purpose: "DEPOSIT",
+            payerType: deposit.payerType,
+            clientId: deposit.clientId,
+            riderId: deposit.riderId,
+            rentalDueId: null,
+            amount: input.amount,
+            paymentMethod: input.paymentMethod!,
+            referenceNumber: input.reference ?? null,
+            receivedAt,
+            receivedById: input.actor.userId,
+            notes: input.reason ?? null,
+          },
+          select: { id: true },
+        })
+      : null;
+
   const transaction = await tx.depositLedger.create({
     data: {
       depositId: deposit.id,
@@ -174,6 +200,7 @@ export async function recordDepositLedgerEntry(
       amount: input.amount,
       reference: input.reference ?? null,
       reason: input.reason ?? null,
+      collectionId: collection?.id ?? null,
       authorizedById: input.actor.userId,
       ...(input.occurredAt ? { createdAt: input.occurredAt } : {}),
     },
@@ -218,6 +245,7 @@ export async function recordDepositLedgerEntry(
       amount: input.amount,
       reference: input.reference ?? null,
       reason: input.reason ?? null,
+      collectionId: collection?.id ?? null,
       balanceAfter: afterTotals.balance,
     },
     summary: `${input.actor.userName} recorded ${input.type.toLowerCase()} of ${input.amount} on security deposit ${deposit.id}.`,
@@ -247,8 +275,10 @@ export async function receiveDeposit(
         type: "RECEIPT",
         direction: "CREDIT",
         amount: new Prisma.Decimal(input.amount),
+        paymentMethod: input.paymentMethod,
         reference: input.reference ?? null,
         reason: input.reason ?? null,
+        occurredAt: input.receivedAt,
         actor,
       })
     );
@@ -304,20 +334,17 @@ export async function getRentalDeposit(rentalId: string) {
   };
 }
 
-export async function getRentalDepositLedger(
-  rentalId: string,
+export async function getDepositLedger(
+  depositId: string,
   query: DepositLedgerQuery
 ) {
   const deposit = await prisma.deposit.findUnique({
-    where: { rentalId },
+    where: { id: depositId },
     select: { id: true },
   });
 
   if (!deposit) {
-    throw new AppError(
-      "Security deposit not found for this rental",
-      404
-    );
+    throw new AppError("Security deposit not found", 404);
   }
 
   const { page, limit } = query;
@@ -328,7 +355,7 @@ export async function getRentalDepositLedger(
   const [transactions, total, totals] = await Promise.all([
     prisma.depositLedger.findMany({
       where,
-      include: { authorizedBy: { select: depositLedgerUserSelect } },
+      include: { authorizedBy: { select: depositLedgerUserSelect }, collection: { select: { paymentMethod: true } } },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       skip: (page - 1) * limit,
       take: limit,

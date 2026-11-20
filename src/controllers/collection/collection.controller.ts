@@ -3,7 +3,6 @@ import { success } from "../../utils/http.js";
 import { getAuditActor } from "../../utils/log.js";
 import * as collectionService from "../../services/collection.js";
 import type {
-  ClearCollectionInput,
   CreateCollectionInput,
   GenerateDuesInput,
   ListCollectionsQuery,
@@ -52,23 +51,6 @@ export const getCollectionById = async (
       req.params.id as string
     );
     return success(res, { collection });
-  } catch (err) {
-    next(err);
-  }
-};
-
-export const clearCollection = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const result = await collectionService.clearCollection(
-      req.params.id as string,
-      req.body as ClearCollectionInput,
-      getAuditActor(req)
-    );
-    return success(res, result);
   } catch (err) {
     next(err);
   }

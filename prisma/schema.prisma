@@ -182,14 +182,6 @@ enum CollectionPurpose {
   DEPOSIT
 }
 
-enum CollectionStatus {
-  PENDING
-  CLEARED
-  FAILED
-  REFUNDED
-  REVERSED
-}
-
 enum PaymentMethod {
   CASH
   UPI
@@ -369,7 +361,6 @@ model User {
   invoicesVoided   Invoice[] @relation("InvoiceVoidedBy")
 
   collectionsReceived   Collection[] @relation("CollectionReceivedBy")
-  collectionsReconciled Collection[] @relation("CollectionReconciledBy")
 
   statementsPaid     RiderPayStatement[] @relation("PayStatementPaidBy")
   depositsAuthorized DepositLedger[]     @relation("DepositAuthorizedBy")
@@ -825,7 +816,7 @@ model DepositLedger {
   type            DepositEntryType
   direction       LedgerDirection
   amount          Decimal            @db.Decimal(14, 2)
-  reference       String?
+  reference       String?  //UPI transaction id, cheque number, bank transfer reference, physical receipt number
   reason          String?
   authorizedById  String?
   authorizedBy    User?              @relation("DepositAuthorizedBy", fields: [authorizedById], references: [id], onDelete: Restrict)
@@ -845,7 +836,7 @@ model DepositLedger {
 
 //p
 /**
- * One collection per rental due. deposits amount given by rider/client is also a collection row.
+ * Rent collections settle a rental due. Deposit collections have no due.
  * CHECK ( (purpose = 'RENT' AND rental_due_id IS NOT NULL) OR (purpose = 'DEPOSIT' AND rental_due_id IS NULL) )
  */
 model Collection {
@@ -862,12 +853,8 @@ model Collection {
   paymentMethod   PaymentMethod
   referenceNumber String?
   receivedAt      DateTime            @default(now()) @db.Timestamptz(3)
-  status          CollectionStatus    @default(PENDING)
   receivedById    String?
   receivedBy      User?               @relation("CollectionReceivedBy", fields: [receivedById], references: [id], onDelete: Restrict)
-  reconciledAt    DateTime?           @db.Timestamptz(3)
-  reconciledById  String?
-  reconciledBy    User?               @relation("CollectionReconciledBy", fields: [reconciledById], references: [id], onDelete: Restrict)
   notes           String?
   createdAt       DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime            @updatedAt @db.Timestamptz(3)
@@ -877,7 +864,6 @@ model Collection {
   @@index([clientId, receivedAt])
   @@index([riderId, receivedAt])
   @@index([rentalDueId])
-  @@index([status])
   @@map("collections")
 }
 

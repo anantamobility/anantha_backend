@@ -113,7 +113,7 @@ export async function buildClientFinancialSummary(
     : [];
 
   const collections = await db.collection.findMany({
-    where: { clientId: client.id, status: "CLEARED" },
+    where: { clientId: client.id },
     select: {
       amount: true,
       rentalDue: { select: { rentalId: true } },
@@ -457,7 +457,6 @@ export async function recordClientPayment(
             paymentMethod: input.paymentMethod,
             referenceNumber: input.referenceNumber ?? null,
             receivedAt,
-            status: "CLEARED",
             notes: input.notes ?? null,
           },
           actor
@@ -563,7 +562,6 @@ export async function listClientCollections(
     clientId: client.id,
     payerType: "CLIENT",
   };
-  if (query.status) where.status = query.status;
   if (query.paymentMethod) where.paymentMethod = query.paymentMethod;
   if (query.rentalId) where.rentalDue = { rentalId: query.rentalId };
   if (query.from || query.to) {

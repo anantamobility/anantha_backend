@@ -23,9 +23,7 @@ const columns = [
   { key: "amount", header: "Amount" },
   { key: "paymentMethod", header: "Payment Method" },
   { key: "referenceNumber", header: "Reference" },
-  { key: "status", header: "Status" },
   { key: "receivedBy", header: "Received By" },
-  { key: "reconciledAt", header: "Reconciled At" },
   { key: "notes", header: "Notes" },
 ];
 
@@ -37,7 +35,6 @@ export async function collectionsReport(
     receivedAt: { gte: startDate, lte: endDate },
   };
 
-  if (query.status) where.status = query.status;
   if (query.payerType) where.payerType = query.payerType;
   if (query.paymentMethod) where.paymentMethod = query.paymentMethod;
   if (query.clientId) where.clientId = query.clientId;
@@ -74,9 +71,7 @@ export async function collectionsReport(
         amount: true,
         paymentMethod: true,
         referenceNumber: true,
-        status: true,
         notes: true,
-        reconciledAt: true,
         client: { select: { clientCode: true, name: true } },
         rider: { select: { riderCode: true, fullName: true } },
         rentalDue: {
@@ -105,7 +100,6 @@ export async function collectionsReport(
     filters: {
       startDate,
       endDate,
-      status: query.status,
       payerType: query.payerType,
       paymentMethod: query.paymentMethod,
       hubId: query.hubId,
@@ -129,9 +123,7 @@ export async function collectionsReport(
       amount: moneyString(row.amount),
       paymentMethod: row.paymentMethod,
       referenceNumber: row.referenceNumber ?? "",
-      status: row.status,
       receivedBy: row.receivedBy?.staffProfile?.fullName ?? "",
-      reconciledAt: row.reconciledAt,
       notes: row.notes ?? "",
     })),
     pagination: reportPagination(query, total),

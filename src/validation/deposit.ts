@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { paginationQuerySchema } from "./common.js";
+import { paymentMethodSchema } from "./collection.js";
 
 const decimalString = z
   .union([z.string(), z.number()])
@@ -25,8 +26,10 @@ function moneySchema(scale: number, label: string, positive = true) {
 export const receiveDepositSchema = z
   .object({
     amount: moneySchema(2, "amount"),
+    paymentMethod: paymentMethodSchema,
     reference: z.string().trim().min(1).max(200).nullable().optional(),
     reason: z.string().trim().min(1).max(500).nullable().optional(),
+    receivedAt: z.coerce.date().optional(),
   })
   .strict();
 
