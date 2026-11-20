@@ -16,11 +16,6 @@ enum AccountStatus {
   SUSPENDED
 }
 
-enum ClientType {
-  INDIVIDUAL
-  CORPORATE
-}
-
 enum Gender {
   MALE
   FEMALE
@@ -620,8 +615,6 @@ model ClientContract {
   createdAt           DateTime         @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime         @updatedAt @db.Timestamptz(3)
 
-  rentals Rental[]
-
   @@index([clientId, startDate])
   @@map("client_contracts")
 }
@@ -629,16 +622,15 @@ model ClientContract {
 //p
 model Client {
   id               String     @id @default(uuid(7))
-  clientCode       String     @unique
-  type             ClientType
+  clientCode       String?    @unique
   name             String
   companyName      String?
   contactPerson    String?
   email            String?
   phoneNumber      String?
-  taxId            String?
-  billingAddress   Json?      @db.JsonB
-  paymentTermsDays Int?
+  // taxId            String?
+  // billingAddress   Json?      @db.JsonB
+  // paymentTermsDays Int?
   isActive         Boolean    @default(true)
   createdAt        DateTime   @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime   @updatedAt @db.Timestamptz(3)
@@ -652,7 +644,6 @@ model Client {
   replacementAssignments ReplacementAssignment[]
   contracts              ClientContract[]
 
-  @@index([type])
   @@index([isActive])
   @@index([phoneNumber])
   @@index([email])
@@ -727,8 +718,6 @@ model Rental {
   closedBy    User?           @relation("RentalClosedBy", fields: [closedById], references: [id], onDelete: Restrict)
   createdAt   DateTime        @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime        @updatedAt @db.Timestamptz(3)
-  contractId  String?
-  contract    ClientContract? @relation(fields: [contractId], references: [id], onDelete: Restrict)
 
   assignments                         VehicleDeployment[]
   deposits                            Deposit[]
@@ -744,7 +733,6 @@ model Rental {
   @@index([clientId, status])
   @@index([riderId, status])
   @@index([hubId])
-  @@index([contractId])
   @@index([startDate, endDate])
   @@index([status, collectionPeriod])
   @@map("rentals")

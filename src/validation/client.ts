@@ -1,8 +1,6 @@
 import { z } from "zod";
 import { paginationQuerySchema, searchQuerySchema } from "./common.js";
 
-export const clientTypeSchema = z.enum(["INDIVIDUAL", "CORPORATE"]);
-
 const optionalNullableString = (max: number) =>
   z.string().trim().min(1).max(max).nullable().optional();
 
@@ -34,21 +32,11 @@ const clientCodeSchema = z
 
 const clientBaseShape = {
   clientCode: clientCodeSchema.optional(),
-  type: clientTypeSchema,
   name: z.string().trim().min(1, "name is required").max(200),
   companyName: optionalNullableString(200),
   contactPerson: optionalNullableString(150),
   email: emailSchema,
   phoneNumber: phoneNumberSchema.nullable().optional(),
-  taxId: optionalNullableString(50),
-  billingAddress: z.json().nullable().optional(),
-  paymentTermsDays: z
-    .number()
-    .int("paymentTermsDays must be an integer")
-    .min(0, "paymentTermsDays cannot be negative")
-    .max(365, "paymentTermsDays cannot exceed 365")
-    .nullable()
-    .optional(),
   isActive: z.boolean().optional(),
 };
 
@@ -65,7 +53,6 @@ export const updateClientSchema = z
 export const listClientsQuerySchema = paginationQuerySchema
   .extend(searchQuerySchema.shape)
   .extend({
-    type: clientTypeSchema.optional(),
     isActive: z
       .enum(["true", "false"])
       .transform((value) => value === "true")

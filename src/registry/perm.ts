@@ -55,20 +55,16 @@ export const PERMISSION_REGISTRY = [
     actions: ['create', 'read', 'update', 'assign', 'activate', 'close']
   },
   {
+    resource: 'rentalDue',
+    actions: ['read', 'generate']
+  },
+  {
     resource: 'deposit',
     actions: ['read', 'receive', 'refund', 'adjust']
   },
   {
     resource: 'collection',
-    actions: [
-      'create',
-      'read',
-      'update',
-      'due:generate',
-      'client:read',
-      'client:due:generate',
-      'client:pay',
-    ]
+    actions: ['create', 'read']
   },
   {
     resource: 'ledgerEntry',
@@ -143,14 +139,10 @@ export const ACTION_DEFINITIONS = {
   receive: "Record an inbound financial receipt.",
   refund: "Record an outbound refund.",
   adjust: "Record an approved financial adjustment.",
-  "due:generate": "Generate collection dues from a billing schedule.",
   generate: "Generate a derived financial record such as a pay statement.",
   approve: "Approve a pending financial record.",
   pay: "Disburse a payable financial record.",
   reconcile: "Reconcile or reverse a financial record after verification.",
-  "client:read": "Read consolidated B2B client financials.",
-  "client:due:generate": "Generate collection dues across all rentals of a B2B client.",
-  "client:pay": "Record and allocate a consolidated B2B client payment.",
   start: "Start work on a service order and begin vehicle downtime.",
   complete: "Complete service work and restore the vehicle.",
   cancel: "Cancel a service order and release any downtime it holds.",

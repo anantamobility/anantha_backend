@@ -39,7 +39,6 @@ const CLOSED_RENTAL_STATUSES = ["COMPLETED", "TERMINATED", "CANCELLED"];
 const rentalClientSelect = {
   id: true,
   clientCode: true,
-  type: true,
   name: true,
   companyName: true,
 } as const;
@@ -166,10 +165,10 @@ function isClosedStatus(status: string) {
   return CLOSED_RENTAL_STATUSES.includes(status);
 }
 
-async function assertClient(tx: Tx, rentalType: string, clientId: string) {
+async function assertClient(tx: Tx, clientId: string) {
   const client = await tx.client.findUnique({
     where: { id: clientId },
-    select: { id: true, type: true, isActive: true, deletedAt: true },
+    select: { id: true, isActive: true, deletedAt: true },
   });
 
   if (!client || client.deletedAt) {
@@ -178,12 +177,6 @@ async function assertClient(tx: Tx, rentalType: string, clientId: string) {
   if (!client.isActive) {
     throw new AppError(
       "Client is inactive and cannot be used for a rental",
-      409
-    );
-  }
-  if (rentalType === "B2B" && client.type !== "CORPORATE") {
-    throw new AppError(
-      "B2B rentals require a CORPORATE client",
       409
     );
   }
@@ -430,7 +423,7 @@ export async function createRental(
     });
 
     return await prisma.$transaction(async (tx) => {
-      await assertClient(tx, input.rentalType, input.clientId);
+      await assertClient(tx, input.clientId);
 
       if (input.riderId) {
         await assertRider(tx, {

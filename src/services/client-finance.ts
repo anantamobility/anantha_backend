@@ -36,9 +36,8 @@ const TERMINAL_RENTAL_STATUSES = [
 
 type ClientRecord = {
   id: string;
-  clientCode: string;
+  clientCode: string | null;
   name: string;
-  type: string;
   isActive: boolean;
   deletedAt: Date | null;
 };
@@ -46,7 +45,7 @@ type ClientRecord = {
 async function assertClient(
   db: ClientDb,
   clientId: string,
-  options: { requireActive?: boolean; requireCorporate?: boolean } = {}
+  options: { requireActive?: boolean } = {}
 ): Promise<ClientRecord> {
   const client = await db.client.findUnique({
     where: { id: clientId },
@@ -54,7 +53,6 @@ async function assertClient(
       id: true,
       clientCode: true,
       name: true,
-      type: true,
       isActive: true,
       deletedAt: true,
     },
@@ -66,12 +64,6 @@ async function assertClient(
   if (options.requireActive && !client.isActive) {
     throw new AppError(
       "Client is inactive and cannot be used for financial operations",
-      409
-    );
-  }
-  if (options.requireCorporate && client.type !== "CORPORATE") {
-    throw new AppError(
-      "Consolidated client financials require a CORPORATE client",
       409
     );
   }
@@ -244,7 +236,6 @@ export async function generateClientDues(
     return await prisma.$transaction(async (tx) => {
       const client = await assertClient(tx, clientId, {
         requireActive: true,
-        requireCorporate: true,
       });
       const throughDate = input.throughDate ?? new Date();
 
@@ -300,7 +291,7 @@ export async function generateClientDues(
           rentalsProcessed: rentals.length,
           generated,
         },
-        summary: `${actor.userName} generated ${generated} collection due(s) across ${rentals.length} rental(s) for client ${client.clientCode}.`,
+        summary: `${actor.userName} generated ${generated} collection due(s) across ${rentals.length} rental(s) for client ${client.clientCode ?? client.name}.`,
         db: tx,
         throwOnError: true,
       });
@@ -327,7 +318,6 @@ export async function recordClientPayment(
     return await prisma.$transaction(async (tx) => {
       const client = await assertClient(tx, clientId, {
         requireActive: true,
-        requireCorporate: true,
       });
 
       const amount = new Prisma.Decimal(input.amount);
@@ -494,7 +484,7 @@ export async function recordClientPayment(
           referenceNumber: input.referenceNumber ?? null,
           allocations,
         },
-        summary: `${actor.userName} recorded a consolidated payment of ${amount} for client ${client.clientCode}.`,
+        summary: `${actor.userName} recorded a consolidated payment of ${amount} for client ${client.clientCode ?? client.name}.`,
         db: tx,
         throwOnError: true,
       });

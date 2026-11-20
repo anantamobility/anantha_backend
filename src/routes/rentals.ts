@@ -51,7 +51,7 @@ const r = Router();
 //   "/:id/dues",
 //   verifyToken,
 //   validate(idParamSchema, "params"),
-//   authorize("collection", "read", { policy: false }),
+//   authorize("rentalDue", "read", { policy: false }),
 //   validate(listRentalDuesQuerySchema, "query"),
 //   getRentalDues
 // );
@@ -59,7 +59,7 @@ const r = Router();
 //   "/:id/dues/generate",
 //   verifyToken,
 //   validate(idParamSchema, "params"),
-//   authorize("collection", "due:generate", { policy: false }),
+//   authorize("rentalDue", "generate", { policy: false }),
 //   validate(generateDuesSchema),
 //   generateRentalDues
 // );

@@ -21,7 +21,6 @@ export const riderUserSelect = {
 
 export const riderClientSelect = {
   id: true,
-  type: true,
   name: true,
   companyName: true,
   isActive: true,

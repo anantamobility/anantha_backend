@@ -50,15 +50,11 @@ export function getRolePermissionBuckets(
           'client',
           'rateCard',
           'rental',
+          'rentalDue',
           'deposit',
           'collection',
         ].includes(group.resource)
       ) {
-        // Consolidated B2B client financials and rider ledger/pay-statements
-        // are ADMIN-only capabilities.
-        if (group.resource === 'collection' && action.startsWith('client:')) {
-          continue;
-        }
         buckets.SUPERVISOR.push(key);
       }
 
