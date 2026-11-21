@@ -60,6 +60,16 @@ export const riderListSelect = {
 export const riderDetailSelect = {
   ...riderListSelect,
   statusChangedAt: true,
+  aadharNumber: true,
+  panNumber: true,
+  licenseNumber: true,
+  medicalReportExpiryDate: true,
+  agreementDate: true,
+  policeVerificationValidUpto: true,
+  backgroundVerificationExpiryDate: true,
+  dateOfLastWorkingDay: true,
+  bankName: true,
+  branch: true,
   _count: {
     select: {
       documents: true,

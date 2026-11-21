@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { success } from "../../utils/http.js";
 import { getAuditActor } from "../../utils/log.js";
+import * as riderImportService from "../../services/riderImport.js";
 import * as riderService from "../../services/rider.js";
 import type {
   ChangeRiderStatusInput,
@@ -8,6 +9,7 @@ import type {
   ListRidersQuery,
   UpdateRiderInput,
 } from "../../validation/rider.js";
+import type { RiderImportBody } from "../../validation/riderImport.js";
 
 export const createRider = async (
   req: Request,
@@ -100,6 +102,45 @@ export const deleteRiderById = async (
       getAuditActor(req)
     );
     return success(res, { message: "Rider deleted successfully" });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const validateRiderImport = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const body = req.body as RiderImportBody;
+    const result = await riderImportService.validateRiderImportRows(body.rows);
+
+    return success(res, {
+      summary: result.summary,
+      results: result.results.map(({ rowIndex, ok, errors }) => ({
+        rowIndex,
+        ok,
+        errors,
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const importRiders = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const body = req.body as RiderImportBody;
+    const result = await riderImportService.importRiders(
+      body.rows,
+      getAuditActor(req),
+    );
+    return success(res, result);
   } catch (err) {
     next(err);
   }

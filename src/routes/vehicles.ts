@@ -3,6 +3,7 @@ import { verifyToken } from "../middleware/verifyToken.js";
 import { authorize } from "../middleware/pbac.js";
 import { validate } from "../middleware/validate.js";
 import { idParamSchema } from "../validation/common.js";
+import { vehicleImportBodySchema } from "../validation/vehicleImport.js";
 import {
   changeVehicleStatusSchema,
   createVehicleSchema,
@@ -15,21 +16,75 @@ import {
   deleteVehicle,
   getVehicleById,
   getVehicles,
+  importVehicles,
   updateVehicle,
+  validateVehicleImport,
 } from "../controllers/vehicle/vehicles.js";
 
 const r = Router();
 
-r.post( "/", verifyToken, authorize("vehicle", "create"), validate(createVehicleSchema), createVehicle);
+r.post(
+  "/",
+  verifyToken,
+  authorize("vehicle", "create"),
+  validate(createVehicleSchema),
+  createVehicle
+);
 
-r.get( "/", verifyToken, authorize("vehicle", "read", { policy: false }), validate(listVehiclesQuerySchema, "query"), getVehicles);
+r.post(
+  "/import/validate",
+  verifyToken,
+  authorize("vehicle", "create"),
+  validate(vehicleImportBodySchema),
+  validateVehicleImport,
+);
 
-r.patch( "/:id/status", verifyToken, validate(idParamSchema, "params"), authorize("vehicle", "status:update"), validate(changeVehicleStatusSchema), changeVehicleStatus);
+r.post(
+  "/import",
+  verifyToken,
+  authorize("vehicle", "create"),
+  validate(vehicleImportBodySchema),
+  importVehicles,
+);
 
-r.get( "/:id", verifyToken, validate(idParamSchema, "params"), authorize("vehicle", "read"), getVehicleById);
+r.get(
+  "/",
+  verifyToken,
+  authorize("vehicle", "read", { policy: false }),
+  validate(listVehiclesQuerySchema, "query"),
+  getVehicles
+);
+r.patch(
+  "/:id/status",
+  verifyToken,
+  validate(idParamSchema, "params"),
+  authorize("vehicle", "status:update"),
+  validate(changeVehicleStatusSchema),
+  changeVehicleStatus
+);
+r.get(
+  "/:id",
+  verifyToken,
+  validate(idParamSchema, "params"),
+  authorize("vehicle", "read"),
+  getVehicleById
+);
+r.patch(
+  "/:id",
+  verifyToken,
+  validate(idParamSchema, "params"),
+  authorize("vehicle", "update"),
+  validate(updateVehicleSchema),
+  updateVehicle
+);
+r.delete(
+  "/:id",
+  verifyToken,
+  validate(idParamSchema, "params"),
+  authorize("vehicle", "delete"),
+  deleteVehicle
+);
 
-r.patch( "/:id", verifyToken, validate(idParamSchema, "params"), authorize("vehicle", "update"), validate(updateVehicleSchema), updateVehicle);
 
-r.delete( "/:id", verifyToken, validate(idParamSchema, "params"), authorize("vehicle", "delete"), deleteVehicle);
 
 export default r;
