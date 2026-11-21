@@ -32,12 +32,12 @@ r.get(
   getCollections
 );
 
-// r.get(
-//   "/:id",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("collection", "read"),
-//   getCollectionById
-// );
+r.get(
+  "/:id",
+  verifyToken,
+  validate(idParamSchema, "params"),
+  authorize("collection", "read"),
+  getCollectionById
+);
 
 export default r;

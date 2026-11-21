@@ -75,13 +75,12 @@ const createRentalBaseSchema = z
     clientId: z.string().uuid("clientId must be a valid UUID"),
     riderId: optionalNullableUuid("riderId"),
     hubId: z.string().uuid("hubId must be a valid UUID"),
-    vehicleId: optionalNullableUuid("vehicleId"),
-    rateCardId: optionalNullableUuid("rateCardId"),
+    vehicleId: z.string().uuid("vehicleId must be a valid UUID"),
     startDate: z.coerce.date(),
     expectedEndDate: z.coerce.date().nullable().optional(),
     collectionPeriod: collectionPeriodSchema,
     securityDepositAmount: moneySchema(2, "securityDepositAmount"),
-    manualPricing: manualPricingSchema.nullable().optional(),
+    manualPricing: manualPricingSchema,
     notes: optionalNullableString(2000),
   })
   .strict();

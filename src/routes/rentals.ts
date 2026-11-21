@@ -31,20 +31,20 @@ import {
 
 const r = Router();
 
-// r.post(
-//   "/",
-//   verifyToken,
-//   authorize("rental", "create"),
-//   validate(createRentalSchema),
-//   createRental
-// );
-// r.get(
-//   "/",
-//   verifyToken,
-//   authorize("rental", "read", { policy: false }),
-//   validate(listRentalsQuerySchema, "query"),
-//   getRentals
-// );
+r.post(
+  "/",
+  verifyToken,
+  authorize("rental", "create"),
+  validate(createRentalSchema),
+  createRental
+);
+r.get(
+  "/",
+  verifyToken,
+  authorize("rental", "read", { policy: false }),
+  validate(listRentalsQuerySchema, "query"),
+  getRentals
+);
 
 // Collection dues and rental collections
 // r.get(
@@ -89,21 +89,21 @@ const r = Router();
 //   validate(activateRentalSchema),
 //   activateRental
 // );
-// r.patch(
-//   "/:id/close",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("rental", "close"),
-//   validate(closeRentalSchema),
-//   closeRental
-// );
+r.patch(
+  "/:id/close",
+  verifyToken,
+  validate(idParamSchema, "params"),
+  authorize("rental", "close"),
+  validate(closeRentalSchema),
+  closeRental
+);
 
-// r.get(
-//   "/:id",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("rental", "read"),
-//   getRentalById
-// );
+r.get(
+  "/:id",
+  verifyToken,
+  validate(idParamSchema, "params"),
+  authorize("rental", "read"),
+  getRentalById
+);
 
 export default r;

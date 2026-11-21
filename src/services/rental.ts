@@ -100,7 +100,6 @@ export const rentalListSelect = {
   client: { select: rentalClientSelect },
   rider: { select: rentalRiderSelect },
   hub: { select: rentalHubSelect },
-  contract: { select: { id: true, contractNumber: true } },
 } as const;
 
 export const rentalDetailSelect = {
@@ -119,24 +118,6 @@ export const rentalDetailSelect = {
       endDate: true,
       status: true,
       vehicle: { select: rentalVehicleSelect },
-    },
-  },
-  deposits: {
-    select: {
-      id: true,
-      payerType: true,
-      amountRequired: true,
-      status: true,
-      dueDate: true,
-    },
-  },
-  _count: {
-    select: {
-      assignments: true,
-      dues: true,
-      deposits: true,
-      ledgerEntries: true,
-      services: true,
     },
   },
 } as const;
@@ -293,18 +274,15 @@ async function assignVehicleWithinTransaction(
     );
   }
 
-  // A B2B agreement may cover multiple vehicles. B2C rentals remain limited
-  // to one active vehicle at a time.
-  if (input.rental.rentalType !== "B2B") {
-    const activeForRental = await tx.vehicleDeployment.count({
-      where: { rentalId: input.rental.id, status: "ACTIVE" },
-    });
-    if (activeForRental > 0) {
-      throw new AppError(
-        "Rental already has an active vehicle assignment",
-        409
-      );
-    }
+  // One rental has one active vehicle.
+  const activeForRental = await tx.vehicleDeployment.count({
+    where: { rentalId: input.rental.id, status: "ACTIVE" },
+  });
+  if (activeForRental > 0) {
+    throw new AppError(
+      "Rental already has an active vehicle assignment",
+      409
+    );
   }
 
   const vehicle = await tx.vehicle.findUnique({
@@ -415,12 +393,7 @@ export async function createRental(
   actor: AuditActor
 ) {
   try {
-    const pricing = await resolveRentalPricing({
-      clientId: input.clientId,
-      rateCardId: input.rateCardId ?? null,
-      effectiveAt: input.startDate,
-      manualPricing: input.manualPricing ?? null,
-    });
+    const pricing = resolveRentalPricing(input.manualPricing);
 
     return await prisma.$transaction(async (tx) => {
       await assertClient(tx, input.clientId);
@@ -436,26 +409,6 @@ export async function createRental(
       }
 
       if (input.hubId) await assertHub(tx, input.hubId);
-      if (input.vehicleId) {
-        const vehicle = await tx.vehicle.findUnique({
-          where: { id: input.vehicleId },
-          select: {
-            id: true,
-            status: true,
-            isActive: true,
-            deletedAt: true,
-          },
-        });
-        if (!vehicle || vehicle.deletedAt) {
-          throw new AppError("Vehicle not found", 404);
-        }
-        if (!vehicle.isActive || vehicle.status !== "IDLE") {
-          throw new AppError(
-            "Vehicle is not available for assignment",
-            409
-          );
-        }
-      }
 
       const data: Prisma.RentalUncheckedCreateInput = {
         rentalNumber: generateRentalNumber(),
@@ -487,25 +440,23 @@ export async function createRental(
         await getOrCreateDepositForRental(tx, rental.id);
       }
 
-      if (input.vehicleId) {
-        await assignVehicleWithinTransaction(
-          tx,
-          {
-            rental: {
-              id: rental.id,
-              rentalNumber: rental.rentalNumber,
-              rentalType: rental.rentalType,
-              riderId: rental.riderId,
-              hubId: rental.hubId,
-              status: rental.status,
-            },
-            vehicleId: input.vehicleId,
-            startDate: input.startDate,
-            reason: "Assigned during rental creation",
+      await assignVehicleWithinTransaction(
+        tx,
+        {
+          rental: {
+            id: rental.id,
+            rentalNumber: rental.rentalNumber,
+            rentalType: rental.rentalType,
+            riderId: rental.riderId,
+            hubId: rental.hubId,
+            status: rental.status,
           },
-          actor
-        );
-      }
+          vehicleId: input.vehicleId,
+          startDate: input.startDate,
+          reason: "Assigned during rental creation",
+        },
+        actor
+      );
 
       await logAudit({
         ...actor,
@@ -594,11 +545,7 @@ export async function getRentalById(id: string) {
     throw new AppError("Rental not found", 404);
   }
 
-  const financialSummary = await prisma.$transaction(async (tx) =>
-    getRentalFinancialSummary(tx, id)
-  );
-
-  return { rental, financialSummary };
+  return { rental };
 }
 
 export async function assignVehicle(
