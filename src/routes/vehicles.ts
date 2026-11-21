@@ -3,6 +3,7 @@ import { verifyToken } from "../middleware/verifyToken.js";
 import { authorize } from "../middleware/pbac.js";
 import { validate } from "../middleware/validate.js";
 import { idParamSchema } from "../validation/common.js";
+import { vehicleImportBodySchema } from "../validation/vehicleImport.js";
 import {
   changeVehicleStatusSchema,
   createVehicleSchema,
@@ -15,7 +16,9 @@ import {
   deleteVehicle,
   getVehicleById,
   getVehicles,
+  importVehicles,
   updateVehicle,
+  validateVehicleImport,
 } from "../controllers/vehicle/vehicles.js";
 
 const r = Router();
@@ -27,6 +30,23 @@ r.post(
   validate(createVehicleSchema),
   createVehicle
 );
+
+r.post(
+  "/import/validate",
+  verifyToken,
+  authorize("vehicle", "create"),
+  validate(vehicleImportBodySchema),
+  validateVehicleImport,
+);
+
+r.post(
+  "/import",
+  verifyToken,
+  authorize("vehicle", "create"),
+  validate(vehicleImportBodySchema),
+  importVehicles,
+);
+
 r.get(
   "/",
   verifyToken,
@@ -64,5 +84,7 @@ r.delete(
   authorize("vehicle", "delete"),
   deleteVehicle
 );
+
+
 
 export default r;

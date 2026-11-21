@@ -516,6 +516,7 @@ model Hub {
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now()) @db.Timestamptz(3)
   updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+  
 
   vehicles          Vehicle[]
   staff             Staff[]
@@ -1333,7 +1334,7 @@ model Document {
   url            String
   issueDate      DateTime?    @db.Timestamptz(3)
   expiryDate     DateTime?    @db.Timestamptz(3)
-  documentNumber String?
+  documentNumber String? 
 
   riderId String?
   rider   Rider?  @relation(fields: [riderId], references: [id], onDelete: Restrict)
