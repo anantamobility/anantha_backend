@@ -13,13 +13,16 @@ import {
   riderDocumentParamSchema,
   updateRiderSchema,
 } from "../validation/rider.js";
+import { riderImportBodySchema } from "../validation/riderImport.js";
 import {
   changeRiderStatus,
   createRider,
   deleteRiderById,
   getRiderById,
   getRiders,
+  importRiders,
   updateRider,
+  validateRiderImport,
 } from "../controllers/rider/riders.js";
 import {
   deleteRiderDocument,
@@ -32,6 +35,22 @@ import {
 const r = Router();
 
 r.post("/", verifyToken, authorize("rider", "create"), validate(createRiderSchema), createRider);
+
+r.post(
+  "/import/validate",
+  verifyToken,
+  authorize("rider", "create"),
+  validate(riderImportBodySchema),
+  validateRiderImport,
+);
+
+r.post(
+  "/import",
+  verifyToken,
+  authorize("rider", "create"),
+  validate(riderImportBodySchema),
+  importRiders,
+);
 
 r.get("/", verifyToken, authorize("rider", "read", { policy: false }), validate(listRidersQuerySchema, "query"), getRiders);
 
