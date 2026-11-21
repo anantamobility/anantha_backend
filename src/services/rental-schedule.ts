@@ -44,17 +44,16 @@ export type DuePeriod = { periodStart: Date; periodEnd: Date };
 /**
  * Builds deterministic, non-overlapping billing periods.
  *
- * A period is generated when its start is on or before `throughDate`. The
- * final period may extend beyond an agreed rental end date; the business rule
- * for mid-period early closure is documented as an open decision in
- * docs/rentals-collections.md (current convention: final period billed in
- * full).
+ * A period is generated only when it has completed on or before `throughDate`.
+ * With `includePartial`, the unfinished period is appended from its start up to
+ * `throughDate`, so rental close can bill the days actually used.
  */
 export function buildDuePeriods(input: {
   startDate: Date;
   period: CollectionPeriod;
   throughDate: Date;
   maxPeriods?: number;
+  includePartial?: boolean;
 }): DuePeriod[] {
   const { startDate, period, throughDate } = input;
   const maxPeriods = input.maxPeriods ?? 1000;
@@ -62,17 +61,27 @@ export function buildDuePeriods(input: {
 
   for (let index = 0; index < maxPeriods; index += 1) {
     const periodStart = periodStartFor(startDate, period, index);
-    if (periodStart.getTime() > throughDate.getTime()) break;
-
     const periodEnd = periodStartFor(startDate, period, index + 1);
+    if (periodEnd.getTime() > throughDate.getTime()) break;
+
     periods.push({ periodStart, periodEnd });
+  }
+
+  if (input.includePartial) {
+    const partialStart = periods.length
+      ? periods[periods.length - 1].periodEnd
+      : startDate;
+    if (partialStart.getTime() < throughDate.getTime()) {
+      periods.push({ periodStart: partialStart, periodEnd: throughDate });
+    }
   }
 
   return periods;
 }
 
 export function daysInPeriod(periodStart: Date, periodEnd: Date): number {
-  return Math.round(
+  // A started day is billable.
+  return Math.ceil(
     (periodEnd.getTime() - periodStart.getTime()) / MS_PER_DAY
   );
 }

@@ -3,20 +3,12 @@ import prisma from "../database/prismaClient.js";
 import { AppError } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import { toDecimal } from "./rental-schedule.js";
-import {
-  generateRentalDues,
-  refreshOverdueDues,
-  rentalDueSelect,
-} from "./rental-dues.js";
-import {
-  collectionSelect,
-  createCollectionWithinTransaction,
-} from "./collection.js";
+import { generateRentalDues, rentalDueSelect } from "./rental-dues.js";
+import { collectionSelect } from "./collection.js";
 import type {
   GenerateClientDuesInput,
   ListClientCollectionsQuery,
   ListClientDuesQuery,
-  RecordClientPaymentInput,
 } from "../validation/clientFinance.js";
 
 type Tx = Prisma.TransactionClient;
@@ -26,8 +18,6 @@ type FinanceDb = Pick<
   "rental" | "rentalDue" | "collection"
 >;
 
-const OPEN_DUE_STATUSES = ["PENDING", "PARTIALLY_PAID", "OVERDUE"] as const;
-const COLLECTIBLE_RENTAL_STATUSES = ["ACTIVE", "ON_HOLD"] as const;
 const TERMINAL_RENTAL_STATUSES = [
   "COMPLETED",
   "TERMINATED",
@@ -237,7 +227,11 @@ export async function generateClientDues(
       const client = await assertClient(tx, clientId, {
         requireActive: true,
       });
-      const throughDate = input.throughDate ?? new Date();
+      const now = new Date();
+      const throughDate =
+        input.throughDate && input.throughDate.getTime() < now.getTime()
+          ? input.throughDate
+          : now;
 
       const rentals = await tx.rental.findMany({
         where: {
@@ -306,193 +300,6 @@ export async function generateClientDues(
     });
   } catch (err) {
     throw AppError.fromPrisma(err, "Client dues could not be generated") ?? err;
-  }
-}
-
-export async function recordClientPayment(
-  clientId: string,
-  input: RecordClientPaymentInput,
-  actor: AuditActor
-) {
-  try {
-    return await prisma.$transaction(async (tx) => {
-      const client = await assertClient(tx, clientId, {
-        requireActive: true,
-      });
-
-      const amount = new Prisma.Decimal(input.amount);
-      const receivedAt = input.receivedAt ?? new Date();
-
-      let rentals: Array<{
-        id: string;
-        rentalNumber: string;
-      }>;
-
-      if (input.rentalId) {
-        const rental = await tx.rental.findUnique({
-          where: { id: input.rentalId },
-          select: {
-            id: true,
-            rentalNumber: true,
-            clientId: true,
-            rentalType: true,
-            status: true,
-          },
-        });
-
-        if (!rental) {
-          throw new AppError("Rental not found", 404);
-        }
-        if (rental.clientId !== client.id || rental.rentalType !== "B2B") {
-          throw new AppError(
-            "Rental does not belong to the selected B2B client",
-            409
-          );
-        }
-        if (
-          !COLLECTIBLE_RENTAL_STATUSES.includes(
-            rental.status as (typeof COLLECTIBLE_RENTAL_STATUSES)[number]
-          )
-        ) {
-          throw new AppError(
-            `Client payments can only be recorded against an ACTIVE or ON_HOLD rental (current status: ${rental.status})`,
-            409
-          );
-        }
-
-        rentals = [
-          {
-            id: rental.id,
-            rentalNumber: rental.rentalNumber,
-          },
-        ];
-      } else {
-        rentals = await tx.rental.findMany({
-          where: {
-            clientId: client.id,
-            rentalType: "B2B",
-            status: { in: [...COLLECTIBLE_RENTAL_STATUSES] },
-          },
-          select: { id: true, rentalNumber: true },
-          orderBy: { startDate: "asc" },
-        });
-      }
-
-      if (rentals.length === 0) {
-        throw new AppError(
-          "Client has no active B2B rentals to receive a payment",
-          409
-        );
-      }
-
-      for (const rental of rentals) {
-        await refreshOverdueDues(tx, rental.id);
-      }
-
-      const dues = await tx.rentalDue.findMany({
-        where: {
-          rentalId: { in: rentals.map((rental) => rental.id) },
-          status: { in: [...OPEN_DUE_STATUSES] },
-          outstandingAmount: { gt: 0 },
-        },
-        orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }, { id: "asc" }],
-        select: {
-          id: true,
-          rentalId: true,
-          outstandingAmount: true,
-          rental: { select: { rentalNumber: true } },
-        },
-      });
-
-      const totalOutstanding = dues.reduce(
-        (total, due) => total.add(toDecimal(due.outstandingAmount)),
-        new Prisma.Decimal(0)
-      );
-
-      if (totalOutstanding.lte(0)) {
-        throw new AppError(
-          "Client has no outstanding collection dues",
-          409
-        );
-      }
-      if (amount.gt(totalOutstanding)) {
-        throw new AppError(
-          "Client payment exceeds the total outstanding balance",
-          409
-        );
-      }
-
-      let remaining = amount;
-      const collections: unknown[] = [];
-      const allocations: Array<{
-        dueId: string;
-        rentalId: string;
-        rentalNumber: string;
-        amount: string;
-      }> = [];
-
-      // One collection per due, oldest dues first.
-      for (const due of dues) {
-        if (remaining.lte(0)) break;
-
-        const outstanding = toDecimal(due.outstandingAmount);
-        const applied = Prisma.Decimal.min(outstanding, remaining);
-        if (applied.lte(0)) continue;
-
-        const result = await createCollectionWithinTransaction(
-          tx,
-          {
-            rentalDueId: due.id,
-            amount: applied.toString(),
-            paymentMethod: input.paymentMethod,
-            referenceNumber: input.referenceNumber ?? null,
-            receivedAt,
-            notes: input.notes ?? null,
-          },
-          actor
-        );
-
-        collections.push(result.collection);
-        allocations.push({
-          dueId: due.id,
-          rentalId: due.rentalId,
-          rentalNumber: due.rental.rentalNumber,
-          amount: applied.toString(),
-        });
-
-        remaining = remaining.sub(applied);
-      }
-
-      if (remaining.gt(0)) {
-        throw new AppError(
-          "Client payment could not be fully allocated; please retry",
-          409
-        );
-      }
-
-      const summary = await buildClientFinancialSummary(tx, client);
-
-      await logAudit({
-        ...actor,
-        action: "COLLECTION_RECEIVED",
-        resource: "Client",
-        resourceId: client.id,
-        newData: {
-          clientCode: client.clientCode,
-          amount,
-          paymentMethod: input.paymentMethod,
-          referenceNumber: input.referenceNumber ?? null,
-          allocations,
-        },
-        summary: `${actor.userName} recorded a consolidated payment of ${amount} for client ${client.clientCode ?? client.name}.`,
-        db: tx,
-        throwOnError: true,
-      });
-
-      return { collections, allocations, summary, duplicate: false };
-    });
-  } catch (err) {
-    throw AppError.fromPrisma(err, "Client payment could not be recorded") ?? err;
   }
 }
 

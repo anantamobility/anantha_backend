@@ -762,6 +762,7 @@ export async function closeRental(
       await generateRentalDues(tx, {
         rentalId: rental.id,
         throughDate: endDate,
+        includePartial: true,
         actor,
       });
 

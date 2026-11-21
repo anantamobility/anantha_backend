@@ -6,7 +6,6 @@ import type {
   GenerateClientDuesInput,
   ListClientCollectionsQuery,
   ListClientDuesQuery,
-  RecordClientPaymentInput,
 } from "../../validation/clientFinance.js";
 
 export const getClientFinancials = async (
@@ -36,23 +35,6 @@ export const generateClientDues = async (
       getAuditActor(req)
     );
     return success(res, result, 201);
-  } catch (err) {
-    next(err);
-  }
-};
-
-export const recordClientPayment = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const result = await clientFinanceService.recordClientPayment(
-      req.params.id as string,
-      req.body as RecordClientPaymentInput,
-      getAuditActor(req)
-    );
-    return success(res, result, result.duplicate ? 200 : 201);
   } catch (err) {
     next(err);
   }

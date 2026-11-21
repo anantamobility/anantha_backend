@@ -20,7 +20,7 @@ import type {
 
 type Tx = Prisma.TransactionClient;
 
-const COLLECTIBLE_RENTAL_STATUSES = ["ACTIVE", "ON_HOLD"] as const;
+const COLLECTIBLE_RENTAL_STATUSES = ["ACTIVE", "ON_HOLD", "COMPLETED"] as const;
 
 export const collectionSelect = {
   id: true,
@@ -110,7 +110,7 @@ async function assertCollectibleDue(tx: Tx, rentalDueId: string) {
     )
   ) {
     throw new AppError(
-      `Collections can only be recorded against an ACTIVE or ON_HOLD rental (current status: ${due.rental.status})`,
+      `Collections can only be recorded against an ACTIVE, ON_HOLD or COMPLETED rental (current status: ${due.rental.status})`,
       409
     );
   }
@@ -410,11 +410,17 @@ export async function generateDues(
   input: GenerateDuesInput,
   actor: AuditActor
 ) {
+  const now = new Date();
+  const throughDate =
+    input.throughDate && input.throughDate.getTime() < now.getTime()
+      ? input.throughDate
+      : now;
+
   try {
     return await prisma.$transaction(async (tx) =>
       generateRentalDues(tx, {
         rentalId,
-        throughDate: input.throughDate ?? new Date(),
+        throughDate,
         actor,
       })
     );

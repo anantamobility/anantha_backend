@@ -52,6 +52,7 @@ export async function generateRentalDues(
   input: {
     rentalId: string;
     throughDate: Date;
+    includePartial?: boolean;
     actor?: AuditActor;
   }
 ) {
@@ -97,6 +98,7 @@ export async function generateRentalDues(
     startDate: rental.startDate,
     period: rental.collectionPeriod,
     throughDate: input.throughDate,
+    includePartial: input.includePartial,
   });
 
   const existing = await tx.rentalDue.findMany({
@@ -145,14 +147,14 @@ export async function generateRentalDues(
         rentalId: rental.id,
         periodStart: period.periodStart,
         periodEnd: period.periodEnd,
-        dueDate: period.periodStart,
+        dueDate: period.periodEnd,
         amountDue,
         amountCollected: new Prisma.Decimal(0),
         outstandingAmount: amountDue,
         status: deriveDueStatus({
           amountCollected: new Prisma.Decimal(0),
           outstandingAmount: amountDue,
-          dueDate: period.periodStart,
+          dueDate: period.periodEnd,
           now,
         }),
       },
@@ -160,24 +162,26 @@ export async function generateRentalDues(
       select: { id: true },
     });
 
-    if (!existingKeys.has(key)) generated += 1;
+    if (!existingKeys.has(key)) {
+      generated += 1;
 
-    await recordLedgerEntry(
-      tx,
-      {
-        rentalId: rental.id,
-        entryType: "RENT_CHARGED",
-        direction: "DEBIT",
-        amount: amountDue,
-        occurredAt: period.periodStart,
-        description: `Rent charged for ${period.periodStart
-          .toISOString()
-          .slice(0, 10)} to ${period.periodEnd.toISOString().slice(0, 10)}`,
-        sourceType: "RentalDue",
-        sourceId: due.id,
-      },
-      input.actor?.userId ?? null
-    );
+      await recordLedgerEntry(
+        tx,
+        {
+          rentalId: rental.id,
+          entryType: "RENT_CHARGED",
+          direction: "DEBIT",
+          amount: amountDue,
+          occurredAt: period.periodStart,
+          description: `Rent charged for ${period.periodStart
+            .toISOString()
+            .slice(0, 10)} to ${period.periodEnd.toISOString().slice(0, 10)}`,
+          sourceType: "RentalDue",
+          sourceId: due.id,
+        },
+        input.actor?.userId ?? null
+      );
+    }
   }
 
   await refreshOverdueDues(tx, rental.id);
@@ -229,7 +233,7 @@ export async function getRentalFinancialSummary(tx: Tx, rentalId: string) {
       },
     }),
     tx.collection.findMany({
-      where: { status: "CLEARED", rentalDue: { rentalId } },
+      where: { rentalDue: { rentalId } },
       select: { amount: true },
     }),
   ]);

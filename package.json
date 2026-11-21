@@ -6,9 +6,6 @@
     "build": "npx prisma generate && tsc",
     "start": "node dist/server.js",
     "dev": "tsx src/server.ts",
-    "test": "vitest run",
-    "test-watch": "vitest",
-    "test:integration": "vitest run --config vitest.integration.config.ts",
     "seed": "tsx src/database/seed.ts"
   },
   "devDependencies": {

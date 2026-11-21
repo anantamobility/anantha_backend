@@ -1,5 +1,9 @@
 import prisma from "../database/prismaClient.js";
-import { InvoiceStatus, Prisma, RentalStatus } from "../generated/prisma/client.js";
+import {
+  DepositStatus,
+  Prisma,
+  RentalStatus,
+} from "../generated/prisma/client.js";
 import { AppError } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import type {
@@ -270,22 +274,21 @@ export async function deleteClient(id: string, actor: AuditActor) {
         );
       }
 
-      const openInvoices = await tx.invoice.count({
+      const openDeposits = await tx.deposit.count({
         where: {
           clientId: id,
           status: {
-            in: [
-              InvoiceStatus.DRAFT,
-              InvoiceStatus.ISSUED,
-              InvoiceStatus.PARTIALLY_PAID,
-              InvoiceStatus.OVERDUE,
+            notIn: [
+              DepositStatus.REFUNDED,
+              DepositStatus.FORFEITED,
+              DepositStatus.CLOSED,
             ],
           },
         },
       });
-      if (openInvoices > 0) {
+      if (openDeposits > 0) {
         throw new AppError(
-          "Client cannot be deleted while it has open invoices",
+          "Client cannot be deleted while it has open deposits",
           409
         );
       }

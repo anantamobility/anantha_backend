@@ -15,20 +15,23 @@ import {
 
 const r = Router();
 
-// r.post(
-//   "/",
-//   verifyToken,
-//   authorize("collection", "create"),
-//   validate(createCollectionSchema),
-//   createCollection
-// );
-// r.get(
-//   "/",
-//   verifyToken,
-//   authorize("collection", "read", { policy: false }),
-//   validate(listCollectionsQuerySchema, "query"),
-//   getCollections
-// );
+//need another review with reomval of nested helpers
+r.post(
+  "/",
+  verifyToken,
+  authorize("collection", "create"),
+  validate(createCollectionSchema),
+  createCollection
+);
+
+r.get(
+  "/",
+  verifyToken,
+  authorize("collection", "read", { policy: false }),
+  validate(listCollectionsQuerySchema, "query"),
+  getCollections
+);
+
 // r.get(
 //   "/:id",
 //   verifyToken,
