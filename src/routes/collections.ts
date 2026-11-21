@@ -4,12 +4,10 @@ import { authorize } from "../middleware/pbac.js";
 import { validate } from "../middleware/validate.js";
 import { idParamSchema } from "../validation/common.js";
 import {
-  clearCollectionSchema,
   createCollectionSchema,
   listCollectionsQuerySchema,
 } from "../validation/collection.js";
 import {
-  clearCollection,
   createCollection,
   getCollectionById,
   getCollections,
@@ -30,14 +28,6 @@ const r = Router();
 //   authorize("collection", "read", { policy: false }),
 //   validate(listCollectionsQuerySchema, "query"),
 //   getCollections
-// );
-// r.patch(
-//   "/:id/clear",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("collection", "update"),
-//   validate(clearCollectionSchema),
-//   clearCollection
 // );
 // r.get(
 //   "/:id",

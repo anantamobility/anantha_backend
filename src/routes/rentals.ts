@@ -11,12 +11,6 @@ import {
   listRentalsQuerySchema,
 } from "../validation/rental.js";
 import {
-  adjustDepositSchema,
-  depositLedgerQuerySchema,
-  receiveDepositSchema,
-  refundDepositSchema,
-} from "../validation/deposit.js";
-import {
   generateDuesSchema,
   listRentalCollectionsQuerySchema,
   listRentalDuesQuerySchema,
@@ -28,14 +22,7 @@ import {
   createRental,
   getRentalById,
   getRentals,
-} from "../controllers/rental/rental.controller.js";
-import {
-  adjustDeposit,
-  getRentalDeposit,
-  getRentalDepositLedger,
-  receiveDeposit,
-  refundDeposit,
-} from "../controllers/rental/deposit.controller.js";
+} from "../controllers/rental/rental.js";
 import {
   generateRentalDues,
   getRentalCollections,
@@ -59,53 +46,12 @@ const r = Router();
 //   getRentals
 // );
 
-// Security deposit
-// r.get(
-//   "/:id/deposit",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("deposit", "read", { policy: false }),
-//   getRentalDeposit
-// );
-// r.get(
-//   "/:id/deposit/ledger",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("deposit", "read", { policy: false }),
-//   validate(depositLedgerQuerySchema, "query"),
-//   getRentalDepositLedger
-// );
-// r.post(
-//   "/:id/deposit/receive",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("deposit", "receive", { policy: false }),
-//   validate(receiveDepositSchema),
-//   receiveDeposit
-// );
-// r.post(
-//   "/:id/deposit/refund",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("deposit", "refund", { policy: false }),
-//   validate(refundDepositSchema),
-//   refundDeposit
-// );
-// r.post(
-//   "/:id/deposit/adjust",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("deposit", "adjust", { policy: false }),
-//   validate(adjustDepositSchema),
-//   adjustDeposit
-// );
-
 // Collection dues and rental collections
 // r.get(
 //   "/:id/dues",
 //   verifyToken,
 //   validate(idParamSchema, "params"),
-//   authorize("collection", "read", { policy: false }),
+//   authorize("rentalDue", "read", { policy: false }),
 //   validate(listRentalDuesQuerySchema, "query"),
 //   getRentalDues
 // );
@@ -113,7 +59,7 @@ const r = Router();
 //   "/:id/dues/generate",
 //   verifyToken,
 //   validate(idParamSchema, "params"),
-//   authorize("collection", "due:generate", { policy: false }),
+//   authorize("rentalDue", "generate", { policy: false }),
 //   validate(generateDuesSchema),
 //   generateRentalDues
 // );

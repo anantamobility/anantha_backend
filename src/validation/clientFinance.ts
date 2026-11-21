@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { paginationQuerySchema } from "./common.js";
 import {
-  collectionStatusSchema,
   paymentMethodSchema,
   rentalDueStatusSchema,
 } from "./collection.js";
@@ -38,7 +37,6 @@ export const recordClientPaymentSchema = z
     referenceNumber: z.string().trim().min(1).max(200).nullable().optional(),
     receivedAt: z.coerce.date().optional(),
     rentalId: z.string().uuid("rentalId must be a valid UUID").nullable().optional(),
-    idempotencyKey: z.string().trim().min(1).max(200).optional(),
     notes: z.string().trim().min(1).max(2000).nullable().optional(),
   })
   .strict();
@@ -53,13 +51,12 @@ export const listClientDuesQuerySchema = paginationQuerySchema.extend({
 });
 
 export const listClientCollectionsQuerySchema = paginationQuerySchema.extend({
-  status: collectionStatusSchema.optional(),
   paymentMethod: paymentMethodSchema.optional(),
   rentalId: z.string().uuid("rentalId must be a valid UUID").optional(),
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
   sortBy: z
-    .enum(["receivedAt", "amount", "status", "createdAt", "updatedAt"])
+    .enum(["receivedAt", "amount", "createdAt", "updatedAt"])
     .default("receivedAt"),
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
 });

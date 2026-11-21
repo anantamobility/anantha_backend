@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { paginationQuerySchema } from "./common.js";
+import { paymentMethodSchema } from "./collection.js";
 
 const decimalString = z
   .union([z.string(), z.number()])
@@ -25,9 +26,10 @@ function moneySchema(scale: number, label: string, positive = true) {
 export const receiveDepositSchema = z
   .object({
     amount: moneySchema(2, "amount"),
+    paymentMethod: paymentMethodSchema,
     reference: z.string().trim().min(1).max(200).nullable().optional(),
     reason: z.string().trim().min(1).max(500).nullable().optional(),
-    idempotencyKey: z.string().trim().min(1).max(200).optional(),
+    receivedAt: z.coerce.date().optional(),
   })
   .strict();
 
@@ -36,17 +38,6 @@ export const refundDepositSchema = z
     amount: moneySchema(2, "amount"),
     reference: z.string().trim().min(1).max(200).nullable().optional(),
     reason: z.string().trim().min(1).max(500).nullable().optional(),
-    idempotencyKey: z.string().trim().min(1).max(200).optional(),
-  })
-  .strict();
-
-export const adjustDepositSchema = z
-  .object({
-    amount: moneySchema(2, "amount"),
-    direction: z.enum(["CREDIT", "DEBIT"]),
-    reason: z.string().trim().min(1).max(500),
-    reference: z.string().trim().min(1).max(200).nullable().optional(),
-    idempotencyKey: z.string().trim().min(1).max(200).optional(),
   })
   .strict();
 
@@ -54,5 +45,4 @@ export const depositLedgerQuerySchema = paginationQuerySchema;
 
 export type ReceiveDepositInput = z.infer<typeof receiveDepositSchema>;
 export type RefundDepositInput = z.infer<typeof refundDepositSchema>;
-export type AdjustDepositInput = z.infer<typeof adjustDepositSchema>;
 export type DepositLedgerQuery = z.infer<typeof depositLedgerQuerySchema>;

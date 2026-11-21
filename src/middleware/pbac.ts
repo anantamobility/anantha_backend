@@ -2,9 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import prisma from "../database/prismaClient.js";
 import { type AppResource, type AppAction } from "../registry/perm.js";
 import { PolicyRegistry } from "../registry/policy.js";
-import { getModelDelegate } from "../registry/models.js";
 import { error } from "../utils/http.js";
-import { ErrorCode } from "../utils/errors.js";
 
 
 interface AuthOptions {
@@ -31,7 +29,7 @@ export const authorize = (
             // Optional: Allow OPTIONS requests to pass through without auth
             if (req.method === 'OPTIONS') return next();
             
-            return error(res, 401, ErrorCode.UNAUTHORIZED, "Unauthorized: No user found");
+            return error(res, 401, "Unauthorized: No user found");
         }
 
         // ---------------------------------------------------------
@@ -40,7 +38,7 @@ export const authorize = (
         // ---------------------------------------------------------
         const permissionString = `${resource}:${action}`;
         if (!user.permissions.includes(permissionString)) {
-            return error(res, 403, ErrorCode.FORBIDDEN, `Forbidden: Missing ${permissionString}`);
+            return error(res, 403, `Forbidden: Missing ${permissionString}`);
         }
 
         // If policy is disabled (e.g., for "Get All Trips"), stop here.
@@ -72,14 +70,14 @@ export const authorize = (
             if (!resourceId) {
                 // If we reached here, we needed an ID for a policy check but didn't find one.
                 console.log(`Missing ID parameter: ${idParam}`)
-                return error(res, 400, ErrorCode.VALIDATION_ERROR, `Missing ID parameter: ${idParam}`);
+                return error(res, 400, `Missing ID parameter: ${idParam}`);
             }
 
             // Dynamic DB Fetch
-            const modelDelegate = getModelDelegate(resource);
-            if (!modelDelegate) {
-                return error(res, 400, ErrorCode.VALIDATION_ERROR, "Unknown resource");
-            }
+            const modelDelegate = (prisma as any)[resource];
+            if (!modelDelegate){
+                return res.status(500).json({ message: "Invalid resource type" });
+            } 
 
             contextData = await modelDelegate.findFirst({
                 where: { [lookupField]: resourceId }
@@ -87,7 +85,7 @@ export const authorize = (
 
             if (!contextData) {
               console.log(`${resource} not found, in pbac check.`)
-              return error(res, 404, ErrorCode.NOT_FOUND, `${resource} not found`);
+              return error(res, 404, `${resource} not found`);
             }
         }
 
@@ -100,14 +98,14 @@ export const authorize = (
         if (policyHandler) {
             const isAllowed = policyHandler(user, contextData);
             if (!isAllowed) {
-                return error(res, 403, ErrorCode.FORBIDDEN,
+                return error(res, 403,
                     `Policy violation: You cannot ${action} this specific ${resource}.`
                 );
             }
         }
 
-        // 4. ATTACH CONTEXT (Optimization)
-        // We attach this so your Controller doesn't have to fetch the same data again.
+        // 4. ATTACH CONTEXT
+        // We attach this so the Controller doesn't have to fetch the same data again.
         if (action !== 'create') {
             req.resource = contextData;
         }

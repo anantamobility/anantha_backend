@@ -1,10 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import prisma from "../database/prismaClient.js";
 import { Prisma } from "../generated/prisma/client.js";
-import {
-  AppError,
-  ErrorCode,
-} from "../utils/errors.js";
+import { AppError } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import type {
   ChangeRateCardStatusInput,
@@ -25,8 +22,6 @@ export const rateCardListSelect = {
   fortnightlyRate: true,
   monthlyRate: true,
   securityDeposit: true,
-  effectiveFrom: true,
-  effectiveTo: true,
   isActive: true,
   terms: true,
   createdAt: true,
@@ -49,25 +44,12 @@ function termsInput(
   return value as Prisma.InputJsonValue;
 }
 
-function assertDateRange(effectiveFrom: Date, effectiveTo: Date | null) {
-  if (effectiveTo && effectiveTo.getTime() <= effectiveFrom.getTime()) {
-    throw new AppError(
-      "effectiveTo must be later than effectiveFrom",
-      400,
-      ErrorCode.VALIDATION_ERROR
-    );
-  }
-}
-
 export async function createRateCard(
   input: CreateRateCardInput,
   actor: AuditActor
 ) {
   try {
     return await prisma.$transaction(async (tx) => {
-      const effectiveTo = input.effectiveTo ?? null;
-      assertDateRange(input.effectiveFrom, effectiveTo);
-
       const data: Prisma.RateCardUncheckedCreateInput = {
         code: input.code ?? generateRateCardCode(),
         name: input.name,
@@ -79,8 +61,6 @@ export async function createRateCard(
         fortnightlyRate: input.fortnightlyRate ?? null,
         monthlyRate: input.monthlyRate ?? null,
         securityDeposit: input.securityDeposit ?? null,
-        effectiveFrom: input.effectiveFrom,
-        effectiveTo,
         isActive: input.isActive ?? true,
       };
 
@@ -117,22 +97,12 @@ function listRateCardsWhere(query: ListRateCardsQuery) {
     vehicleCategory,
     rentalType,
     isActive,
-    validOn,
   } = query;
 
   const where: Prisma.RateCardWhereInput = { deletedAt: null };
   if (vehicleCategory) where.vehicleCategory = vehicleCategory;
   if (rentalType) where.rentalType = rentalType;
   if (typeof isActive === "boolean") where.isActive = isActive;
-
-  if (validOn) {
-    where.effectiveFrom = { lte: validOn };
-    where.AND = [
-      {
-        OR: [{ effectiveTo: null }, { effectiveTo: { gte: validOn } }],
-      },
-    ];
-  }
 
   if (search) {
     where.OR = [
@@ -183,7 +153,7 @@ export async function getRateCardById(id: string) {
   });
 
   if (!rateCard || rateCard.deletedAt) {
-    throw new AppError("Ratecard not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Ratecard not found", 404);
   }
 
   const { deletedAt: _deletedAt, ...safeRateCard } = rateCard;
@@ -199,15 +169,8 @@ export async function updateRateCard(
     return await prisma.$transaction(async (tx) => {
       const existing = await tx.rateCard.findUnique({ where: { id } });
       if (!existing || existing.deletedAt) {
-        throw new AppError("Ratecard not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Ratecard not found", 404);
       }
-
-      const effectiveFrom = input.effectiveFrom ?? existing.effectiveFrom;
-      const effectiveTo =
-        input.effectiveTo !== undefined
-          ? input.effectiveTo
-          : existing.effectiveTo;
-      assertDateRange(effectiveFrom, effectiveTo);
 
       const data: Prisma.RateCardUncheckedUpdateInput = {};
       if (input.name !== undefined) data.name = input.name;
@@ -229,10 +192,6 @@ export async function updateRateCard(
       if (input.securityDeposit !== undefined) {
         data.securityDeposit = input.securityDeposit;
       }
-      if (input.effectiveFrom !== undefined) {
-        data.effectiveFrom = input.effectiveFrom;
-      }
-      if (input.effectiveTo !== undefined) data.effectiveTo = input.effectiveTo;
 
       const terms = termsInput(input.terms);
       if (terms !== undefined) data.terms = terms;
@@ -274,14 +233,13 @@ export async function changeRateCardStatus(
     return await prisma.$transaction(async (tx) => {
       const existing = await tx.rateCard.findUnique({ where: { id } });
       if (!existing || existing.deletedAt) {
-        throw new AppError("Ratecard not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Ratecard not found", 404);
       }
 
       if (existing.isActive === input.isActive) {
         throw new AppError(
           `Ratecard is already ${input.isActive ? "active" : "inactive"}`,
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -296,8 +254,7 @@ export async function changeRateCardStatus(
       if (updateResult.count === 0) {
         throw new AppError(
           "Ratecard status was modified concurrently; please retry",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -338,7 +295,7 @@ export async function deleteRateCard(id: string, actor: AuditActor) {
     return await prisma.$transaction(async (tx) => {
       const existing = await tx.rateCard.findUnique({ where: { id } });
       if (!existing || existing.deletedAt) {
-        throw new AppError("Ratecard not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Ratecard not found", 404);
       }
 
       const deletedAt = new Date();

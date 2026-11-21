@@ -48,23 +48,19 @@ export function getRolePermissionBuckets(
       if (
         [
           'client',
-          'ratecard',
+          'rateCard',
           'rental',
+          'rentalDue',
           'deposit',
           'collection',
         ].includes(group.resource)
       ) {
-        // Consolidated B2B client financials and rider earnings/pay-statements
-        // are ADMIN-only capabilities.
-        if (group.resource === 'collection' && action.startsWith('client:')) {
-          continue;
-        }
         buckets.SUPERVISOR.push(key);
       }
 
       // SUPERVISOR owns the full operational service, spares and inventory
       // workflow, including damage responsibility approval.
-      if (['service', 'spare', 'inventory'].includes(group.resource)) {
+      if (['service', 'sparePart', 'inventoryMovement'].includes(group.resource)) {
         buckets.SUPERVISOR.push(key);
       }
 

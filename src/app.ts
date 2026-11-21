@@ -19,7 +19,7 @@ import clientsRouter from './routes/clients.js'
 import ratecardsRouter from './routes/ratecards.js'
 import rentalsRouter from './routes/rentals.js'
 import collectionsRouter from './routes/collections.js'
-import earningsRouter from './routes/earnings.js'
+import ledgersRouter from './routes/ledgers.js'
 import payStatementsRouter from './routes/payStatements.js'
 import servicesRouter from './routes/services.js'
 import sparesRouter from './routes/spares.js'
@@ -35,7 +35,7 @@ app.use(morgan('dev'))
 const options = {
     origin: ['http://localhost:8080', 'http://localhost:5173', envConfig.frontendUrl],
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'idempotency-key'],
     credentials: true
 };
 app.use(cors(options))
@@ -52,7 +52,7 @@ app.use("/clients", clientsRouter)
 app.use("/ratecards", ratecardsRouter)
 app.use("/rentals", rentalsRouter)
 app.use("/collections", collectionsRouter)
-app.use("/earnings", earningsRouter)
+app.use(ledgersRouter)
 app.use("/pay-statements", payStatementsRouter)
 app.use("/services", servicesRouter)
 app.use("/spares", sparesRouter)

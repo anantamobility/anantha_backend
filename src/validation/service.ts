@@ -193,7 +193,6 @@ export const createServiceChargeSchema = z
     chargeType: serviceChargeTypeSchema,
     costAmount: moneySchema(2, "costAmount", true),
     description: z.string().trim().min(1).max(2000).optional(),
-    idempotencyKey: z.string().trim().min(1).max(200).optional(),
   })
   .strict();
 

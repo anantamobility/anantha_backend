@@ -1,10 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import { Prisma } from "../generated/prisma/client.js";
 import prisma from "../database/prismaClient.js";
-import {
-  AppError,
-  ErrorCode,
-} from "../utils/errors.js";
+import { AppError } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import { deriveServiceChargeAllocation } from "./inventory.js";
 import { calculateDueAmount } from "./rental-schedule.js";
@@ -48,7 +45,6 @@ const serviceVehicleSelect = {
   status: true,
   hubId: true,
   isActive: true,
-  version: true,
 } as const;
 
 const serviceRentalSelect = {
@@ -92,7 +88,6 @@ const serviceChargeSelect = {
   description: true,
   sourceType: true,
   sourceId: true,
-  idempotencyKey: true,
   serviceSpareId: true,
   createdAt: true,
   updatedAt: true,
@@ -160,7 +155,6 @@ export const serviceListSelect = {
   responsibilityApprovedAt: true,
   responsibilityInvestigationNotes: true,
   replacementVehicleId: true,
-  version: true,
   createdAt: true,
   updatedAt: true,
   vehicle: { select: serviceVehicleSelect },
@@ -219,26 +213,23 @@ async function assertVehicle(tx: Tx, vehicleId: string, requireAvailable = false
       status: true,
       hubId: true,
       isActive: true,
-      version: true,
       deletedAt: true,
     },
   });
 
   if (!vehicle || vehicle.deletedAt) {
-    throw new AppError("Vehicle not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Vehicle not found", 404);
   }
   if (!vehicle.isActive) {
     throw new AppError(
       "Vehicle is inactive and cannot be used for service",
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
   if (requireAvailable && ["RETIRED", "OUT_OF_SERVICE"].includes(vehicle.status)) {
     throw new AppError(
       `Vehicle is not serviceable in status ${vehicle.status}`,
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
   return vehicle;
@@ -251,7 +242,6 @@ async function assertRental(tx: Tx, rentalId: string) {
       id: true,
       rentalNumber: true,
       status: true,
-      version: true,
       rentalType: true,
       clientId: true,
       riderId: true,
@@ -259,13 +249,12 @@ async function assertRental(tx: Tx, rentalId: string) {
     },
   });
   if (!rental) {
-    throw new AppError("Rental not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Rental not found", 404);
   }
   if (TERMINAL_RENTAL_STATUSES.includes(rental.status)) {
     throw new AppError(
       `Service cannot be attached to a ${rental.status} rental`,
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
   return rental;
@@ -288,8 +277,7 @@ async function assertNoOtherActiveDowntime(
   if (active > 0) {
     throw new AppError(
       "Vehicle already has an active service downtime; complete or cancel it first",
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
 }
@@ -308,16 +296,15 @@ async function moveVehicleForService(
       | "UNDER_REPAIR"
       | "OUT_OF_SERVICE"
       | "RETIRED";
-    expectedVersion?: number;
     previousVehicleStatus?: string | null;
   }
 ) {
   const vehicle = await tx.vehicle.findUnique({
     where: { id: input.vehicleId },
-    select: { id: true, registrationNumber: true, status: true, version: true },
+    select: { id: true, registrationNumber: true, status: true },
   });
   if (!vehicle) {
-    throw new AppError("Vehicle not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Vehicle not found", 404);
   }
 
   const target =
@@ -334,21 +321,18 @@ async function moveVehicleForService(
     where: {
       id: vehicle.id,
       status: input.expectedStatus ?? vehicle.status,
-      version: input.expectedVersion ?? vehicle.version,
       deletedAt: null,
     },
     data: {
       status: target,
       statusChangedAt: new Date(),
-      version: { increment: 1 },
     },
   });
 
   if (updated.count === 0) {
     throw new AppError(
       "Vehicle status was modified concurrently; please retry",
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
 
@@ -419,8 +403,7 @@ export async function createService(
         if (activeAssignment === 0) {
           throw new AppError(
             "Vehicle is not actively assigned to the selected rental",
-            409,
-            ErrorCode.CONFLICT
+            409
           );
         }
       }
@@ -433,8 +416,7 @@ export async function createService(
         if (!assignee || assignee.status !== "ACTIVE") {
           throw new AppError(
             "Assigned user not found or inactive",
-            404,
-            ErrorCode.NOT_FOUND
+            404
           );
         }
       }
@@ -617,7 +599,7 @@ export async function getServiceById(id: string) {
     select: serviceDetailSelect,
   });
   if (!service) {
-    throw new AppError("Service order not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Service order not found", 404);
   }
 
   return { service, costSummary: summarizeServiceCost(service) };
@@ -631,13 +613,12 @@ export async function updateService(
   return prisma.$transaction(async (tx) => {
     const existing = await tx.service.findUnique({ where: { id } });
     if (!existing) {
-      throw new AppError("Service order not found", 404, ErrorCode.NOT_FOUND);
+      throw new AppError("Service order not found", 404);
     }
     if (isTerminal(existing.status)) {
       throw new AppError(
         `Cannot update a ${existing.status} service order`,
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
@@ -649,14 +630,12 @@ export async function updateService(
       if (!assignee || assignee.status !== "ACTIVE") {
         throw new AppError(
           "Assigned user not found or inactive",
-          404,
-          ErrorCode.NOT_FOUND
+          404
         );
       }
     }
 
     const data: Prisma.ServiceUncheckedUpdateInput = {
-      version: { increment: 1 },
     };
     if (input.description !== undefined) data.description = input.description;
     if (input.diagnosis !== undefined) data.diagnosis = input.diagnosis;
@@ -672,14 +651,13 @@ export async function updateService(
     }
 
     const updated = await tx.service.updateMany({
-      where: { id, version: existing.version },
+      where: { id },
       data,
     });
     if (updated.count === 0) {
       throw new AppError(
         "Service order was modified concurrently; please retry",
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
@@ -721,19 +699,17 @@ export async function startService(
           rentalId: true,
           previousVehicleStatus: true,
           downtimeStart: true,
-          version: true,
         },
       });
       if (!service) {
-        throw new AppError("Service order not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Service order not found", 404);
       }
 
       const allowed = SERVICE_STATUS_TRANSITIONS[service.status] as readonly string[];
       if (!allowed.includes("IN_PROGRESS")) {
         throw new AppError(
           `Service cannot be started from status ${service.status}`,
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -743,7 +719,7 @@ export async function startService(
       const vehicle = await assertVehicle(tx, service.vehicleId, true);
 
       const updated = await tx.service.updateMany({
-        where: { id, version: service.version },
+        where: { id },
         data: {
           status: "IN_PROGRESS",
           statusChangedAt: startedAt,
@@ -754,14 +730,12 @@ export async function startService(
             service.downtimeStart === null
               ? vehicle.status
               : service.previousVehicleStatus ?? vehicle.status,
-          version: { increment: 1 },
         },
       });
       if (updated.count === 0) {
         throw new AppError(
           "Service order was modified concurrently; please retry",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -769,7 +743,6 @@ export async function startService(
         vehicleId: service.vehicleId,
         targetStatus: "IN_SERVICE",
         expectedStatus: vehicle.status,
-        expectedVersion: vehicle.version,
         reason: input.reason ?? `Service ${service.serviceNumber} started`,
         actor,
       });
@@ -813,35 +786,31 @@ export async function markServiceAwaitingParts(
         id: true,
         serviceNumber: true,
         status: true,
-        version: true,
       },
     });
     if (!service) {
-      throw new AppError("Service order not found", 404, ErrorCode.NOT_FOUND);
+      throw new AppError("Service order not found", 404);
     }
 
     const allowed = SERVICE_STATUS_TRANSITIONS[service.status] as readonly string[];
     if (!allowed.includes("AWAITING_PARTS")) {
       throw new AppError(
         `Service cannot await parts from status ${service.status}`,
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
     const updated = await tx.service.updateMany({
-      where: { id, version: service.version },
+      where: { id },
       data: {
         status: "AWAITING_PARTS",
         statusChangedAt: new Date(),
-        version: { increment: 1 },
       },
     });
     if (updated.count === 0) {
       throw new AppError(
         "Service order was modified concurrently; please retry",
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
@@ -877,35 +846,31 @@ export async function resumeServiceWork(
         id: true,
         serviceNumber: true,
         status: true,
-        version: true,
       },
     });
     if (!service) {
-      throw new AppError("Service order not found", 404, ErrorCode.NOT_FOUND);
+      throw new AppError("Service order not found", 404);
     }
 
     const allowed = SERVICE_STATUS_TRANSITIONS[service.status] as readonly string[];
     if (!allowed.includes("IN_PROGRESS")) {
       throw new AppError(
         `Service work cannot resume from status ${service.status}`,
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
     const updated = await tx.service.updateMany({
-      where: { id, version: service.version },
+      where: { id },
       data: {
         status: "IN_PROGRESS",
         statusChangedAt: new Date(),
-        version: { increment: 1 },
       },
     });
     if (updated.count === 0) {
       throw new AppError(
         "Service order was modified concurrently; please retry",
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
@@ -946,19 +911,17 @@ export async function completeService(
         previousVehicleStatus: true,
         startedAt: true,
         downtimeStart: true,
-        version: true,
       },
     });
     if (!service) {
-      throw new AppError("Service order not found", 404, ErrorCode.NOT_FOUND);
+      throw new AppError("Service order not found", 404);
     }
 
     const allowed = SERVICE_STATUS_TRANSITIONS[service.status] as readonly string[];
     if (!allowed.includes("COMPLETED")) {
       throw new AppError(
         `Service cannot be completed from status ${service.status}`,
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
@@ -969,13 +932,12 @@ export async function completeService(
     ) {
       throw new AppError(
         "completedAt cannot be before the service start",
-        400,
-        ErrorCode.VALIDATION_ERROR
+        400
       );
     }
 
     const updated = await tx.service.updateMany({
-      where: { id, version: service.version },
+      where: { id },
       data: {
         status: "COMPLETED",
         statusChangedAt: completedAt,
@@ -987,14 +949,12 @@ export async function completeService(
         ...(input.resolutionNotes !== undefined
           ? { resolutionNotes: input.resolutionNotes }
           : {}),
-        version: { increment: 1 },
       },
     });
     if (updated.count === 0) {
       throw new AppError(
         "Service order was modified concurrently; please retry",
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
@@ -1037,37 +997,33 @@ export async function closeService(
         id: true,
         serviceNumber: true,
         status: true,
-        version: true,
       },
     });
     if (!service) {
-      throw new AppError("Service order not found", 404, ErrorCode.NOT_FOUND);
+      throw new AppError("Service order not found", 404);
     }
 
     const allowed = SERVICE_STATUS_TRANSITIONS[service.status] as readonly string[];
     if (!allowed.includes("CLOSED")) {
       throw new AppError(
         `Service cannot be closed from status ${service.status}`,
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
     const closedAt = new Date();
     const updated = await tx.service.updateMany({
-      where: { id, version: service.version },
+      where: { id },
       data: {
         status: "CLOSED",
         statusChangedAt: closedAt,
         closedAt,
-        version: { increment: 1 },
       },
     });
     if (updated.count === 0) {
       throw new AppError(
         "Service order was modified concurrently; please retry",
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
@@ -1107,39 +1063,35 @@ export async function cancelService(
         rentalId: true,
         previousVehicleStatus: true,
         downtimeStart: true,
-        version: true,
       },
     });
     if (!service) {
-      throw new AppError("Service order not found", 404, ErrorCode.NOT_FOUND);
+      throw new AppError("Service order not found", 404);
     }
 
     const allowed = SERVICE_STATUS_TRANSITIONS[service.status] as readonly string[];
     if (!allowed.includes("CANCELLED")) {
       throw new AppError(
         `Service cannot be cancelled from status ${service.status}`,
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
     const cancelledAt = new Date();
     const updated = await tx.service.updateMany({
-      where: { id, version: service.version },
+      where: { id },
       data: {
         status: "CANCELLED",
         statusChangedAt: cancelledAt,
         cancelledAt,
         cancellationReason: input.reason,
         downtimeEnd: service.downtimeStart ? cancelledAt : null,
-        version: { increment: 1 },
       },
     });
     if (updated.count === 0) {
       throw new AppError(
         "Service order was modified concurrently; please retry",
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
@@ -1180,8 +1132,7 @@ export async function approveServiceResponsibility(
   if (!RESPONSIBILITY_APPROVER_ROLES.includes(actor.userRole)) {
     throw new AppError(
       "Only ADMIN or SUPERVISOR users can approve service responsibility",
-      403,
-      ErrorCode.FORBIDDEN
+      403
     );
   }
 
@@ -1193,23 +1144,21 @@ export async function approveServiceResponsibility(
         serviceNumber: true,
         status: true,
         responsibleParty: true,
-        version: true,
       },
     });
     if (!service) {
-      throw new AppError("Service order not found", 404, ErrorCode.NOT_FOUND);
+      throw new AppError("Service order not found", 404);
     }
     if (isTerminal(service.status)) {
       throw new AppError(
         `Responsibility cannot be approved for a ${service.status} service order`,
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
     const approvedAt = new Date();
     const updated = await tx.service.updateMany({
-      where: { id, version: service.version },
+      where: { id },
       data: {
         responsibleParty: input.responsibility,
         responsibilityApprovedAt: approvedAt,
@@ -1223,14 +1172,12 @@ export async function approveServiceResponsibility(
             }
           : {}),
         approvedById: actor.userId,
-        version: { increment: 1 },
       },
     });
     if (updated.count === 0) {
       throw new AppError(
         "Service order was modified concurrently; please retry",
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
@@ -1314,21 +1261,19 @@ export async function assignReplacement(
         },
       });
       if (!service) {
-        throw new AppError("Service order not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Service order not found", 404);
       }
       if (isTerminal(service.status)) {
         throw new AppError(
           `Replacement cannot be assigned for a ${service.status} service order`,
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
       if (input.replacementVehicleId === service.vehicleId) {
         throw new AppError(
           "Replacement vehicle must be different from the vehicle under service",
-          400,
-          ErrorCode.VALIDATION_ERROR
+          400
         );
       }
 
@@ -1341,8 +1286,7 @@ export async function assignReplacement(
       if (replacementVehicle.status !== "IDLE") {
         throw new AppError(
           `Replacement vehicle must be IDLE (current status: ${replacementVehicle.status})`,
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -1352,8 +1296,7 @@ export async function assignReplacement(
       if (activeForService > 0) {
         throw new AppError(
           "Service already has an active replacement vehicle",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -1363,8 +1306,7 @@ export async function assignReplacement(
       if (activeForVehicle > 0) {
         throw new AppError(
           "Replacement vehicle already has an active replacement assignment",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -1374,8 +1316,7 @@ export async function assignReplacement(
         if (replacementRental.id === service.rentalId) {
           throw new AppError(
             "replacementRentalId must reference a different rental from the original",
-            400,
-            ErrorCode.VALIDATION_ERROR
+            400
           );
         }
       }
@@ -1408,7 +1349,6 @@ export async function assignReplacement(
         where: { id: service.id },
         data: {
           replacementVehicleId: replacementVehicle.id,
-          version: { increment: 1 },
         },
       });
 
@@ -1416,7 +1356,6 @@ export async function assignReplacement(
         vehicleId: replacementVehicle.id,
         targetStatus: "DEPLOYED",
         expectedStatus: "IDLE",
-        expectedVersion: replacementVehicle.version,
         reason: input.reason ?? `Replacement for service ${service.serviceNumber}`,
         actor,
       });
@@ -1467,13 +1406,12 @@ export async function returnReplacement(
       },
     });
     if (!service) {
-      throw new AppError("Service order not found", 404, ErrorCode.NOT_FOUND);
+      throw new AppError("Service order not found", 404);
     }
     if (isTerminal(service.status)) {
       throw new AppError(
         `Replacement cannot be returned for a ${service.status} service order`,
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
@@ -1489,8 +1427,7 @@ export async function returnReplacement(
     if (!assignment) {
       throw new AppError(
         "Service has no active replacement assignment",
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
@@ -1498,8 +1435,7 @@ export async function returnReplacement(
     if (returnedAt.getTime() < assignment.assignedAt.getTime()) {
       throw new AppError(
         "returnedAt cannot be before the replacement assignment",
-        400,
-        ErrorCode.VALIDATION_ERROR
+        400
       );
     }
 
@@ -1515,14 +1451,13 @@ export async function returnReplacement(
     if (updated.count === 0) {
       throw new AppError(
         "Replacement assignment was modified concurrently; please retry",
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
     const vehicle = await tx.vehicle.findUnique({
       where: { id: assignment.replacementVehicleId },
-      select: { id: true, status: true, version: true, registrationNumber: true },
+      select: { id: true, status: true, registrationNumber: true },
     });
 
     if (vehicle && vehicle.status === "DEPLOYED") {
@@ -1530,20 +1465,17 @@ export async function returnReplacement(
         where: {
           id: vehicle.id,
           status: "DEPLOYED",
-          version: vehicle.version,
           deletedAt: null,
         },
         data: {
           status: "IDLE",
           statusChangedAt: new Date(),
-          version: { increment: 1 },
         },
       });
       if (vehicleUpdated.count === 0) {
         throw new AppError(
           "Vehicle status was modified concurrently; please retry",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
     }
@@ -1564,13 +1496,6 @@ export async function returnReplacement(
       });
 
       if (replacementRental) {
-        const idempotencyKey = `replacement-charge:${assignment.id}`;
-        const existingCharge = await tx.serviceCharge.findUnique({
-          where: { idempotencyKey },
-          select: { id: true },
-        });
-
-        if (!existingCharge) {
           const amount = calculateDueAmount({
             period: replacementRental.collectionPeriod,
             periodStart: assignment.assignedAt,
@@ -1607,18 +1532,16 @@ export async function returnReplacement(
                   .slice(0, 10)} to ${returnedAt.toISOString().slice(0, 10)}`,
                 sourceType: "ReplacementAssignment",
                 sourceId: assignment.id,
-                idempotencyKey,
               },
               select: serviceChargeSelect,
             });
           }
-        }
       }
     }
 
     await tx.service.updateMany({
       where: { id: service.id, replacementVehicleId: assignment.replacementVehicleId },
-      data: { replacementVehicleId: null, version: { increment: 1 } },
+      data: { replacementVehicleId: null },
     });
 
     await logAudit({
@@ -1661,24 +1584,13 @@ export async function createServiceCharge(
         },
       });
       if (!service) {
-        throw new AppError("Service order not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Service order not found", 404);
       }
       if (isTerminal(service.status)) {
         throw new AppError(
           `Charges cannot be added to a ${service.status} service order`,
-          409,
-          ErrorCode.CONFLICT
+          409
         );
-      }
-
-      if (input.idempotencyKey) {
-        const existing = await tx.serviceCharge.findUnique({
-          where: { idempotencyKey: input.idempotencyKey },
-          select: serviceChargeSelect,
-        });
-        if (existing) {
-          return { charge: existing, duplicate: true };
-        }
       }
 
       const costAmount = new Prisma.Decimal(input.costAmount);
@@ -1702,7 +1614,6 @@ export async function createServiceCharge(
             | "UNKNOWN",
           status: allocation.status,
           description: input.description ?? null,
-          idempotencyKey: input.idempotencyKey ?? null,
           sourceType: "Manual",
           sourceId: service.id,
         },

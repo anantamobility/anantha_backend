@@ -1,6 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
 import prisma from "../../database/prismaClient.js";
-import { ErrorCode } from "../../utils/errors.js";
 import { error, success } from "../../utils/http.js";
 import { getAuditActor, logAudit } from "../../utils/log.js";
 import type {
@@ -49,7 +48,7 @@ export const updatePermsOnRole = async (req: Request, res: Response, next: NextF
 			include: { permissions: true },
 		});
 		if (!role) {
-			error(res, 404, ErrorCode.NOT_FOUND, "Role not found");
+			error(res, 404, "Role not found");
 			return;
 		}
 
@@ -60,7 +59,7 @@ export const updatePermsOnRole = async (req: Request, res: Response, next: NextF
 		const knownIds = new Set(known.map((permission) => permission.id));
 		const missing = permissions.filter((permissionId) => !knownIds.has(permissionId));
 		if (missing.length > 0) {
-			error(res, 400, ErrorCode.VALIDATION_ERROR, `Unknown permission ids: ${missing.join(", ")}`);
+			error(res, 400, `Unknown permission ids: ${missing.join(", ")}`);
 			return;
 		}
 
@@ -105,7 +104,7 @@ export const addRole = async (req: Request, res: Response, next: NextFunction): 
 		success(res, { role }, 201);
 	} catch (err) {
 		if (isDuplicate(err)) {
-			error(res, 409, ErrorCode.CONFLICT, "A role with this name already exists");
+			error(res, 409, "A role with this name already exists");
 			return;
 		}
 		next(err);
@@ -123,7 +122,7 @@ export const renameRole = async (req: Request, res: Response, next: NextFunction
 			select: { id: true, name: true },
 		});
 		if (!role) {
-			error(res, 404, ErrorCode.NOT_FOUND, "Role not found");
+			error(res, 404, "Role not found");
 			return;
 		}
 
@@ -150,7 +149,7 @@ export const renameRole = async (req: Request, res: Response, next: NextFunction
 		success(res, { role: updated });
 	} catch (err) {
 		if (isDuplicate(err)) {
-			error(res, 409, ErrorCode.CONFLICT, "A role with this name already exists");
+			error(res, 409, "A role with this name already exists");
 			return;
 		}
 		next(err);

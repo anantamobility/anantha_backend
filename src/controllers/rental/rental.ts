@@ -10,11 +10,7 @@ import type {
   ListRentalsQuery,
 } from "../../validation/rental.js";
 
-export const createRental = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
+export const createRental = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const rental = await rentalService.createRental(
       req.body as CreateRentalInput,

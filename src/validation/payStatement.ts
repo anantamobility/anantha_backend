@@ -35,7 +35,7 @@ export const statementCycleSchema = z.enum(["SAME_DAY", "NEXT_DAY"]);
 
 export const manualDeductionSchema = z
   .object({
-    lineType: z.enum(["DEPOSIT_DEDUCTION", "OTHER_DEDUCTION", "ADJUSTMENT"]),
+    lineType: z.enum(["DEPOSIT_DEDUCTION", "OTHER_DEDUCTION"]),
     amount: moneySchema(2, "amount"),
     description: z.string().trim().min(1).max(500),
     rentalId: z.string().uuid("rentalId must be a valid UUID").nullable().optional(),

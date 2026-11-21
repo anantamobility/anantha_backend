@@ -2,7 +2,7 @@ import { Router } from "express";
 import { verifyToken } from "../middleware/verifyToken.js";
 import { authorize } from "../middleware/pbac.js";
 import { validate } from "../middleware/validate.js";
-import { reportHandler } from "../controllers/reports.js";
+import { reportHandler } from "../controllers/reports/reports.js";
 import {
   b2bReportQuerySchema,
   b2cReportQuerySchema,

@@ -1,10 +1,6 @@
-import { v4 as uuidv4 } from "uuid";
 import prisma from "../database/prismaClient.js";
 import { InvoiceStatus, Prisma, RentalStatus } from "../generated/prisma/client.js";
-import {
-  AppError,
-  ErrorCode,
-} from "../utils/errors.js";
+import { AppError } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import type {
   ChangeClientStatusInput,
@@ -16,15 +12,11 @@ import type {
 export const clientListSelect = {
   id: true,
   clientCode: true,
-  type: true,
   name: true,
   companyName: true,
   contactPerson: true,
   email: true,
   phoneNumber: true,
-  taxId: true,
-  billingAddress: true,
-  paymentTermsDays: true,
   isActive: true,
   createdAt: true,
   updatedAt: true,
@@ -41,52 +33,30 @@ export const clientDetailSelect = {
   },
 } as const;
 
-function generateClientCode() {
-  return `CLI-${uuidv4().replace(/-/g, "").slice(0, 8).toUpperCase()}`;
-}
-
-function billingAddressInput(
-  value: CreateClientInput["billingAddress"]
-): Prisma.InputJsonValue | typeof Prisma.DbNull | undefined {
-  if (value === undefined) return undefined;
-  if (value === null) return Prisma.DbNull;
-  return value as Prisma.InputJsonValue;
-}
-
-export async function createClient(
-  input: CreateClientInput,
-  actor: AuditActor
-) {
+export async function createClient(input: CreateClientInput, actor: AuditActor) {
   try {
     return await prisma.$transaction(async (tx) => {
       const data: Prisma.ClientUncheckedCreateInput = {
-        clientCode: input.clientCode ?? generateClientCode(),
-        type: input.type,
+        clientCode: input.clientCode ?? null,
         name: input.name,
         companyName: input.companyName ?? null,
         contactPerson: input.contactPerson ?? null,
         email: input.email ?? null,
         phoneNumber: input.phoneNumber ?? null,
-        taxId: input.taxId ?? null,
-        paymentTermsDays: input.paymentTermsDays ?? null,
         isActive: input.isActive ?? true,
       };
-
-      const billingAddress = billingAddressInput(input.billingAddress);
-      if (billingAddress !== undefined) data.billingAddress = billingAddress;
 
       const client = await tx.client.create({
         data,
         select: clientDetailSelect,
       });
-      const { billingAddress: _billingAddress, ...clientAudit } = client;
 
       await logAudit({
         ...actor,
         action: "CREATE",
         resource: "Client",
         resourceId: client.id,
-        newData: clientAudit,
+        newData: client,
         summary: `${actor.userName} created client ${client.name}.`,
         db: tx,
         throwOnError: true,
@@ -103,10 +73,9 @@ export async function createClient(
 }
 
 export async function listClients(query: ListClientsQuery) {
-  const { page, limit, search, type, isActive } = query;
+  const { page, limit, search, isActive } = query;
 
   const where: Prisma.ClientWhereInput = { deletedAt: null };
-  if (type) where.type = type;
   if (typeof isActive === "boolean") where.isActive = isActive;
 
   if (search) {
@@ -115,9 +84,6 @@ export async function listClients(query: ListClientsQuery) {
       { name: { contains: search, mode: "insensitive" } },
       { companyName: { contains: search, mode: "insensitive" } },
       { contactPerson: { contains: search, mode: "insensitive" } },
-      { email: { contains: search, mode: "insensitive" } },
-      { phoneNumber: { contains: search, mode: "insensitive" } },
-      { taxId: { contains: search, mode: "insensitive" } },
     ];
   }
 
@@ -154,7 +120,7 @@ export async function getClientById(id: string) {
   });
 
   if (!client || client.deletedAt) {
-    throw new AppError("Client not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Client not found", 404);
   }
 
   const { deletedAt: _deletedAt, ...safeClient } = client;
@@ -170,11 +136,10 @@ export async function updateClient(
     return await prisma.$transaction(async (tx) => {
       const existing = await tx.client.findUnique({ where: { id } });
       if (!existing || existing.deletedAt) {
-        throw new AppError("Client not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Client not found", 404);
       }
 
       const data: Prisma.ClientUncheckedUpdateInput = {};
-      if (input.type !== undefined) data.type = input.type;
       if (input.name !== undefined) data.name = input.name;
       if (input.companyName !== undefined) {
         data.companyName = input.companyName;
@@ -184,13 +149,6 @@ export async function updateClient(
       }
       if (input.email !== undefined) data.email = input.email;
       if (input.phoneNumber !== undefined) data.phoneNumber = input.phoneNumber;
-      if (input.taxId !== undefined) data.taxId = input.taxId;
-      if (input.paymentTermsDays !== undefined) {
-        data.paymentTermsDays = input.paymentTermsDays;
-      }
-
-      const billingAddress = billingAddressInput(input.billingAddress);
-      if (billingAddress !== undefined) data.billingAddress = billingAddress;
 
       const client = await tx.client.update({
         where: { id },
@@ -198,16 +156,13 @@ export async function updateClient(
         select: clientDetailSelect,
       });
 
-      const { billingAddress: _oldBillingAddress, ...clientBefore } = existing;
-      const { billingAddress: _newBillingAddress, ...clientAfter } = client;
-
       await logAudit({
         ...actor,
         action: "UPDATE",
         resource: "Client",
         resourceId: client.id,
-        oldData: clientBefore,
-        newData: clientAfter,
+        oldData: existing,
+        newData: client,
         summary: `${actor.userName} updated client ${client.name}.`,
         db: tx,
         throwOnError: true,
@@ -232,14 +187,13 @@ export async function changeClientStatus(
     return await prisma.$transaction(async (tx) => {
       const existing = await tx.client.findUnique({ where: { id } });
       if (!existing || existing.deletedAt) {
-        throw new AppError("Client not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Client not found", 404);
       }
 
       if (existing.isActive === input.isActive) {
         throw new AppError(
           `Client is already ${input.isActive ? "active" : "inactive"}`,
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -255,30 +209,26 @@ export async function changeClientStatus(
       if (updateResult.count === 0) {
         throw new AppError(
           "Client status was modified concurrently; please retry",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
-      const { deletedAt: _deletedAt, ...currentClient } = existing;
       const client = {
-        ...currentClient,
+        ...existing,
         isActive: input.isActive,
       };
-      const { billingAddress: _oldBillingAddress, ...clientBefore } = existing;
-      const { billingAddress: _newBillingAddress, ...clientAfter } = client;
 
       await logAudit({
         ...actor,
         action: "UPDATE",
         resource: "Client",
         resourceId: id,
-        oldData: clientBefore,
+        oldData: existing,
         newData: {
-          ...clientAfter,
+          ...client,
           reason: input.reason ?? null,
         },
-        summary: `${actor.userName} changed client ${existing.clientCode} status to ${
+        summary: `${actor.userName} changed client ${existing.clientCode ?? existing.name} status to ${
           input.isActive ? "ACTIVE" : "INACTIVE"
         }.`,
         db: tx,
@@ -297,7 +247,7 @@ export async function deleteClient(id: string, actor: AuditActor) {
     return await prisma.$transaction(async (tx) => {
       const existing = await tx.client.findUnique({ where: { id } });
       if (!existing || existing.deletedAt) {
-        throw new AppError("Client not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Client not found", 404);
       }
 
       const activeRentals = await tx.rental.count({
@@ -316,8 +266,7 @@ export async function deleteClient(id: string, actor: AuditActor) {
       if (activeRentals > 0) {
         throw new AppError(
           "Client cannot be deleted while it has open rentals",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -337,8 +286,7 @@ export async function deleteClient(id: string, actor: AuditActor) {
       if (openInvoices > 0) {
         throw new AppError(
           "Client cannot be deleted while it has open invoices",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -349,16 +297,13 @@ export async function deleteClient(id: string, actor: AuditActor) {
         select: clientDetailSelect,
       });
 
-      const { billingAddress: _oldBillingAddress, ...clientBefore } = existing;
-      const { billingAddress: _newBillingAddress, ...clientAfter } = client;
-
       await logAudit({
         ...actor,
         action: "DELETE",
         resource: "Client",
         resourceId: client.id,
-        oldData: clientBefore,
-        newData: clientAfter,
+        oldData: existing,
+        newData: client,
         summary: `${actor.userName} soft-deleted client ${existing.name}.`,
         db: tx,
         throwOnError: true,

@@ -1,7 +1,7 @@
 // src/middleware/validate.ts
 import type { Request, Response, NextFunction } from "express";
 import type { ZodType } from "zod";
-import { AppError, ErrorCode } from "../utils/errors.js";
+import { AppError } from "../utils/errors.js";
 
 type Source = "body" | "params" | "query";
 
@@ -12,7 +12,7 @@ export const validate = (schema: ZodType, source: Source = "body") =>
       const message = result.error.issues
         .map((i) => `${i.path.join(".") || source}: ${i.message}`)
         .join("; ");
-      return next(new AppError(message, 400, ErrorCode.VALIDATION_ERROR));
+      return next(new AppError(message, 400));
     }
 
     // Express 5 exposes req.query as a getter-only property, so shadow it with

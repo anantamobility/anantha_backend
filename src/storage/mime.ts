@@ -1,5 +1,5 @@
 import { extname } from "node:path";
-import { AppError, ErrorCode } from "../utils/errors.js";
+import { AppError } from "../utils/errors.js";
 
 export const ALLOWED_DOCUMENT_MIME_TYPES: Record<string, readonly string[]> = {
   "application/pdf": [".pdf"],
@@ -28,8 +28,7 @@ export function safeDocumentExtension(
   if (!allowed) {
     throw new AppError(
       `Unsupported document MIME type: ${mime}`,
-      400,
-      ErrorCode.VALIDATION_ERROR
+      400
     );
   }
 
@@ -38,8 +37,7 @@ export function safeDocumentExtension(
     if (!allowed.includes(extension)) {
       throw new AppError(
         "Document file extension does not match its MIME type",
-        400,
-        ErrorCode.VALIDATION_ERROR
+        400
       );
     }
     return extension;

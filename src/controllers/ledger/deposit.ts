@@ -1,9 +1,8 @@
 import type { NextFunction, Request, Response } from "express";
 import { success } from "../../utils/http.js";
 import { getAuditActor } from "../../utils/log.js";
-import * as ledgerService from "../../services/ledger.js";
+import * as ledgerService from "../../services/depositLedger.js";
 import type {
-  AdjustDepositInput,
   DepositLedgerQuery,
   ReceiveDepositInput,
   RefundDepositInput,
@@ -24,13 +23,13 @@ export const getRentalDeposit = async (
   }
 };
 
-export const getRentalDepositLedger = async (
+export const getDepositLedger = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    const result = await ledgerService.getRentalDepositLedger(
+    const result = await ledgerService.getDepositLedger(
       req.params.id as string,
       req.query as unknown as DepositLedgerQuery
     );
@@ -66,23 +65,6 @@ export const refundDeposit = async (
     const result = await ledgerService.refundDeposit(
       req.params.id as string,
       req.body as RefundDepositInput,
-      getAuditActor(req)
-    );
-    return success(res, result, 201);
-  } catch (err) {
-    next(err);
-  }
-};
-
-export const adjustDeposit = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const result = await ledgerService.adjustDeposit(
-      req.params.id as string,
-      req.body as AdjustDepositInput,
       getAuditActor(req)
     );
     return success(res, result, 201);

@@ -1,10 +1,6 @@
-import { v4 as uuidv4 } from "uuid";
 import { Prisma } from "../generated/prisma/client.js";
 import prisma from "../database/prismaClient.js";
-import {
-  AppError,
-  ErrorCode,
-} from "../utils/errors.js";
+import { AppError } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import { toDecimal } from "./rental-schedule.js";
 import {
@@ -40,9 +36,8 @@ const TERMINAL_RENTAL_STATUSES = [
 
 type ClientRecord = {
   id: string;
-  clientCode: string;
+  clientCode: string | null;
   name: string;
-  type: string;
   isActive: boolean;
   deletedAt: Date | null;
 };
@@ -50,7 +45,7 @@ type ClientRecord = {
 async function assertClient(
   db: ClientDb,
   clientId: string,
-  options: { requireActive?: boolean; requireCorporate?: boolean } = {}
+  options: { requireActive?: boolean } = {}
 ): Promise<ClientRecord> {
   const client = await db.client.findUnique({
     where: { id: clientId },
@@ -58,27 +53,18 @@ async function assertClient(
       id: true,
       clientCode: true,
       name: true,
-      type: true,
       isActive: true,
       deletedAt: true,
     },
   });
 
   if (!client || client.deletedAt) {
-    throw new AppError("Client not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Client not found", 404);
   }
   if (options.requireActive && !client.isActive) {
     throw new AppError(
       "Client is inactive and cannot be used for financial operations",
-      409,
-      ErrorCode.CONFLICT
-    );
-  }
-  if (options.requireCorporate && client.type !== "CORPORATE") {
-    throw new AppError(
-      "Consolidated client financials require a CORPORATE client",
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
 
@@ -119,7 +105,7 @@ export async function buildClientFinancialSummary(
     : [];
 
   const collections = await db.collection.findMany({
-    where: { clientId: client.id, status: "CLEARED" },
+    where: { clientId: client.id },
     select: {
       amount: true,
       rentalDue: { select: { rentalId: true } },
@@ -250,7 +236,6 @@ export async function generateClientDues(
     return await prisma.$transaction(async (tx) => {
       const client = await assertClient(tx, clientId, {
         requireActive: true,
-        requireCorporate: true,
       });
       const throughDate = input.throughDate ?? new Date();
 
@@ -268,8 +253,7 @@ export async function generateClientDues(
       if (rentals.length === 0) {
         throw new AppError(
           "Client has no B2B rentals eligible for due generation",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -307,7 +291,7 @@ export async function generateClientDues(
           rentalsProcessed: rentals.length,
           generated,
         },
-        summary: `${actor.userName} generated ${generated} collection due(s) across ${rentals.length} rental(s) for client ${client.clientCode}.`,
+        summary: `${actor.userName} generated ${generated} collection due(s) across ${rentals.length} rental(s) for client ${client.clientCode ?? client.name}.`,
         db: tx,
         throwOnError: true,
       });
@@ -334,31 +318,10 @@ export async function recordClientPayment(
     return await prisma.$transaction(async (tx) => {
       const client = await assertClient(tx, clientId, {
         requireActive: true,
-        requireCorporate: true,
       });
 
       const amount = new Prisma.Decimal(input.amount);
       const receivedAt = input.receivedAt ?? new Date();
-      const baseKey =
-        input.idempotencyKey ??
-        (input.referenceNumber
-          ? `client-payment:${client.id}:${input.referenceNumber}`
-          : `client-payment:${client.id}:${uuidv4()}`);
-
-      const existing = await tx.collection.findFirst({
-        where: { idempotencyKey: { startsWith: `${baseKey}:` } },
-        select: collectionSelect,
-      });
-
-      if (existing) {
-        const summary = await buildClientFinancialSummary(tx, client);
-        return {
-          collections: [],
-          allocations: [],
-          summary,
-          duplicate: true,
-        };
-      }
 
       let rentals: Array<{
         id: string;
@@ -378,13 +341,12 @@ export async function recordClientPayment(
         });
 
         if (!rental) {
-          throw new AppError("Rental not found", 404, ErrorCode.NOT_FOUND);
+          throw new AppError("Rental not found", 404);
         }
         if (rental.clientId !== client.id || rental.rentalType !== "B2B") {
           throw new AppError(
             "Rental does not belong to the selected B2B client",
-            409,
-            ErrorCode.CONFLICT
+            409
           );
         }
         if (
@@ -394,8 +356,7 @@ export async function recordClientPayment(
         ) {
           throw new AppError(
             `Client payments can only be recorded against an ACTIVE or ON_HOLD rental (current status: ${rental.status})`,
-            409,
-            ErrorCode.CONFLICT
+            409
           );
         }
 
@@ -420,8 +381,7 @@ export async function recordClientPayment(
       if (rentals.length === 0) {
         throw new AppError(
           "Client has no active B2B rentals to receive a payment",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -452,15 +412,13 @@ export async function recordClientPayment(
       if (totalOutstanding.lte(0)) {
         throw new AppError(
           "Client has no outstanding collection dues",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
       if (amount.gt(totalOutstanding)) {
         throw new AppError(
           "Client payment exceeds the total outstanding balance",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -489,8 +447,6 @@ export async function recordClientPayment(
             paymentMethod: input.paymentMethod,
             referenceNumber: input.referenceNumber ?? null,
             receivedAt,
-            status: "CLEARED",
-            idempotencyKey: `${baseKey}:${due.id}`,
             notes: input.notes ?? null,
           },
           actor
@@ -510,8 +466,7 @@ export async function recordClientPayment(
       if (remaining.gt(0)) {
         throw new AppError(
           "Client payment could not be fully allocated; please retry",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -529,7 +484,7 @@ export async function recordClientPayment(
           referenceNumber: input.referenceNumber ?? null,
           allocations,
         },
-        summary: `${actor.userName} recorded a consolidated payment of ${amount} for client ${client.clientCode}.`,
+        summary: `${actor.userName} recorded a consolidated payment of ${amount} for client ${client.clientCode ?? client.name}.`,
         db: tx,
         throwOnError: true,
       });
@@ -597,7 +552,6 @@ export async function listClientCollections(
     clientId: client.id,
     payerType: "CLIENT",
   };
-  if (query.status) where.status = query.status;
   if (query.paymentMethod) where.paymentMethod = query.paymentMethod;
   if (query.rentalId) where.rentalDue = { rentalId: query.rentalId };
   if (query.from || query.to) {

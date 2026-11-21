@@ -54,11 +54,9 @@ const vehicleBaseSchema = z.object({
 
   vehicleCategory: optionalNullableString(100),
   vehicleType: optionalNullableString(100),
-  seats: z.number().int().positive().nullable().optional(),
   batteryType: optionalNullableString(100),
   batteryCapacity: optionalInt,
   nominalRange: optionalInt,
-  bootSpace: optionalInt,
   chargingOptions: optionalNullableString(50),
   chargerProvided: z.boolean().nullable().optional(),
   noOfTyres: optionalInt,
@@ -75,7 +73,6 @@ const vehicleBaseSchema = z.object({
   dateOfOperation: optionalDate,
   warrantyStartDate: optionalDate,
   warrantyEndDate: optionalDate,
-  safeCabCertificateExpiryDate: optionalDate,
   telematicsExpiryDate: optionalDate,
 
   loanProvider: optionalNullableString(150),
@@ -93,7 +90,7 @@ const vehicleBaseSchema = z.object({
   insuranceThirdParty: optionalNullableString(100),
 });
 
-// Strict objects reject system-managed fields (id, status, version, timestamps,
+// Strict objects reject system-managed fields (id, status, timestamps,
 // deletedAt, retiredAt) instead of silently accepting and discarding them.
 export const createVehicleSchema = vehicleBaseSchema.strict();
 

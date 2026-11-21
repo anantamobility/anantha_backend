@@ -26,9 +26,6 @@ const reportBaseSchema = paginationQuerySchema
   .refine(hasValidDateRange, dateRangeRefinement);
 
 export const collectionsReportQuerySchema = reportBaseSchema.extend({
-  status: z
-    .enum(["PENDING", "CLEARED", "FAILED", "REFUNDED", "REVERSED"])
-    .optional(),
   payerType: z.enum(["CLIENT", "RIDER"]).optional(),
   paymentMethod: z
     .enum(["CASH", "UPI", "CARD", "BANK_TRANSFER", "CHEQUE", "OTHER"])

@@ -16,11 +16,6 @@ enum AccountStatus {
   SUSPENDED
 }
 
-enum ClientType {
-  INDIVIDUAL
-  CORPORATE
-}
-
 enum Gender {
   MALE
   FEMALE
@@ -140,7 +135,7 @@ enum DepositEntryType {
   REFUND
   DEDUCTION
   FORFEIT
-  ADJUSTMENT
+  // ADJUSTMENT
   REVERSAL
 }
 
@@ -182,14 +177,6 @@ enum CollectionPurpose {
   DEPOSIT
 }
 
-enum CollectionStatus {
-  PENDING
-  CLEARED
-  FAILED
-  REFUNDED
-  REVERSED
-}
-
 enum PaymentMethod {
   CASH
   UPI
@@ -211,10 +198,10 @@ enum PayStatementStatus {
 }
 
 enum PayStatementLineType {
-  DELIVERY_EARNING
+  DELIVERY_PAY
   RENT_DEDUCTION
   DEPOSIT_DEDUCTION
-  ADJUSTMENT
+  // ADJUSTMENT
   OTHER_DEDUCTION
   PAYOUT_REVERSAL
   INCENTIVE
@@ -224,15 +211,16 @@ enum PayStatementLineType {
 }
 
 // One ledger for both directions: money owed to AML by a client/rider
-// (rent) and money owed by AML to a rider (earnings). entryType says which.
+// (rent) and money owed by AML to a rider (delivery pay and other credits).
+// entryType says which.
 enum LedgerEntryType {
   RENT_CHARGED
   COLLECTION_RECEIVED
-  RENT_ADJUSTMENT
-  DELIVERY_EARNING
+  // RENT_ADJUSTMENT
+  DELIVERY_PAY
   RENT_DEDUCTION
   DEPOSIT_DEDUCTION
-  ADJUSTMENT
+  // ADJUSTMENT
   PAYOUT
   REVERSAL
   OTHER
@@ -368,7 +356,6 @@ model User {
   invoicesVoided   Invoice[] @relation("InvoiceVoidedBy")
 
   collectionsReceived   Collection[] @relation("CollectionReceivedBy")
-  collectionsReconciled Collection[] @relation("CollectionReconciledBy")
 
   statementsPaid     RiderPayStatement[] @relation("PayStatementPaidBy")
   depositsAuthorized DepositLedger[]     @relation("DepositAuthorizedBy")
@@ -465,7 +452,7 @@ model Rider {
   bankIfsc            String?
   bankHolderName      String?
 
-  rentalType   RentalType?
+  rentalType   RentalType
   b2cMode      B2CMode?
   b2bRiderMgmt B2BRiderMgmt?
 
@@ -477,7 +464,6 @@ model Rider {
   status          RiderStatus @default(ONBOARDING)
   onboardedAt     DateTime?   @db.Timestamptz(3)
   statusChangedAt DateTime?   @db.Timestamptz(3)
-  version         Int         @default(0) //? remove this maybe
 
   createdAt DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt DateTime  @updatedAt @db.Timestamptz(3)
@@ -543,13 +529,11 @@ model Vehicle {
   year               Int?
   color              String?
 
-  vehicleType      String? // e.g. EV scooter / cargo
+  vehicleType      String?
   vehicleCategory  String?
-  seats            Int?
   batteryType      String?
   batteryCapacity  Int?
   nominalRange     Int?
-  bootSpace        Int? // in litres
   chargingOptions  String? // slow | fast
   chargerProvided  Boolean?
   noOfTyres        Int?
@@ -566,7 +550,6 @@ model Vehicle {
   dateOfOperation     DateTime? @db.Timestamptz(3)
   warrantyStartDate   DateTime? @db.Timestamptz(3)
   warrantyEndDate     DateTime? @db.Timestamptz(3)
-  safeCabCertificateExpiryDate DateTime? @db.Timestamptz(3)
   telematicsExpiryDate         DateTime? @db.Timestamptz(3)
 
   // Current finance and insurance only; no history.
@@ -588,7 +571,6 @@ model Vehicle {
   acquiredAt      DateTime?     @db.Timestamptz(3)
   retiredAt       DateTime?     @db.Timestamptz(3)
   isActive        Boolean       @default(true)
-  version         Int           @default(0)
   statusChangedAt DateTime?     @db.Timestamptz(3)
   createdAt       DateTime      @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime      @updatedAt @db.Timestamptz(3)
@@ -634,8 +616,6 @@ model ClientContract {
   createdAt           DateTime         @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime         @updatedAt @db.Timestamptz(3)
 
-  rentals Rental[]
-
   @@index([clientId, startDate])
   @@map("client_contracts")
 }
@@ -643,16 +623,15 @@ model ClientContract {
 //p
 model Client {
   id               String     @id @default(uuid(7))
-  clientCode       String     @unique
-  type             ClientType
+  clientCode       String?    @unique
   name             String
   companyName      String?
   contactPerson    String?
   email            String?
   phoneNumber      String?
-  taxId            String?
-  billingAddress   Json?      @db.JsonB
-  paymentTermsDays Int?
+  // taxId            String?
+  // billingAddress   Json?      @db.JsonB
+  // paymentTermsDays Int?
   isActive         Boolean    @default(true)
   createdAt        DateTime   @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime   @updatedAt @db.Timestamptz(3)
@@ -666,7 +645,6 @@ model Client {
   replacementAssignments ReplacementAssignment[]
   contracts              ClientContract[]
 
-  @@index([type])
   @@index([isActive])
   @@index([phoneNumber])
   @@index([email])
@@ -681,14 +659,15 @@ model RateCard {
   name            String
   description     String?
   vehicleCategory String?
+  vehicleModel    String?
   rentalType      RentalType?
+
   dailyRate       Decimal     @db.Decimal(14, 4)
   weeklyRate      Decimal?    @db.Decimal(14, 4)
   fortnightlyRate Decimal?    @db.Decimal(14, 4)
   monthlyRate     Decimal?    @db.Decimal(14, 4)
   securityDeposit Decimal?    @db.Decimal(14, 2)
-  effectiveFrom   DateTime    @db.Timestamptz(3)
-  effectiveTo     DateTime?   @db.Timestamptz(3)
+
   isActive        Boolean     @default(true)
   terms           Json?       @db.JsonB
   createdAt       DateTime    @default(now()) @db.Timestamptz(3)
@@ -728,7 +707,6 @@ model Rental {
   monthlyRate             Decimal?         @db.Decimal(14, 4)
   securityDepositRequired Decimal?         @db.Decimal(14, 2)
 
-  version                Int       @default(0)
   notes                  String?
   activatedAt            DateTime? @db.Timestamptz(3)
   closedAt               DateTime? @db.Timestamptz(3)
@@ -741,8 +719,6 @@ model Rental {
   closedBy    User?           @relation("RentalClosedBy", fields: [closedById], references: [id], onDelete: Restrict)
   createdAt   DateTime        @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime        @updatedAt @db.Timestamptz(3)
-  contractId  String?
-  contract    ClientContract? @relation(fields: [contractId], references: [id], onDelete: Restrict)
 
   assignments                         VehicleDeployment[]
   deposits                            Deposit[]
@@ -758,7 +734,6 @@ model Rental {
   @@index([clientId, status])
   @@index([riderId, status])
   @@index([hubId])
-  @@index([contractId])
   @@index([startDate, endDate])
   @@index([status, collectionPeriod])
   @@map("rentals")
@@ -809,7 +784,6 @@ model Deposit {
   amountRequired Decimal          @db.Decimal(14, 2)
   status         DepositStatus    @default(REQUIRED)
   dueDate        DateTime?        @db.Timestamptz(3)
-  version        Int              @default(0)
   notes          String?
   createdAt      DateTime         @default(now()) @db.Timestamptz(3)
   updatedAt      DateTime         @updatedAt @db.Timestamptz(3)
@@ -823,7 +797,7 @@ model Deposit {
   @@map("deposits")
 }
 
-//deposit ledger p
+//p
 model DepositLedger {
   id              String             @id @default(uuid(7))
   depositId       String
@@ -831,7 +805,7 @@ model DepositLedger {
   type            DepositEntryType
   direction       LedgerDirection
   amount          Decimal            @db.Decimal(14, 2)
-  reference       String?
+  reference       String?  //UPI transaction id, cheque number, bank transfer reference, physical receipt number
   reason          String?
   authorizedById  String?
   authorizedBy    User?              @relation("DepositAuthorizedBy", fields: [authorizedById], references: [id], onDelete: Restrict)
@@ -842,7 +816,6 @@ model DepositLedger {
   reversesEntryId String?            @unique
   reversesEntry   DepositLedger?     @relation("DepositReversal", fields: [reversesEntryId], references: [id], onDelete: Restrict)
   reversedBy      DepositLedger?     @relation("DepositReversal")
-  idempotencyKey  String?            @unique
   createdAt       DateTime           @default(now()) @db.Timestamptz(3)
 
   @@index([depositId, createdAt])
@@ -852,9 +825,8 @@ model DepositLedger {
 
 //p
 /**
- * One collection per rental due. deposits amount given by rider/client is also a collection row.
- * CHECK ( (purpose = 'RENT' AND rental_due_id IS NOT NULL)
- * OR (purpose = 'DEPOSIT' AND rental_due_id IS NULL) )
+ * Rent collections settle a rental due. Deposit collections have no due.
+ * CHECK ( (purpose = 'RENT' AND rental_due_id IS NOT NULL) OR (purpose = 'DEPOSIT' AND rental_due_id IS NULL) )
  */
 model Collection {
   id              String              @id @default(uuid(7))
@@ -870,13 +842,8 @@ model Collection {
   paymentMethod   PaymentMethod
   referenceNumber String?
   receivedAt      DateTime            @default(now()) @db.Timestamptz(3)
-  status          CollectionStatus    @default(PENDING)
   receivedById    String?
   receivedBy      User?               @relation("CollectionReceivedBy", fields: [receivedById], references: [id], onDelete: Restrict)
-  reconciledAt    DateTime?           @db.Timestamptz(3)
-  reconciledById  String?
-  reconciledBy    User?               @relation("CollectionReconciledBy", fields: [reconciledById], references: [id], onDelete: Restrict)
-  idempotencyKey  String              @unique
   notes           String?
   createdAt       DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime            @updatedAt @db.Timestamptz(3)
@@ -886,7 +853,6 @@ model Collection {
   @@index([clientId, receivedAt])
   @@index([riderId, receivedAt])
   @@index([rentalDueId])
-  @@index([status])
   @@map("collections")
 }
 
@@ -921,10 +887,9 @@ model RentalDue {
  * - rental side (client/rider owes AML): rentalId set
  * - rider side (AML owes rider): riderId set, payStatementId when closed out
  * One economic event can still be two rows.
- * When rent is deducted from rider earnings,
+ * When rent is deducted from rider pay,
  * payStatement code writes RENT_DEDUCTION (rider, DEBIT)
  * and COLLECTION_RECEIVED (rental, CREDIT) for the same amount.
- * Correct, but nothing enforces the pair balances — only idempotencyKey stops duplicates.
  * penalties, incentives, reimbursements are all just entries with a type
  * and direction until a statement claims them.
  */
@@ -943,14 +908,13 @@ model LedgerEntry {
   payStatementId String?
   payStatement   RiderPayStatement? @relation(fields: [payStatementId], references: [id], onDelete: Restrict)
 
-  sourceType      String? //add enum 
+  //It is a soft pointer to the business row that caused the entry. sourceType says what kind of row, sourceId says which one.
+  sourceType      String?   
   sourceId        String?
   reversesEntryId String?      @unique
   reversesEntry   LedgerEntry? @relation("LedgerEntryReversal", fields: [reversesEntryId], references: [id], onDelete: Restrict)
   reversedBy      LedgerEntry? @relation("LedgerEntryReversal")
 
-  idempotencyKey String   @unique
-  metadata       Json?    @db.JsonB
   createdById    String?
   createdBy      User?    @relation("LedgerCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   createdAt      DateTime @default(now()) @db.Timestamptz(3)
@@ -972,13 +936,12 @@ model RiderPayStatement {
   periodStart          DateTime           @db.Timestamptz(3)
   periodEnd            DateTime           @db.Timestamptz(3)
   status               PayStatementStatus @default(DRAFT)
-  grossEarnings        Decimal            @default(0) @db.Decimal(14, 2)
+  grossCredits         Decimal            @default(0) @db.Decimal(14, 2)
   totalDeductions      Decimal            @default(0) @db.Decimal(14, 2)
   netPayable           Decimal            @default(0) @db.Decimal(14, 2)
-  shortfallAmount      Decimal            @default(0) @db.Decimal(14, 2) //increase if deductions exceed earnings
+  shortfallAmount      Decimal            @default(0) @db.Decimal(14, 2) //increase if deductions exceed credits
   requiresManualReview Boolean            @default(false)
   calculationSnapshot  Json?              @db.JsonB
-  version              Int                @default(0)
   approvedById         String?
   approvedBy           User?              @relation("PayStatementApprovedBy", fields: [approvedById], references: [id], onDelete: Restrict)
   approvedAt           DateTime?          @db.Timestamptz(3)
@@ -1001,7 +964,6 @@ model RiderPayStatement {
 }
 
 //p
-
 model RiderPayStatementLine {
   id             String               @id @default(uuid(7))
   payStatementId String
@@ -1050,7 +1012,6 @@ model Invoice {
   discountAmount     Decimal          @default(0) @db.Decimal(14, 2)
   taxAmount          Decimal          @default(0) @db.Decimal(14, 2)
   totalAmount        Decimal          @default(0) @db.Decimal(14, 2)
-  version            Int              @default(0)
   notes              String?
   approvedById       String?
   approvedBy         User?            @relation("InvoiceApprovedBy", fields: [approvedById], references: [id], onDelete: Restrict)
@@ -1094,6 +1055,68 @@ model InvoiceLine {
   @@map("invoice_lines")
 }
 
+//p
+model Document {
+  id             String       @id @default(uuid(7))
+  documentType   DocumentType
+  title          String
+  fileName       String?
+  mimeType       String?
+  fileSize       Int?
+  url            String
+  issueDate      DateTime?    @db.Timestamptz(3)
+  expiryDate     DateTime?    @db.Timestamptz(3)
+  documentNumber String?
+
+  riderId String?
+  rider   Rider?  @relation(fields: [riderId], references: [id], onDelete: Restrict)
+
+  staffId String?
+  staff   Staff?  @relation(fields: [staffId], references: [id], onDelete: Restrict)
+
+  vehicleId String?
+  vehicle   Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+
+  notes    String?
+  metadata Json?   @db.JsonB
+
+  deletedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@index([riderId])
+  @@index([staffId])
+  @@index([vehicleId])
+  @@index([documentType, documentNumber])
+  @@index([expiryDate])
+  @@index([deletedAt])
+  @@map("documents")
+}
+
+//done
+model AuditLog {
+  id         String   @id @default(uuid(7))
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  userName   String
+  userRole   String
+  action     String
+  ipAddress  String?
+  userAgent  String?
+  status     String   @default("SUCCESS")
+  resource   String
+  resourceId String
+  changes    Json?    @db.JsonB
+  summary    String?
+
+  @@index([userId])
+  @@index([resourceId])
+  @@index([resource])
+  @@map("audit_logs")
+}
+
+
 // model Vendor {
 //   id            String   @id @default(uuid(7))
 //   name          String   @unique
@@ -1103,7 +1126,6 @@ model InvoiceLine {
 //   isActive      Boolean  @default(true)
 //   createdAt     DateTime @default(now())
 //   updatedAt     DateTime @updatedAt
-
 //   @@map("vendors")
 // }
 
@@ -1144,7 +1166,6 @@ model Service {
   responsibilityEvidence           Json?            @db.JsonB
   replacementVehicleId             String?
   replacementVehicle               Vehicle?         @relation("ReplacementVehicle", fields: [replacementVehicleId], references: [id], onDelete: Restrict)
-  version                          Int              @default(0)
   createdAt                        DateTime         @default(now()) @db.Timestamptz(3)
   updatedAt                        DateTime         @updatedAt @db.Timestamptz(3)
 
@@ -1175,7 +1196,6 @@ model ServiceCharge {
   description     String?
   sourceType      String?
   sourceId        String?
-  idempotencyKey  String?             @unique
   serviceSpareId  String?             @unique
   serviceSpare    ServiceSpare?       @relation(fields: [serviceSpareId], references: [id], onDelete: Restrict)
   createdAt       DateTime            @default(now()) @db.Timestamptz(3)
@@ -1197,7 +1217,6 @@ model ServiceSpare {
   quantity            Int
   unitCost            Decimal            @db.Decimal(14, 4)
   lineCost            Decimal            @db.Decimal(14, 2)
-  idempotencyKey      String?            @unique
   inventoryMovementId String?            @unique
   inventoryMovement   InventoryMovement? @relation(fields: [inventoryMovementId], references: [id], onDelete: Restrict)
   createdAt           DateTime           @default(now()) @db.Timestamptz(3)
@@ -1306,7 +1325,6 @@ model InventoryMovement {
   movedBy        User?                 @relation("InventoryMovedBy", fields: [movedById], references: [id], onDelete: Restrict)
   referenceType  String?
   referenceId    String?
-  idempotencyKey String?               @unique
   notes          String?
   movedAt        DateTime              @default(now()) @db.Timestamptz(3)
   createdAt      DateTime              @default(now()) @db.Timestamptz(3)
@@ -1323,63 +1341,4 @@ model InventoryMovement {
   @@map("inventory_movements")
 }
 
-//p
-model Document {
-  id             String       @id @default(uuid(7))
-  documentType   DocumentType
-  title          String
-  fileName       String?
-  mimeType       String?
-  fileSize       Int?
-  url            String
-  issueDate      DateTime?    @db.Timestamptz(3)
-  expiryDate     DateTime?    @db.Timestamptz(3)
-  documentNumber String? 
 
-  riderId String?
-  rider   Rider?  @relation(fields: [riderId], references: [id], onDelete: Restrict)
-
-  staffId String?
-  staff   Staff?  @relation(fields: [staffId], references: [id], onDelete: Restrict)
-
-  vehicleId String?
-  vehicle   Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
-
-  notes    String?
-  metadata Json?   @db.JsonB
-
-  deletedAt DateTime? @db.Timestamptz(3)
-  createdAt DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
-
-  @@index([riderId])
-  @@index([staffId])
-  @@index([vehicleId])
-  @@index([documentType, documentNumber])
-  @@index([expiryDate])
-  @@index([deletedAt])
-  @@map("documents")
-}
-
-//done
-model AuditLog {
-  id         String   @id @default(uuid(7))
-  createdAt  DateTime @default(now()) @db.Timestamptz(3)
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Restrict)
-  userName   String
-  userRole   String
-  action     String
-  ipAddress  String?
-  userAgent  String?
-  status     String   @default("SUCCESS")
-  resource   String
-  resourceId String
-  changes    Json?    @db.JsonB
-  summary    String?
-
-  @@index([userId])
-  @@index([resourceId])
-  @@index([resource])
-  @@map("audit_logs")
-}

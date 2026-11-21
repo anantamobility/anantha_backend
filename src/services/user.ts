@@ -2,10 +2,7 @@ import bcrypt from "bcryptjs";
 import type { Prisma } from "../generated/prisma/client.js";
 import prisma from "../database/prismaClient.js";
 import { redisDel } from "../config/redis.js";
-import {
-  AppError,
-  ErrorCode,
-} from "../utils/errors.js";
+import { AppError } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import type {
   AssignUserRoleInput,
@@ -82,7 +79,7 @@ export async function resolveRole(
       });
 
   if (!role) {
-    throw new AppError("Role not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Role not found", 404);
   }
   return role;
 }
@@ -116,7 +113,7 @@ async function loadTarget(tx: Tx, id: string) {
     },
   });
   if (!user || user.deletedAt) {
-    throw new AppError("User not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("User not found", 404);
   }
   return user;
 }
@@ -201,7 +198,7 @@ export async function getUserById(id: string) {
   });
 
   if (!target || target.deletedAt) {
-    throw new AppError("User not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("User not found", 404);
   }
 
   const { deletedAt: _deletedAt, ...safeUser } = target;
@@ -261,8 +258,7 @@ export async function assignUserRole(
     if (existing.id === actor.userId && existing.role.name === "ADMIN" && role.name !== "ADMIN") {
       throw new AppError(
         "Administrators cannot remove their own administrator role",
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
@@ -302,8 +298,7 @@ export async function changeUserStatus(
     if (existing.id === actor.userId && input.status !== "ACTIVE") {
       throw new AppError(
         "Administrators cannot deactivate their own account",
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 
@@ -345,8 +340,7 @@ export async function revokeUserSessions(id: string, actor: AuditActor) {
     if (!revoked) {
       throw new AppError(
         "Session store is unavailable; sessions were not revoked",
-        503,
-        ErrorCode.INTERNAL_ERROR
+        503
       );
     }
 
@@ -372,8 +366,7 @@ export async function deleteUser(id: string, actor: AuditActor) {
     if (existing.id === actor.userId) {
       throw new AppError(
         "Administrators cannot delete their own account",
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
 

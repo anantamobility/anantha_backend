@@ -1,6 +1,5 @@
-import { v4 as uuidv4 } from "uuid";
 import { Prisma } from "../generated/prisma/client.js";
-import { AppError, ErrorCode } from "../utils/errors.js";
+import { AppError } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import {
   buildDuePeriods,
@@ -8,6 +7,7 @@ import {
   deriveDueStatus,
   toDecimal,
 } from "./rental-schedule.js";
+import { recordLedgerEntry } from "./ledger.js";
 
 type Tx = Prisma.TransactionClient;
 
@@ -72,7 +72,7 @@ export async function generateRentalDues(
   });
 
   if (!rental) {
-    throw new AppError("Rental not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Rental not found", 404);
   }
 
   if (
@@ -82,16 +82,14 @@ export async function generateRentalDues(
   ) {
     throw new AppError(
       `Collection dues cannot be generated for a ${rental.status} rental`,
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
 
   if (input.throughDate.getTime() < rental.startDate.getTime()) {
     throw new AppError(
       "throughDate cannot be before the rental start date",
-      400,
-      ErrorCode.VALIDATION_ERROR
+      400
     );
   }
 
@@ -164,11 +162,9 @@ export async function generateRentalDues(
 
     if (!existingKeys.has(key)) generated += 1;
 
-    await tx.ledgerEntry.upsert({
-      where: {
-        idempotencyKey: `rental-due:${due.id}`,
-      },
-      create: {
+    await recordLedgerEntry(
+      tx,
+      {
         rentalId: rental.id,
         entryType: "RENT_CHARGED",
         direction: "DEBIT",
@@ -179,11 +175,9 @@ export async function generateRentalDues(
           .slice(0, 10)} to ${period.periodEnd.toISOString().slice(0, 10)}`,
         sourceType: "RentalDue",
         sourceId: due.id,
-        idempotencyKey: `rental-due:${due.id}`,
-        createdById: input.actor?.userId ?? null,
       },
-      update: {},
-    });
+      input.actor?.userId ?? null
+    );
   }
 
   await refreshOverdueDues(tx, rental.id);
@@ -270,203 +264,3 @@ export async function getRentalFinancialSummary(tx: Tx, rentalId: string) {
   };
 }
 
-async function applyCreditToDues(
-  tx: Tx,
-  rentalId: string,
-  amount: Prisma.Decimal
-) {
-  const dues = await tx.rentalDue.findMany({
-    where: {
-      rentalId,
-      status: { in: [...OPEN_DUE_STATUSES] },
-      outstandingAmount: { gt: 0 },
-    },
-    orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }, { id: "asc" }],
-    select: {
-      id: true,
-      amountDue: true,
-      amountCollected: true,
-      outstandingAmount: true,
-      dueDate: true,
-    },
-  });
-
-  const totalOutstanding = dues.reduce(
-    (total, due) => total.add(toDecimal(due.outstandingAmount)),
-    new Prisma.Decimal(0)
-  );
-
-  if (totalOutstanding.lt(amount)) {
-    throw new AppError(
-      "Adjustment exceeds the rental outstanding balance",
-      409,
-      ErrorCode.CONFLICT
-    );
-  }
-
-  let remaining = amount;
-  for (const due of dues) {
-    if (remaining.lte(0)) break;
-
-    const outstanding = toDecimal(due.outstandingAmount);
-    const applied = Prisma.Decimal.min(outstanding, remaining);
-    const nextOutstanding = outstanding.sub(applied);
-    const nextAmountDue = toDecimal(due.amountDue).sub(applied);
-    const amountCollected = toDecimal(due.amountCollected);
-
-    const updated = await tx.rentalDue.updateMany({
-      where: {
-        id: due.id,
-        outstandingAmount: { gte: applied },
-      },
-      data: {
-        amountDue: nextAmountDue,
-        outstandingAmount: nextOutstanding,
-        status: deriveDueStatus({
-          amountCollected,
-          outstandingAmount: nextOutstanding,
-          dueDate: due.dueDate,
-        }),
-      },
-    });
-
-    if (updated.count === 0) {
-      throw new AppError(
-        "Collection due was modified concurrently; please retry",
-        409,
-        ErrorCode.CONFLICT
-      );
-    }
-
-    remaining = remaining.sub(applied);
-  }
-
-  return amount.sub(remaining);
-}
-
-async function applyDebitToDues(
-  tx: Tx,
-  rentalId: string,
-  amount: Prisma.Decimal
-) {
-  const due = await tx.rentalDue.findFirst({
-    where: { rentalId },
-    orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }, { id: "asc" }],
-    select: {
-      id: true,
-      amountDue: true,
-      amountCollected: true,
-      outstandingAmount: true,
-      dueDate: true,
-    },
-  });
-
-  if (!due) {
-    throw new AppError(
-      "A debit rent adjustment requires at least one generated collection due",
-      409,
-      ErrorCode.CONFLICT
-    );
-  }
-
-  const nextOutstanding = toDecimal(due.outstandingAmount).add(amount);
-  const nextAmountDue = toDecimal(due.amountDue).add(amount);
-
-  const updated = await tx.rentalDue.updateMany({
-    where: { id: due.id },
-    data: {
-      amountDue: nextAmountDue,
-      outstandingAmount: nextOutstanding,
-      status: deriveDueStatus({
-        amountCollected: toDecimal(due.amountCollected),
-        outstandingAmount: nextOutstanding,
-        dueDate: due.dueDate,
-      }),
-    },
-  });
-
-  if (updated.count === 0) {
-    throw new AppError(
-      "Collection due was modified concurrently; please retry",
-      409,
-      ErrorCode.CONFLICT
-    );
-  }
-
-  return amount;
-}
-
-export async function recordRentAdjustment(
-  tx: Tx,
-  input: {
-    rentalId: string;
-    amount: Prisma.Decimal;
-    direction: "CREDIT" | "DEBIT";
-    reason: string;
-    occurredAt?: Date;
-    idempotencyKey?: string;
-    actor: AuditActor;
-  }
-) {
-  const rental = await tx.rental.findUnique({
-    where: { id: input.rentalId },
-    select: {
-      id: true,
-      rentalNumber: true,
-      status: true,
-    },
-  });
-
-  if (!rental) {
-    throw new AppError("Rental not found", 404, ErrorCode.NOT_FOUND);
-  }
-
-  const idempotencyKey =
-    input.idempotencyKey ?? `rent-adjust:${input.rentalId}:${uuidv4()}`;
-
-  const existing = await tx.ledgerEntry.findUnique({
-    where: { idempotencyKey },
-  });
-
-  if (existing) {
-    return { entry: existing, applied: new Prisma.Decimal(0), duplicate: true };
-  }
-
-  const applied =
-    input.direction === "CREDIT"
-      ? await applyCreditToDues(tx, input.rentalId, input.amount)
-      : await applyDebitToDues(tx, input.rentalId, input.amount);
-
-  const entry = await tx.ledgerEntry.create({
-    data: {
-      rentalId: input.rentalId,
-      entryType: "RENT_ADJUSTMENT",
-      direction: input.direction,
-      amount: input.amount,
-      occurredAt: input.occurredAt ?? new Date(),
-      description: input.reason,
-      sourceType: "RentalAdjustment",
-      sourceId: input.rentalId,
-      idempotencyKey,
-      createdById: input.actor.userId,
-    },
-  });
-
-  await logAudit({
-    ...input.actor,
-    action: "ADJUST",
-    resource: "Rental",
-    resourceId: rental.id,
-    newData: {
-      rentalNumber: rental.rentalNumber,
-      amount: input.amount,
-      direction: input.direction,
-      reason: input.reason,
-    },
-    summary: `${input.actor.userName} recorded a ${input.direction} rent adjustment on rental ${rental.rentalNumber}.`,
-    db: tx,
-    throwOnError: true,
-  });
-
-  return { entry, applied, duplicate: false };
-}

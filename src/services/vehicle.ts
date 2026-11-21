@@ -1,9 +1,6 @@
 import prisma from "../database/prismaClient.js";
 import { Prisma, VehicleStatus } from "../generated/prisma/client.js";
-import {
-  AppError,
-  ErrorCode,
-} from "../utils/errors.js";
+import { AppError } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import type {
   ChangeVehicleStatusInput,
@@ -33,7 +30,6 @@ export const vehicleListSelect = {
   acquiredAt: true,
   retiredAt: true,
   isActive: true,
-  version: true,
   createdAt: true,
   updatedAt: true,
   hub: { select: vehicleHubSelect },
@@ -43,11 +39,9 @@ export const vehicleDetailSelect = {
   ...vehicleListSelect,
   vehicleCategory: true,
   vehicleType: true,
-  seats: true,
   batteryType: true,
   batteryCapacity: true,
   nominalRange: true,
-  bootSpace: true,
   chargingOptions: true,
   chargerProvided: true,
   noOfTyres: true,
@@ -63,7 +57,6 @@ export const vehicleDetailSelect = {
   dateOfOperation: true,
   warrantyStartDate: true,
   warrantyEndDate: true,
-  safeCabCertificateExpiryDate: true,
   telematicsExpiryDate: true,
   loanProvider: true,
   emiAmount: true,
@@ -134,7 +127,7 @@ function tyresInput(tyres: unknown[] | null | undefined) {
 async function assertHubExists(tx: Prisma.TransactionClient, hubId: string) {
   const hub = await tx.hub.findUnique({ where: { id: hubId } });
   if (!hub) {
-    throw new AppError("Hub not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Hub not found", 404);
   }
 }
 
@@ -159,11 +152,9 @@ export async function createVehicle(
         isActive: input.isActive ?? true,
         vehicleCategory: input.vehicleCategory ?? null,
         vehicleType: input.vehicleType ?? null,
-        seats: input.seats ?? null,
         batteryType: input.batteryType ?? null,
         batteryCapacity: input.batteryCapacity ?? null,
         nominalRange: input.nominalRange ?? null,
-        bootSpace: input.bootSpace ?? null,
         chargingOptions: input.chargingOptions ?? null,
         chargerProvided: input.chargerProvided ?? null,
         noOfTyres: input.noOfTyres ?? null,
@@ -178,8 +169,6 @@ export async function createVehicle(
         dateOfOperation: input.dateOfOperation ?? null,
         warrantyStartDate: input.warrantyStartDate ?? null,
         warrantyEndDate: input.warrantyEndDate ?? null,
-        safeCabCertificateExpiryDate:
-          input.safeCabCertificateExpiryDate ?? null,
         telematicsExpiryDate: input.telematicsExpiryDate ?? null,
         loanProvider: input.loanProvider ?? null,
         emiAmount: input.emiAmount ?? null,
@@ -280,7 +269,7 @@ export async function getVehicleById(id: string) {
   });
 
   if (!vehicle || vehicle.deletedAt) {
-    throw new AppError("Vehicle not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Vehicle not found", 404);
   }
 
   const { deletedAt: _deletedAt, ...safeVehicle } = vehicle;
@@ -296,7 +285,7 @@ export async function updateVehicle(
     return await prisma.$transaction(async (tx) => {
       const existing = await tx.vehicle.findUnique({ where: { id } });
       if (!existing || existing.deletedAt) {
-        throw new AppError("Vehicle not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Vehicle not found", 404);
       }
       if (input.hubId !== undefined && input.hubId !== null) {
       }
@@ -325,13 +314,11 @@ export async function updateVehicle(
         data.vehicleCategory = input.vehicleCategory;
       }
       if (input.vehicleType !== undefined) data.vehicleType = input.vehicleType;
-      if (input.seats !== undefined) data.seats = input.seats;
       if (input.batteryType !== undefined) data.batteryType = input.batteryType;
       if (input.batteryCapacity !== undefined) {
         data.batteryCapacity = input.batteryCapacity;
       }
       if (input.nominalRange !== undefined) data.nominalRange = input.nominalRange;
-      if (input.bootSpace !== undefined) data.bootSpace = input.bootSpace;
       if (input.chargingOptions !== undefined) {
         data.chargingOptions = input.chargingOptions;
       }
@@ -369,9 +356,6 @@ export async function updateVehicle(
       }
       if (input.warrantyEndDate !== undefined) {
         data.warrantyEndDate = input.warrantyEndDate;
-      }
-      if (input.safeCabCertificateExpiryDate !== undefined) {
-        data.safeCabCertificateExpiryDate = input.safeCabCertificateExpiryDate;
       }
       if (input.telematicsExpiryDate !== undefined) {
         data.telematicsExpiryDate = input.telematicsExpiryDate;
@@ -446,7 +430,7 @@ export async function deleteVehicle(id: string, actor: AuditActor) {
     return await prisma.$transaction(async (tx) => {
       const existing = await tx.vehicle.findUnique({ where: { id } });
       if (!existing || existing.deletedAt) {
-        throw new AppError("Vehicle not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Vehicle not found", 404);
       }
 
       const [activeAssignments, openServices] = await Promise.all([
@@ -464,16 +448,14 @@ export async function deleteVehicle(id: string, actor: AuditActor) {
       if (activeAssignments > 0) {
         throw new AppError(
           "Vehicle cannot be deleted while it has an active assignment",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
       if (openServices > 0) {
         throw new AppError(
           "Vehicle cannot be deleted while it has an open service record",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -516,7 +498,7 @@ export async function changeVehicleStatus(
     return await prisma.$transaction(async (tx) => {
       const vehicle = await tx.vehicle.findUnique({ where: { id } });
       if (!vehicle || vehicle.deletedAt) {
-        throw new AppError("Vehicle not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Vehicle not found", 404);
       }
 
       const previousStatus = vehicle.status;
@@ -525,16 +507,14 @@ export async function changeVehicleStatus(
       if (previousStatus === nextStatus) {
         throw new AppError(
           `Vehicle already has status ${nextStatus}`,
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
       if (!ALLOWED_VEHICLE_STATUS_TRANSITIONS[previousStatus].includes(nextStatus)) {
         throw new AppError(
           `Invalid status transition from ${previousStatus} to ${nextStatus}`,
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -548,8 +528,7 @@ export async function changeVehicleStatus(
       ) {
         throw new AppError(
           "Vehicle has an active assignment and cannot change to this status",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -557,19 +536,17 @@ export async function changeVehicleStatus(
         nextStatus === VehicleStatus.RETIRED ? new Date() : undefined;
       const statusChangedAt = new Date();
 
-      // Conditional update on the version we read guarantees that a concurrent
+      // Conditional update on the status we read guarantees that a concurrent
       // status change cannot silently overwrite a newer status.
       const updateResult = await tx.vehicle.updateMany({
         where: {
           id,
           status: previousStatus,
-          version: vehicle.version,
           deletedAt: null,
         },
         data: {
           status: nextStatus,
           statusChangedAt,
-          version: { increment: 1 },
           ...(retiredAt ? { retiredAt } : {}),
         },
       });
@@ -577,8 +554,7 @@ export async function changeVehicleStatus(
       if (updateResult.count === 0) {
         throw new AppError(
           "Vehicle status was modified concurrently; please retry",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -587,7 +563,6 @@ export async function changeVehicleStatus(
         ...currentVehicle,
         status: nextStatus,
         statusChangedAt,
-        version: vehicle.version + 1,
         ...(retiredAt ? { retiredAt } : {}),
       };
 

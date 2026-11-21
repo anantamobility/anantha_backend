@@ -31,14 +31,6 @@ export const paymentMethodSchema = z.enum([
   "OTHER",
 ]);
 
-export const collectionStatusSchema = z.enum([
-  "PENDING",
-  "CLEARED",
-  "FAILED",
-  "REFUNDED",
-  "REVERSED",
-]);
-
 export const rentalDueStatusSchema = z.enum([
   "PENDING",
   "PARTIALLY_PAID",
@@ -53,8 +45,6 @@ export const createCollectionSchema = z
     paymentMethod: paymentMethodSchema,
     referenceNumber: z.string().trim().min(1).max(200).nullable().optional(),
     receivedAt: z.coerce.date().optional(),
-    status: z.enum(["PENDING", "CLEARED"]).optional(),
-    idempotencyKey: z.string().trim().min(1).max(200).optional(),
     notes: z.string().trim().min(1).max(2000).nullable().optional(),
   })
   .strict();
@@ -62,23 +52,22 @@ export const createCollectionSchema = z
 export const listCollectionsQuerySchema = paginationQuerySchema
   .extend(searchQuerySchema.shape)
   .extend({
+    purpose: z.enum(["RENT", "DEPOSIT"]).optional(),
     rentalId: z.string().uuid("rentalId must be a valid UUID").optional(),
     clientId: z.string().uuid("clientId must be a valid UUID").optional(),
     riderId: z.string().uuid("riderId must be a valid UUID").optional(),
-    status: collectionStatusSchema.optional(),
     paymentMethod: paymentMethodSchema.optional(),
     from: z.coerce.date().optional(),
     to: z.coerce.date().optional(),
     sortBy: z
-      .enum(["receivedAt", "amount", "status", "createdAt", "updatedAt"])
+      .enum(["receivedAt", "amount", "createdAt", "updatedAt"])
       .default("receivedAt"),
     sortOrder: z.enum(["asc", "desc"]).default("desc"),
   });
 
 export const listRentalCollectionsQuerySchema = paginationQuerySchema.extend({
-  status: collectionStatusSchema.optional(),
   sortBy: z
-    .enum(["receivedAt", "amount", "status", "createdAt", "updatedAt"])
+    .enum(["receivedAt", "amount", "createdAt", "updatedAt"])
     .default("receivedAt"),
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
 });
@@ -98,13 +87,6 @@ export const generateDuesSchema = z
   .strict()
   .default({});
 
-export const clearCollectionSchema = z
-  .object({
-    reconciledAt: z.coerce.date().optional(),
-  })
-  .strict()
-  .default({});
-
 export type CreateCollectionInput = z.infer<typeof createCollectionSchema>;
 export type ListCollectionsQuery = z.infer<typeof listCollectionsQuerySchema>;
 export type ListRentalCollectionsQuery = z.infer<
@@ -112,4 +94,3 @@ export type ListRentalCollectionsQuery = z.infer<
 >;
 export type ListRentalDuesQuery = z.infer<typeof listRentalDuesQuerySchema>;
 export type GenerateDuesInput = z.infer<typeof generateDuesSchema>;
-export type ClearCollectionInput = z.infer<typeof clearCollectionSchema>;

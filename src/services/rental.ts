@@ -1,21 +1,17 @@
 import { v4 as uuidv4 } from "uuid";
 import { Prisma } from "../generated/prisma/client.js";
 import prisma from "../database/prismaClient.js";
-import {
-  AppError,
-  ErrorCode,
-} from "../utils/errors.js";
+import { AppError } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import { resolveRentalPricing } from "./rental-pricing.js";
 import {
   getDepositBalanceByRental,
   getOrCreateDepositForRental,
   recordDepositLedgerEntry,
-} from "./ledger.js";
+} from "./depositLedger.js";
 import {
   generateRentalDues,
   getRentalFinancialSummary,
-  recordRentAdjustment,
 } from "./rental-dues.js";
 import { toDecimal } from "./rental-schedule.js";
 import type {
@@ -43,7 +39,6 @@ const CLOSED_RENTAL_STATUSES = ["COMPLETED", "TERMINATED", "CANCELLED"];
 const rentalClientSelect = {
   id: true,
   clientCode: true,
-  type: true,
   name: true,
   companyName: true,
 } as const;
@@ -73,7 +68,6 @@ const rentalVehicleSelect = {
   make: true,
   model: true,
   status: true,
-  version: true,
 } as const;
 
 export const rentalListSelect = {
@@ -96,7 +90,6 @@ export const rentalListSelect = {
   fortnightlyRate: true,
   monthlyRate: true,
   securityDepositRequired: true,
-  version: true,
   notes: true,
   activatedAt: true,
   closedAt: true,
@@ -135,7 +128,6 @@ export const rentalDetailSelect = {
       amountRequired: true,
       status: true,
       dueDate: true,
-      version: true,
     },
   },
   _count: {
@@ -173,27 +165,19 @@ function isClosedStatus(status: string) {
   return CLOSED_RENTAL_STATUSES.includes(status);
 }
 
-async function assertClient(tx: Tx, rentalType: string, clientId: string) {
+async function assertClient(tx: Tx, clientId: string) {
   const client = await tx.client.findUnique({
     where: { id: clientId },
-    select: { id: true, type: true, isActive: true, deletedAt: true },
+    select: { id: true, isActive: true, deletedAt: true },
   });
 
   if (!client || client.deletedAt) {
-    throw new AppError("Client not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Client not found", 404);
   }
   if (!client.isActive) {
     throw new AppError(
       "Client is inactive and cannot be used for a rental",
-      409,
-      ErrorCode.CONFLICT
-    );
-  }
-  if (rentalType === "B2B" && client.type !== "CORPORATE") {
-    throw new AppError(
-      "B2B rentals require a CORPORATE client",
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
 
@@ -224,27 +208,24 @@ async function assertRider(
   });
 
   if (!rider || rider.deletedAt) {
-    throw new AppError("Rider not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Rider not found", 404);
   }
   if (rider.status !== "ACTIVE") {
     throw new AppError(
       `Rider must be ACTIVE to be used in a rental (current status: ${rider.status})`,
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
   if (rider.clientId && rider.clientId !== input.clientId) {
     throw new AppError(
       "Rider does not belong to the selected client",
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
   if (rider.rentalType && rider.rentalType !== input.rentalType) {
     throw new AppError(
       "Rider rental classification does not match the rental type",
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
   if (
@@ -254,8 +235,7 @@ async function assertRider(
   ) {
     throw new AppError(
       "Rider B2C mode does not match the rental B2C mode",
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
   if (
@@ -265,8 +245,7 @@ async function assertRider(
   ) {
     throw new AppError(
       "Rider B2B management mode does not match the rental B2B mode",
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
 
@@ -279,13 +258,12 @@ async function assertHub(tx: Tx, hubId: string) {
     select: { id: true, isActive: true },
   });
   if (!hub) {
-    throw new AppError("Hub not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Hub not found", 404);
   }
   if (!hub.isActive) {
     throw new AppError(
       "Hub is inactive and cannot be used for a rental",
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
   return hub;
@@ -311,8 +289,7 @@ async function assignVehicleWithinTransaction(
   if (isClosedStatus(input.rental.status)) {
     throw new AppError(
       `Vehicle cannot be assigned to a ${input.rental.status} rental`,
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
 
@@ -325,8 +302,7 @@ async function assignVehicleWithinTransaction(
     if (activeForRental > 0) {
       throw new AppError(
         "Rental already has an active vehicle assignment",
-        409,
-        ErrorCode.CONFLICT
+        409
       );
     }
   }
@@ -338,26 +314,23 @@ async function assignVehicleWithinTransaction(
       registrationNumber: true,
       status: true,
       isActive: true,
-      version: true,
       deletedAt: true,
     },
   });
 
   if (!vehicle || vehicle.deletedAt) {
-    throw new AppError("Vehicle not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Vehicle not found", 404);
   }
   if (!vehicle.isActive) {
     throw new AppError(
       "Vehicle is inactive and cannot be assigned",
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
   if (vehicle.status !== "IDLE") {
     throw new AppError(
       `Vehicle is not available for assignment (current status: ${vehicle.status})`,
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
 
@@ -367,8 +340,7 @@ async function assignVehicleWithinTransaction(
   if (activeForVehicle > 0) {
     throw new AppError(
       "Vehicle already has an active assignment",
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
 
@@ -391,21 +363,18 @@ async function assignVehicleWithinTransaction(
     where: {
       id: vehicle.id,
       status: "IDLE",
-      version: vehicle.version,
       deletedAt: null,
     },
     data: {
       status: "DEPLOYED",
       statusChangedAt: new Date(),
-      version: { increment: 1 },
     },
   });
 
   if (updatedVehicle.count === 0) {
     throw new AppError(
       "Vehicle status was modified concurrently; please retry",
-      409,
-      ErrorCode.CONFLICT
+      409
     );
   }
 
@@ -454,7 +423,7 @@ export async function createRental(
     });
 
     return await prisma.$transaction(async (tx) => {
-      await assertClient(tx, input.rentalType, input.clientId);
+      await assertClient(tx, input.clientId);
 
       if (input.riderId) {
         await assertRider(tx, {
@@ -478,13 +447,12 @@ export async function createRental(
           },
         });
         if (!vehicle || vehicle.deletedAt) {
-          throw new AppError("Vehicle not found", 404, ErrorCode.NOT_FOUND);
+          throw new AppError("Vehicle not found", 404);
         }
         if (!vehicle.isActive || vehicle.status !== "IDLE") {
           throw new AppError(
             "Vehicle is not available for assignment",
-            409,
-            ErrorCode.CONFLICT
+            409
           );
         }
       }
@@ -623,7 +591,7 @@ export async function getRentalById(id: string) {
   });
 
   if (!rental) {
-    throw new AppError("Rental not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Rental not found", 404);
   }
 
   const financialSummary = await prisma.$transaction(async (tx) =>
@@ -653,7 +621,7 @@ export async function assignVehicle(
       });
 
       if (!rental) {
-        throw new AppError("Rental not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Rental not found", 404);
       }
 
       const assignment = await assignVehicleWithinTransaction(
@@ -683,15 +651,14 @@ export async function activateRental(
     return await prisma.$transaction(async (tx) => {
       const rental = await tx.rental.findUnique({ where: { id } });
       if (!rental) {
-        throw new AppError("Rental not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Rental not found", 404);
       }
 
       const allowed = RENTAL_STATUS_TRANSITIONS[rental.status] as readonly string[];
       if (!allowed.includes("ACTIVE")) {
         throw new AppError(
           `Rental cannot be activated from status ${rental.status}`,
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -701,8 +668,7 @@ export async function activateRental(
       if (activeAssignments === 0) {
         throw new AppError(
           "Rental must have an active vehicle assignment before activation",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -710,25 +676,22 @@ export async function activateRental(
       if (activatedAt.getTime() < rental.startDate.getTime()) {
         throw new AppError(
           "activatedAt cannot be before the rental start date",
-          400,
-          ErrorCode.VALIDATION_ERROR
+          400
         );
       }
 
       const updated = await tx.rental.updateMany({
-        where: { id, status: rental.status, version: rental.version },
+        where: { id, status: rental.status },
         data: {
           status: "ACTIVE",
           activatedAt,
-          version: { increment: 1 },
         },
       });
 
       if (updated.count === 0) {
         throw new AppError(
           "Rental was modified concurrently; please retry",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -772,33 +735,19 @@ export async function closeRental(
           hubId: true,
           startDate: true,
           endDate: true,
-          version: true,
           notes: true,
           collectionPeriod: true,
         },
       });
 
       if (!rental) {
-        throw new AppError("Rental not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Rental not found", 404);
       }
 
       if (rental.status !== "ACTIVE" && rental.status !== "ON_HOLD") {
         throw new AppError(
           `Only an ACTIVE or ON_HOLD rental can be closed (current status: ${rental.status})`,
-          409,
-          ErrorCode.CONFLICT
-        );
-      }
-
-      const lock = await tx.rental.updateMany({
-        where: { id, version: rental.version },
-        data: { version: { increment: 1 } },
-      });
-      if (lock.count === 0) {
-        throw new AppError(
-          "Rental was modified concurrently; please retry",
-          409,
-          ErrorCode.CONFLICT
+          409
         );
       }
 
@@ -806,8 +755,7 @@ export async function closeRental(
       if (endDate.getTime() < rental.startDate.getTime()) {
         throw new AppError(
           "endDate cannot be before the rental start date",
-          400,
-          ErrorCode.VALIDATION_ERROR
+          400
         );
       }
 
@@ -817,29 +765,6 @@ export async function closeRental(
         actor,
       });
 
-      if (input.rentAdjustment) {
-        await recordRentAdjustment(tx, {
-          rentalId: rental.id,
-          amount: new Prisma.Decimal(input.rentAdjustment.amount),
-          direction: input.rentAdjustment.direction,
-          reason: input.rentAdjustment.reason,
-          idempotencyKey: input.rentAdjustment.idempotencyKey,
-          actor,
-        });
-      }
-
-      if (input.depositAdjustment) {
-        await recordDepositLedgerEntry(tx, {
-          rentalId: rental.id,
-          type: "ADJUSTMENT",
-          direction: input.depositAdjustment.direction,
-          amount: new Prisma.Decimal(input.depositAdjustment.amount),
-          reason: input.depositAdjustment.reason,
-          idempotencyKey: input.depositAdjustment.idempotencyKey,
-          actor,
-        });
-      }
-
       if (input.depositRefund) {
         await recordDepositLedgerEntry(tx, {
           rentalId: rental.id,
@@ -848,7 +773,6 @@ export async function closeRental(
           amount: new Prisma.Decimal(input.depositRefund.amount),
           reference: input.depositRefund.reference ?? null,
           reason: input.depositRefund.reason ?? "Rental closure refund",
-          idempotencyKey: input.depositRefund.idempotencyKey,
           actor,
         });
       }
@@ -866,7 +790,6 @@ export async function closeRental(
               id: true,
               registrationNumber: true,
               status: true,
-              version: true,
               deletedAt: true,
             },
           },
@@ -905,21 +828,18 @@ export async function closeRental(
             where: {
               id: vehicle.id,
               status: vehicle.status,
-              version: vehicle.version,
               deletedAt: null,
             },
             data: {
               status: returnStatus,
               statusChangedAt: new Date(),
-              version: { increment: 1 },
             },
           });
 
           if (updatedVehicle.count === 0) {
             throw new AppError(
               "Vehicle status was modified concurrently; please retry",
-              409,
-              ErrorCode.CONFLICT
+              409
             );
           }
 

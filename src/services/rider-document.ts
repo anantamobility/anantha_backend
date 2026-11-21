@@ -3,15 +3,10 @@ import { v4 as uuidv4 } from "uuid";
 import { MAX_UPLOAD_BYTES } from "../middleware/upload.js";
 import prisma from "../database/prismaClient.js";
 import {
-  DocumentType,
-  Prisma,
-} from "../generated/prisma/client.js";
+  DocumentType, Prisma, } from "../generated/prisma/client.js";
 import { deleteDocument, uploadDocument } from "../storage/cloudinary.js";
 import { safeDocumentExtension } from "../storage/mime.js";
-import {
-  AppError,
-  ErrorCode,
-} from "../utils/errors.js";
+import { AppError } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import type {
   ListRiderDocumentsQuery,
@@ -45,7 +40,7 @@ async function assertRiderExists(riderId: string) {
   });
 
   if (!rider || rider.deletedAt) {
-    throw new AppError("Rider not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Rider not found", 404);
   }
 
   return rider;
@@ -99,7 +94,7 @@ export async function getRiderDocument(riderId: string, documentId: string) {
   });
 
   if (!document) {
-    throw new AppError("Document not found", 404, ErrorCode.NOT_FOUND);
+    throw new AppError("Document not found", 404);
   }
 
   return document;
@@ -112,14 +107,13 @@ export async function uploadRiderDocument(
   actor: AuditActor
 ) {
   if (!file) {
-    throw new AppError("A document file is required", 400, ErrorCode.VALIDATION_ERROR);
+    throw new AppError("A document file is required", 400);
   }
 
   if (file.size > MAX_UPLOAD_BYTES) {
     throw new AppError(
       `File exceeds the ${MAX_UPLOAD_BYTES} byte limit`,
-      400,
-      ErrorCode.VALIDATION_ERROR
+      400
     );
   }
 
@@ -197,7 +191,7 @@ export async function deleteRiderDocument(
       });
 
       if (!existing) {
-        throw new AppError("Document not found", 404, ErrorCode.NOT_FOUND);
+        throw new AppError("Document not found", 404);
       }
 
       const document = await tx.document.update({

@@ -1,4 +1,4 @@
-import { AppError, ErrorCode } from "./errors.js";
+import { AppError } from "./errors.js";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const DEFAULT_RANGE_DAYS = 30;
@@ -15,8 +15,7 @@ export function resolveTrendRange(query: {
   if (startDate.getTime() > endDate.getTime()) {
     throw new AppError(
       "startDate must be before or equal to endDate",
-      400,
-      ErrorCode.VALIDATION_ERROR
+      400
     );
   }
 
