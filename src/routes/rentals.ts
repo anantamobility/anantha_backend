@@ -47,30 +47,32 @@ r.get(
 );
 
 // Collection dues and rental collections
-// r.get(
-//   "/:id/dues",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("rentalDue", "read", { policy: false }),
-//   validate(listRentalDuesQuerySchema, "query"),
-//   getRentalDues
-// );
-// r.post(
-//   "/:id/dues/generate",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("rentalDue", "generate", { policy: false }),
-//   validate(generateDuesSchema),
-//   generateRentalDues
-// );
-// r.get(
-//   "/:id/collections",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("collection", "read", { policy: false }),
-//   validate(listRentalCollectionsQuerySchema, "query"),
-//   getRentalCollections
-// );
+r.get(
+  "/:id/dues",
+  verifyToken,
+  validate(idParamSchema, "params"),
+  authorize("rentalDue", "read", { policy: false }),
+  validate(listRentalDuesQuerySchema, "query"),
+  getRentalDues
+);
+
+//needs deep review later
+r.post(
+  "/:id/dues/generate",
+  verifyToken,
+  validate(idParamSchema, "params"),
+  authorize("rentalDue", "generate", { policy: false }),
+  validate(generateDuesSchema),
+  generateRentalDues
+);
+r.get(
+  "/:id/collections",
+  verifyToken,
+  validate(idParamSchema, "params"),
+  authorize("collection", "read", { policy: false }),
+  validate(listRentalCollectionsQuerySchema, "query"),
+  getRentalCollections
+);
 
 // Lifecycle
 // r.patch(

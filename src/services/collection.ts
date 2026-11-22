@@ -7,7 +7,6 @@ import { recordLedgerEntry } from "./ledger.js";
 import {
   generateRentalDues,
   getRentalFinancialSummary,
-  refreshOverdueDues,
   rentalDueSelect,
 } from "./rental-dues.js";
 import type {
@@ -328,7 +327,7 @@ export async function listRentalCollections(
   rentalId: string,
   query: ListRentalCollectionsQuery
 ) {
-  const rental = await assertRentalExists(rentalId);
+  await assertRentalExists(rentalId);
   const { page, limit } = query;
 
   const where: Prisma.CollectionWhereInput = { rentalDue: { rentalId } };
@@ -337,7 +336,7 @@ export async function listRentalCollections(
     [query.sortBy]: query.sortOrder,
   };
 
-  const [collections, total, summary] = await Promise.all([
+  const [collections, total] = await Promise.all([
     prisma.collection.findMany({
       where,
       select: collectionSelect,
@@ -346,13 +345,10 @@ export async function listRentalCollections(
       take: limit,
     }),
     prisma.collection.count({ where }),
-    prisma.$transaction(async (tx) => getRentalFinancialSummary(tx, rentalId)),
   ]);
 
   return {
-    rental,
     collections,
-    summary,
     pagination: {
       page,
       limit,
@@ -366,12 +362,8 @@ export async function listRentalDues(
   rentalId: string,
   query: ListRentalDuesQuery
 ) {
-  const rental = await assertRentalExists(rentalId);
+  await assertRentalExists(rentalId);
   const { page, limit } = query;
-
-  await prisma.$transaction(async (tx) => {
-    await refreshOverdueDues(tx, rentalId);
-  });
 
   const where: Prisma.RentalDueWhereInput = { rentalId };
   if (query.status) where.status = query.status;
@@ -380,7 +372,7 @@ export async function listRentalDues(
     [query.sortBy]: query.sortOrder,
   };
 
-  const [dues, total, summary] = await Promise.all([
+  const [dues, total] = await Promise.all([
     prisma.rentalDue.findMany({
       where,
       select: rentalDueSelect,
@@ -389,13 +381,10 @@ export async function listRentalDues(
       take: limit,
     }),
     prisma.rentalDue.count({ where }),
-    prisma.$transaction(async (tx) => getRentalFinancialSummary(tx, rentalId)),
   ]);
 
   return {
-    rental,
     dues,
-    summary,
     pagination: {
       page,
       limit,

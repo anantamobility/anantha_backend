@@ -34,19 +34,6 @@ export const rentalDueSelect = {
   updatedAt: true,
 } as const;
 
-export async function refreshOverdueDues(tx: Tx, rentalId?: string) {
-  const now = new Date();
-  return tx.rentalDue.updateMany({
-    where: {
-      ...(rentalId ? { rentalId } : {}),
-      status: { in: ["PENDING", "PARTIALLY_PAID"] },
-      dueDate: { lt: now },
-      outstandingAmount: { gt: 0 },
-    },
-    data: { status: "OVERDUE" },
-  });
-}
-
 export async function generateRentalDues(
   tx: Tx,
   input: {
@@ -183,8 +170,6 @@ export async function generateRentalDues(
       );
     }
   }
-
-  await refreshOverdueDues(tx, rental.id);
 
   const dues = await tx.rentalDue.findMany({
     where: { rentalId: rental.id },
