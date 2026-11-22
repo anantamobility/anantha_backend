@@ -19,7 +19,7 @@ import type {
 type Tx = Prisma.TransactionClient;
 
 const OPEN_DUE_STATUSES = ["PENDING", "PARTIALLY_PAID", "OVERDUE"] as const;
-const COLLECTIBLE_RENTAL_STATUSES = ["ACTIVE", "ON_HOLD"] as const;
+const COLLECTIBLE_RENTAL_STATUSES = ["ACTIVE"] as const;
 
 export const payStatementLineSelect = {
   id: true,

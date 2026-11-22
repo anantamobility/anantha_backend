@@ -551,7 +551,6 @@ export async function deleteRider(id: string, actor: AuditActor) {
               RentalStatus.DRAFT,
               RentalStatus.PENDING_APPROVAL,
               RentalStatus.ACTIVE,
-              RentalStatus.ON_HOLD,
             ],
           },
         },

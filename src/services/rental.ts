@@ -27,7 +27,7 @@ type Tx = Prisma.TransactionClient;
 export const RENTAL_STATUS_TRANSITIONS = {
   DRAFT: ["PENDING_APPROVAL", "ACTIVE", "CANCELLED"],
   PENDING_APPROVAL: ["ACTIVE", "CANCELLED"],
-  ACTIVE: ["ON_HOLD", "COMPLETED", "TERMINATED"],
+  ACTIVE: ["COMPLETED", "TERMINATED"],
   ON_HOLD: ["ACTIVE", "TERMINATED"],
   COMPLETED: [],
   TERMINATED: [],
@@ -420,7 +420,8 @@ export async function createRental(
         hubId: input.hubId,
         startDate: input.startDate,
         expectedEndDate: input.expectedEndDate ?? null,
-        status: "DRAFT",
+        status: "ACTIVE",
+        activatedAt: new Date(),
         collectionPeriod: input.collectionPeriod,
         dailyRate: pricing.rates.dailyRate,
         weeklyRate: pricing.rates.weeklyRate,
@@ -691,9 +692,9 @@ export async function closeRental(
         throw new AppError("Rental not found", 404);
       }
 
-      if (rental.status !== "ACTIVE" && rental.status !== "ON_HOLD") {
+      if (rental.status !== "ACTIVE") {
         throw new AppError(
-          `Only an ACTIVE or ON_HOLD rental can be closed (current status: ${rental.status})`,
+          `Only an ACTIVE rental can be closed (current status: ${rental.status})`,
           409
         );
       }

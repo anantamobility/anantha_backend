@@ -262,7 +262,6 @@ export async function deleteClient(id: string, actor: AuditActor) {
               RentalStatus.DRAFT,
               RentalStatus.PENDING_APPROVAL,
               RentalStatus.ACTIVE,
-              RentalStatus.ON_HOLD,
             ],
           },
         },

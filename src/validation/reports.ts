@@ -45,7 +45,6 @@ export const b2cReportQuerySchema = reportBaseSchema.extend({
       "DRAFT",
       "PENDING_APPROVAL",
       "ACTIVE",
-      "ON_HOLD",
       "COMPLETED",
       "TERMINATED",
       "CANCELLED",

@@ -13,7 +13,6 @@ export const rentalStatusSchema = z.enum([
   "DRAFT",
   "PENDING_APPROVAL",
   "ACTIVE",
-  "ON_HOLD",
   "COMPLETED",
   "TERMINATED",
   "CANCELLED",

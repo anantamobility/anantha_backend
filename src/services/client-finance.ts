@@ -202,7 +202,7 @@ export async function buildClientFinancialSummary(
       ...summary,
       rentalCount: rentals.length,
       activeRentalCount: rentals.filter(
-        (rental) => rental.status === "ACTIVE" || rental.status === "ON_HOLD"
+        (rental) => rental.status === "ACTIVE"
       ).length,
     },
     rentals: rentals.map((rental) => ({
