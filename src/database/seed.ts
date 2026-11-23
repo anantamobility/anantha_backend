@@ -157,7 +157,7 @@ async function main() {
     create: {
       userId: admin.id,
       fullName: 'IT-ADMIN',
-      gender: 'PREFER_NOT_TO_SAY',
+      gender: 'MALE',
       jobTitle: 'System Administrator',
       status: 'ACTIVE',
     },
