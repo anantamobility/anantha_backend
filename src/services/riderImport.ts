@@ -85,9 +85,6 @@ export async function validateRiderImportRows(
   const emails = rows
     .map((row) => row.email?.trim().toLowerCase())
     .filter((value): value is string => Boolean(value));
-  const riderCodes = rows
-    .map((row) => row.riderCode?.trim())
-    .filter((value): value is string => Boolean(value));
   const aadhars = rows
     .map((row) => row.aadharNumber?.trim())
     .filter((value): value is string => Boolean(value));
@@ -111,7 +108,6 @@ export async function validateRiderImportRows(
   ];
 
   const riderUniqueOr = [
-    ...(riderCodes.length ? [{ riderCode: { in: riderCodes } }] : []),
     ...(aadhars.length ? [{ aadharNumber: { in: aadhars } }] : []),
     ...(pans.length ? [{ panNumber: { in: pans } }] : []),
   ];
@@ -138,14 +134,12 @@ export async function validateRiderImportRows(
               OR: riderUniqueOr,
             },
             select: {
-              riderCode: true,
               aadharNumber: true,
               panNumber: true,
             },
           })
         : Promise.resolve(
             [] as {
-              riderCode: string;
               aadharNumber: string | null;
               panNumber: string | null;
             }[],
@@ -177,9 +171,6 @@ export async function validateRiderImportRows(
       .map((user) => user.email?.toLowerCase())
       .filter((value): value is string => Boolean(value)),
   );
-  const existingRiderCodeSet = new Set(
-    existingRiders.map((rider) => rider.riderCode),
-  );
   const existingAadharSet = new Set(
     existingRiders
       .map((rider) => rider.aadharNumber)
@@ -201,7 +192,6 @@ export async function validateRiderImportRows(
 
   const seenPhones = new Set<string>();
   const seenEmails = new Set<string>();
-  const seenRiderCodes = new Set<string>();
   const seenAadhars = new Set<string>();
   const seenPans = new Set<string>();
 
@@ -213,7 +203,6 @@ export async function validateRiderImportRows(
 
     const phoneNumber = row.phoneNumber.trim();
     const email = row.email?.trim().toLowerCase() || null;
-    const riderCode = row.riderCode?.trim() || undefined;
     const aadharNumber = row.aadharNumber?.trim() || null;
     const panNumber = row.panNumber?.trim() || null;
     const hubCodeKey = row.hubCode?.trim().toUpperCase() || null;
@@ -236,17 +225,6 @@ export async function validateRiderImportRows(
       }
       if (existingEmailSet.has(email)) {
         errors.push(`User already exists with email: ${email}`);
-      }
-    }
-
-    if (riderCode) {
-      if (seenRiderCodes.has(riderCode)) {
-        errors.push(`Duplicate riderCode in file: ${riderCode}`);
-      } else {
-        seenRiderCodes.add(riderCode);
-      }
-      if (existingRiderCodeSet.has(riderCode)) {
-        errors.push(`Rider already exists with riderCode: ${riderCode}`);
       }
     }
 
@@ -301,7 +279,6 @@ export async function validateRiderImportRows(
       fullName: row.fullName.trim(),
       phoneNumber,
       email,
-      riderCode,
       dateOfBirth: row.dateOfBirth ?? null,
       gender: row.gender ?? null,
       address: buildAddress(row),

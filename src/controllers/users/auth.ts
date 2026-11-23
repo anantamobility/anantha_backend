@@ -83,7 +83,7 @@ export const login = async(req: Request, res: Response, next: NextFunction) => {
             action: "LOGIN",
             resource: "User",
             resourceId: user.id,
-            summary: `User ${userName} signed in.`,
+            summary: `User ${userName} logged in.`,
             throwOnError: false,
         });
         const accessToken = jwt.sign(

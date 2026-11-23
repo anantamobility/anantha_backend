@@ -49,6 +49,7 @@ export const riderImportRowSchema = z
     fullName: z.string().trim().min(1, "fullName is required").max(150),
     phoneNumber: phoneNumberSchema,
     email: emailSchema,
+    // Accepted for CSV compatibility. Ignored; the server generates the code.
     riderCode: z.string().trim().min(1).max(50).optional(),
     dateOfBirth: pastDateSchema,
     gender: genderSchema.nullable().optional(),

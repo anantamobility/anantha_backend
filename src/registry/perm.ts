@@ -72,7 +72,7 @@ export const PERMISSION_REGISTRY = [
   },
   {
     resource: 'riderPayStatement',
-    actions: ['generate', 'read', 'approve', 'pay', 'reconcile']
+    actions: ['generate', 'read', 'pay']
   },
   {
     resource: 'service',

@@ -53,6 +53,8 @@ export function getRolePermissionBuckets(
           'rentalDue',
           'deposit',
           'collection',
+          'ledgerEntry',
+          'riderPayStatement',
         ].includes(group.resource)
       ) {
         buckets.SUPERVISOR.push(key);

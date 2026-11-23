@@ -5,8 +5,10 @@ import {
 } from "../generated/prisma/client.js";
 import prisma from "../database/prismaClient.js";
 import { AppError } from "../utils/errors.js";
+import { logAudit, type AuditActor } from "../utils/log.js";
 import { toDecimal } from "./rental-schedule.js";
 import type {
+  DeliveryPayInput,
   LedgerSummaryQuery,
   ListLedgerQuery,
 } from "../validation/ledger.js";
@@ -139,6 +141,50 @@ export async function recordLedgerEntry(tx: Tx, input: RecordLedgerEntryInput, c
     },
     select: ledgerEntryDetailSelect,
   });
+}
+
+export async function recordDeliveryPay(
+  input: DeliveryPayInput,
+  actor: AuditActor
+) {
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const entry = await recordLedgerEntry(
+        tx,
+        {
+          riderId: input.riderId,
+          entryType: "DELIVERY_PAY",
+          direction: "CREDIT",
+          amount: toDecimal(input.amount),
+          occurredAt: input.occurredAt,
+          description: input.description ?? "Delivery pay",
+          sourceType: "DeliveryPay",
+          sourceId: input.reference ?? null,
+        },
+        actor.userId
+      );
+
+      await logAudit({
+        ...actor,
+        action: "DELIVERY_PAY",
+        resource: "LedgerEntry",
+        resourceId: entry.id,
+        newData: {
+          riderId: input.riderId,
+          amount: input.amount,
+          occurredAt: entry.occurredAt,
+          reference: input.reference ?? null,
+        },
+        summary: `${actor.userName} recorded delivery pay of ${input.amount} for rider ${entry.rider?.riderCode ?? input.riderId}.`,
+        db: tx,
+        throwOnError: true,
+      });
+
+      return { entry };
+    });
+  } catch (err) {
+    throw AppError.fromPrisma(err, "Delivery pay could not be recorded") ?? err;
+  }
 }
 
 export async function listLedgerEntries(query: ListLedgerQuery) {

@@ -9,8 +9,11 @@ import {
   toDecimal,
 } from "./rental-schedule.js";
 import { assertB2CRider, recordLedgerEntry } from "./ledger.js";
+import {
+  getDepositBalanceByRental,
+  recordDepositLedgerEntry,
+} from "./depositLedger.js";
 import type {
-  ApprovePayStatementInput,
   GeneratePayStatementInput,
   ListPayStatementsQuery,
   PayStatementPaymentInput,
@@ -49,8 +52,6 @@ export const payStatementSelect = {
   shortfallAmount: true,
   requiresManualReview: true,
   calculationSnapshot: true,
-  approvedById: true,
-  approvedAt: true,
   paidById: true,
   paidAt: true,
   paymentMethod: true,
@@ -63,7 +64,6 @@ export const payStatementSelect = {
 export const payStatementDetailSelect = {
   ...payStatementSelect,
   rider: { select: { id: true, riderCode: true, fullName: true } },
-  approvedBy: { select: { id: true, name: true } },
   paidBy: { select: { id: true, name: true } },
   lines: {
     select: payStatementLineSelect,
@@ -72,7 +72,7 @@ export const payStatementDetailSelect = {
 } as const;
 
 function generatePayStatementNumber() {
-  return `STL-${uuidv4().replace(/-/g, "").slice(0, 10).toUpperCase()}`;
+  return `PS-${uuidv4().replace(/-/g, "").slice(0, 10).toUpperCase()}`;
 }
 
 function startOfDayUtc(date: Date) {
@@ -140,6 +140,7 @@ export async function generatePayStatement(
   try {
     return await prisma.$transaction(async (tx) => {
       const rider = await assertB2CRider(tx, input.riderId);
+      await tx.$queryRaw`SELECT id FROM riders WHERE id = ${rider.id} FOR UPDATE`;
       const { periodStart, periodEnd } = resolveStatementPeriod(input);
 
       const existing = await tx.riderPayStatement.findFirst({
@@ -186,6 +187,7 @@ export async function generatePayStatement(
           riderId: rider.id,
           payStatementId: null,
           direction: "DEBIT",
+          occurredAt: { gte: periodStart, lt: periodEnd },
         },
         orderBy: [{ occurredAt: "asc" }, { id: "asc" }],
         select: {
@@ -421,7 +423,7 @@ export async function generatePayStatement(
 
       let manualDeductionTotal = new Prisma.Decimal(0);
 
-      for (const [index, deduction] of (input.manualDeductions ?? []).entries()) {
+      for (const deduction of input.manualDeductions ?? []) {
         const amount = new Prisma.Decimal(deduction.amount);
         const entry = await recordLedgerEntry(
           tx,
@@ -443,6 +445,61 @@ export async function generatePayStatement(
           actor.userId
         );
 
+        let referenceType = "ManualDeduction";
+        let referenceId = input.notes ?? null;
+
+        if (deduction.lineType === "DEPOSIT_DEDUCTION") {
+          const deposit = await tx.deposit.findUnique({
+            where: { id: deduction.depositId! },
+            select: {
+              id: true,
+              rentalId: true,
+              riderId: true,
+              amountRequired: true,
+            },
+          });
+
+          if (!deposit || !deposit.rentalId) {
+            throw new AppError("Security deposit not found", 404);
+          }
+          if (deposit.riderId !== rider.id) {
+            throw new AppError(
+              "Security deposit does not belong to this rider",
+              409
+            );
+          }
+
+          const balance = await getDepositBalanceByRental(
+            tx,
+            deposit.rentalId
+          );
+          if (
+            balance.balance
+              .add(amount)
+              .gt(toDecimal(deposit.amountRequired))
+          ) {
+            throw new AppError(
+              "Deposit deduction exceeds the required security deposit",
+              409
+            );
+          }
+
+          await recordDepositLedgerEntry(tx, {
+            rentalId: deposit.rentalId,
+            type: "RECEIPT",
+            direction: "CREDIT",
+            amount,
+            reference: payStatement.statementNumber,
+            reason: `Deducted from pay statement ${payStatement.statementNumber}`,
+            occurredAt: now,
+            payStatementId: payStatement.id,
+            actor,
+          });
+
+          referenceType = "Deposit";
+          referenceId = deposit.id;
+        }
+
         await tx.riderPayStatementLine.create({
           data: {
             payStatementId: payStatement.id,
@@ -452,8 +509,8 @@ export async function generatePayStatement(
             description: deduction.description,
             rentalId: deduction.rentalId ?? null,
             ledgerEntryId: entry.id,
-            referenceType: "ManualDeduction",
-            referenceId: input.notes ?? null,
+            referenceType,
+            referenceId,
           },
         });
 
@@ -464,15 +521,17 @@ export async function generatePayStatement(
         .add(rentDeduction)
         .add(manualDeductionTotal);
       const net = grossCredits.sub(totalDeductions);
-      const shortfallAmount = net.lt(0) ? net.abs() : new Prisma.Decimal(0);
-      const netPayable = net.gt(0) ? net : new Prisma.Decimal(0);
-      const requiresManualReview = shortfallAmount.gt(0);
+
+      if (net.lt(0)) {
+        throw new AppError(
+          "Pay statement deductions exceed gross credits; reduce manual deductions",
+          409
+        );
+      }
+
+      const netPayable = net;
       const zeroNetStatement = net.eq(0);
-      const status = requiresManualReview
-        ? "DRAFT"
-        : zeroNetStatement
-          ? "PAID"
-          : "PAYABLE";
+      const status = zeroNetStatement ? "PAID" : "PAYABLE";
 
       const updatedStatement = await tx.riderPayStatement.update({
         where: { id: payStatement.id },
@@ -481,8 +540,8 @@ export async function generatePayStatement(
           grossCredits,
           totalDeductions,
           netPayable,
-          shortfallAmount,
-          requiresManualReview,
+          shortfallAmount: new Prisma.Decimal(0),
+          requiresManualReview: false,
           paidAt: zeroNetStatement ? now : undefined,
           calculationSnapshot: {
             periodStart: periodStart.toISOString(),
@@ -513,7 +572,6 @@ export async function generatePayStatement(
           grossCredits,
           totalDeductions,
           netPayable,
-          shortfallAmount,
           status,
         },
         summary: `${actor.userName} generated payStatement ${updatedStatement.statementNumber} for rider ${rider.riderCode} with net payable ${netPayable}.`,
@@ -528,97 +586,6 @@ export async function generatePayStatement(
       err,
       "A pay statement already exists for this rider and period"
     ) ?? err;
-  }
-}
-
-export async function approvePayStatement(
-  id: string,
-  input: ApprovePayStatementInput,
-  actor: AuditActor
-) {
-  try {
-    return await prisma.$transaction(async (tx) => {
-      const payStatement = await tx.riderPayStatement.findUnique({
-        where: { id },
-        select: {
-          id: true,
-          statementNumber: true,
-          riderId: true,
-          status: true,
-          netPayable: true,
-          shortfallAmount: true,
-          requiresManualReview: true,
-        },
-      });
-
-      if (!payStatement) {
-        throw new AppError("Pay statement not found", 404);
-      }
-
-      if (payStatement.status === "APPROVED") {
-        const existing = await tx.riderPayStatement.findUniqueOrThrow({
-          where: { id },
-          select: payStatementDetailSelect,
-        });
-        return { payStatement: existing, duplicate: true };
-      }
-
-      if (payStatement.status !== "PAYABLE") {
-        throw new AppError(
-          `Only a PAYABLE payStatement can be approved (current status: ${payStatement.status})`,
-          409
-        );
-      }
-
-      if (
-        payStatement.requiresManualReview ||
-        toDecimal(payStatement.shortfallAmount).gt(0)
-      ) {
-        throw new AppError(
-          "Pay statement requires manual review before it can be approved",
-          409
-        );
-      }
-
-      if (toDecimal(payStatement.netPayable).lte(0)) {
-        throw new AppError(
-          "Pay statement has no payable amount",
-          409
-        );
-      }
-
-      const approvedAt = new Date();
-      const updated = await tx.riderPayStatement.update({
-        where: { id },
-        data: {
-          status: "APPROVED",
-          approvedById: actor.userId,
-          approvedAt,
-        },
-        select: payStatementDetailSelect,
-      });
-
-      await logAudit({
-        ...actor,
-        action: "APPROVE",
-        resource: "RiderPayStatement",
-        resourceId: payStatement.id,
-        oldData: { status: payStatement.status },
-        newData: {
-          status: "APPROVED",
-          statementNumber: payStatement.statementNumber,
-          netPayable: payStatement.netPayable,
-          notes: input.notes ?? null,
-        },
-        summary: `${actor.userName} approved payStatement ${payStatement.statementNumber}.`,
-        db: tx,
-        throwOnError: true,
-      });
-
-      return { payStatement: updated, duplicate: false };
-    });
-  } catch (err) {
-    throw AppError.fromPrisma(err, "Pay statement could not be approved") ?? err;
   }
 }
 
@@ -653,9 +620,9 @@ export async function payPayStatement(
         return { payStatement: existing, duplicate: true };
       }
 
-      if (payStatement.status !== "APPROVED") {
+      if (payStatement.status !== "PAYABLE") {
         throw new AppError(
-          `Only an APPROVED payStatement can be paid (current status: ${payStatement.status})`,
+          `Only a PAYABLE payStatement can be paid (current status: ${payStatement.status})`,
           409
         );
       }

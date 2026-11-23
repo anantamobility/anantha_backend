@@ -58,7 +58,6 @@ const emailSchema = z
 
 const riderBaseShape = {
   fullName: z.string().trim().min(1, "fullName is required").max(150),
-  riderCode: z.string().trim().min(1).max(50).optional(),
   dateOfBirth: pastDateSchema,
   gender: genderSchema.nullable().optional(),
   address: addressSchema,

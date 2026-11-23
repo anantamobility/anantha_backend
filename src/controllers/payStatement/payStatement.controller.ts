@@ -3,7 +3,6 @@ import { success } from "../../utils/http.js";
 import { getAuditActor } from "../../utils/log.js";
 import * as payStatementService from "../../services/pay-statement.js";
 import type {
-  ApprovePayStatementInput,
   GeneratePayStatementInput,
   ListPayStatementsQuery,
   PayStatementPaymentInput,
@@ -50,23 +49,6 @@ export const getPayStatementById = async (
       req.params.id as string
     );
     return success(res, { payStatement });
-  } catch (err) {
-    next(err);
-  }
-};
-
-export const approvePayStatement = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const result = await payStatementService.approvePayStatement(
-      req.params.id as string,
-      req.body as ApprovePayStatementInput,
-      getAuditActor(req)
-    );
-    return success(res, result);
   } catch (err) {
     next(err);
   }

@@ -39,8 +39,25 @@ export const manualDeductionSchema = z
     amount: moneySchema(2, "amount"),
     description: z.string().trim().min(1).max(500),
     rentalId: z.string().uuid("rentalId must be a valid UUID").nullable().optional(),
+    depositId: z.string().uuid("depositId must be a valid UUID").optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.lineType === "DEPOSIT_DEDUCTION" && !value.depositId) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["depositId"],
+        message: "depositId is required for a deposit deduction",
+      });
+    }
+    if (value.lineType !== "DEPOSIT_DEDUCTION" && value.depositId) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["depositId"],
+        message: "depositId is only valid for a deposit deduction",
+      });
+    }
+  });
 
 export const generatePayStatementSchema = z
   .object({
@@ -102,13 +119,6 @@ export const listPayStatementsQuerySchema = paginationQuerySchema
     sortOrder: z.enum(["asc", "desc"]).default("desc"),
   });
 
-export const approvePayStatementSchema = z
-  .object({
-    notes: z.string().trim().min(1).max(2000).nullable().optional(),
-  })
-  .strict()
-  .default({});
-
 export const payStatementPaymentSchema = z
   .object({
     paymentMethod: paymentMethodSchema,
@@ -120,6 +130,5 @@ export const payStatementPaymentSchema = z
 
 export type GeneratePayStatementInput = z.infer<typeof generatePayStatementSchema>;
 export type ListPayStatementsQuery = z.infer<typeof listPayStatementsQuerySchema>;
-export type ApprovePayStatementInput = z.infer<typeof approvePayStatementSchema>;
 export type PayStatementPaymentInput = z.infer<typeof payStatementPaymentSchema>;
 export type PayStatementStatusValue = z.infer<typeof payStatementStatusSchema>;

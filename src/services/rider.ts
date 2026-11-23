@@ -197,7 +197,7 @@ export async function createRider(
       });
 
       const data: Prisma.RiderUncheckedCreateInput = {
-        riderCode: input.riderCode ?? (await generateRiderId(tx)),
+        riderCode: await generateRiderId(tx),
         fullName: input.fullName,
         userId: user.id,
         aadharNumber: input.aadharNumber ?? null,
@@ -379,7 +379,6 @@ export async function updateRider(
 
       const data: Prisma.RiderUncheckedUpdateInput = {};
       if (input.fullName !== undefined) data.fullName = input.fullName;
-      if (input.riderCode !== undefined) data.riderCode = input.riderCode;
       if (input.aadharNumber !== undefined) data.aadharNumber = input.aadharNumber;
       if (input.panNumber !== undefined) data.panNumber = input.panNumber;
       if (input.licenseNumber !== undefined) data.licenseNumber = input.licenseNumber;

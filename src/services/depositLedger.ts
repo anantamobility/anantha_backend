@@ -148,6 +148,7 @@ export async function recordDepositLedgerEntry(
     reference?: string | null;
     reason?: string | null;
     occurredAt?: Date;
+    payStatementId?: string | null;
     actor: AuditActor;
   }
 ) {
@@ -166,14 +167,17 @@ export async function recordDepositLedgerEntry(
     );
   }
 
-  if (input.type === "RECEIPT" && !input.paymentMethod) {
+  const payrollReceipt =
+    input.type === "RECEIPT" && Boolean(input.payStatementId);
+
+  if (input.type === "RECEIPT" && !input.paymentMethod && !payrollReceipt) {
     throw new AppError("Payment method is required for a deposit receipt", 400);
   }
 
   const receivedAt = input.occurredAt ?? new Date();
 
   const collection =
-    input.type === "RECEIPT"
+    input.type === "RECEIPT" && !payrollReceipt
       ? await tx.collection.create({
           data: {
             purpose: "DEPOSIT",
@@ -201,6 +205,7 @@ export async function recordDepositLedgerEntry(
       reference: input.reference ?? null,
       reason: input.reason ?? null,
       collectionId: collection?.id ?? null,
+      payStatementId: input.payStatementId ?? null,
       authorizedById: input.actor.userId,
       ...(input.occurredAt ? { createdAt: input.occurredAt } : {}),
     },
@@ -246,6 +251,7 @@ export async function recordDepositLedgerEntry(
       reference: input.reference ?? null,
       reason: input.reason ?? null,
       collectionId: collection?.id ?? null,
+      payStatementId: input.payStatementId ?? null,
       balanceAfter: afterTotals.balance,
     },
     summary: `${input.actor.userName} recorded ${input.type.toLowerCase()} of ${input.amount} on security deposit ${deposit.id}.`,
