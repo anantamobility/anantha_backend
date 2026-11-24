@@ -18,6 +18,7 @@ import {
 
 const r = Router();
 
+// need deep review
 r.post(
   "/generate",
   verifyToken,
@@ -40,6 +41,8 @@ r.get(
   authorize("riderPayStatement", "read"),
   getPayStatementById
 );
+
+//need deep review
 r.post(
   "/:id/pay",
   verifyToken,

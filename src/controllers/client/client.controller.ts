@@ -4,8 +4,10 @@ import { getAuditActor } from "../../utils/log.js";
 import * as clientService from "../../services/client.js";
 import type {
   ChangeClientStatusInput,
+  CreateClientContractInput,
   CreateClientInput,
   ListClientsQuery,
+  UpdateClientContractInput,
   UpdateClientInput,
 } from "../../validation/client.js";
 
@@ -98,6 +100,41 @@ export const deleteClient = async (
       getAuditActor(req)
     );
     return success(res, { message: "Client deleted successfully" });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const createClientContract = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const contract = await clientService.createClientContract(
+      req.params.id as string,
+      req.body as CreateClientContractInput,
+      getAuditActor(req)
+    );
+    return success(res, { contract }, 201);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const updateClientContract = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const contract = await clientService.updateClientContract(
+      req.params.id as string,
+      req.params.contractId as string,
+      req.body as UpdateClientContractInput,
+      getAuditActor(req)
+    );
+    return success(res, { contract });
   } catch (err) {
     next(err);
   }

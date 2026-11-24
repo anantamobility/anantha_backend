@@ -3,9 +3,9 @@ import { verifyToken } from "../middleware/verifyToken.js";
 import { authorize } from "../middleware/pbac.js";
 import { validate } from "../middleware/validate.js";
 import { idParamSchema } from "../validation/common.js";
-import { changeClientStatusSchema, createClientSchema, listClientsQuerySchema, updateClientSchema } from "../validation/client.js";
+import { changeClientStatusSchema, clientContractParamsSchema, createClientContractSchema, createClientSchema, listClientsQuerySchema, updateClientContractSchema, updateClientSchema } from "../validation/client.js";
 import { generateClientDuesSchema, listClientCollectionsQuerySchema, listClientDuesQuerySchema } from "../validation/clientFinance.js";
-import { changeClientStatus, createClient, deleteClient, getClientById, getClients, updateClient } from "../controllers/client/client.controller.js";
+import { changeClientStatus, createClient, createClientContract, deleteClient, getClientById, getClients, updateClient, updateClientContract } from "../controllers/client/client.controller.js";
 import { generateClientDues, getClientCollections, getClientDues, getClientFinancials } from "../controllers/client/client-finance.controller.js";
 
 const r = Router();
@@ -20,6 +20,8 @@ r.get("/:id/collections", verifyToken, validate(idParamSchema, "params"), author
 r.post("/:id/dues/generate", verifyToken, validate(idParamSchema, "params"), authorize("rentalDue", "generate", { policy: false }), validate(generateClientDuesSchema), generateClientDues);
 
 r.patch("/:id/status", verifyToken, validate(idParamSchema, "params"), authorize("client", "status:update"), validate(changeClientStatusSchema), changeClientStatus);
+r.post("/:id/contracts", verifyToken, validate(idParamSchema, "params"), authorize("client", "update"), validate(createClientContractSchema), createClientContract);
+r.patch("/:id/contracts/:contractId", verifyToken, validate(clientContractParamsSchema, "params"), authorize("client", "update"), validate(updateClientContractSchema), updateClientContract);
 r.get("/:id", verifyToken, validate(idParamSchema, "params"), authorize("client", "read"), getClientById);
 r.patch("/:id", verifyToken, validate(idParamSchema, "params"), authorize("client", "update"), validate(updateClientSchema), updateClient);
 r.delete("/:id", verifyToken, validate(idParamSchema, "params"), authorize("client", "delete"), deleteClient);
