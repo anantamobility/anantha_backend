@@ -4,16 +4,11 @@ import { AppError } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import { deriveDueStatus, toDecimal } from "./rental-schedule.js";
 import { recordLedgerEntry } from "./ledger.js";
-import {
-  generateRentalDues,
-  getRentalFinancialSummary,
-  rentalDueSelect,
-} from "./rental-dues.js";
+import { generateRentalDues, rentalDueSelect } from "./rental-dues.js";
 import type {
   CreateCollectionInput,
   GenerateDuesInput,
   ListCollectionsQuery,
-  ListRentalCollectionsQuery,
   ListRentalDuesQuery,
 } from "../validation/collection.js";
 
@@ -48,33 +43,6 @@ export const collectionDetailSelect = {
   receivedBy: { select: { id: true, name: true } },
   rentalDue: { select: rentalDueSelect },
 } as const;
-
-export async function createCollectionLedgerEntry(
-  tx: Tx,
-  input: {
-    rentalId: string;
-    collectionId: string;
-    amount: Prisma.Decimal;
-    occurredAt: Date;
-    actor: AuditActor;
-    description: string;
-  }
-) {
-  await recordLedgerEntry(
-    tx,
-    {
-      rentalId: input.rentalId,
-      entryType: "COLLECTION_RECEIVED",
-      direction: "CREDIT",
-      amount: input.amount,
-      occurredAt: input.occurredAt,
-      description: input.description,
-      sourceType: "Collection",
-      sourceId: input.collectionId,
-    },
-    input.actor.userId
-  );
-}
 
 async function assertCollectibleDue(tx: Tx, rentalDueId: string) {
   const due = await tx.rentalDue.findUnique({
@@ -166,83 +134,77 @@ export async function createCollection(
   actor: AuditActor
 ) {
   try {
-    return await prisma.$transaction(async (tx) =>
-      createCollectionWithinTransaction(tx, input, actor)
-    );
+    return await prisma.$transaction(async (tx) => {
+      const due = await assertCollectibleDue(tx, input.rentalDueId);
+      const rental = due.rental;
+      const amount = new Prisma.Decimal(input.amount);
+      const receivedAt = input.receivedAt ?? new Date();
+
+      const applied = await applyCollectionToDue(tx, due, amount);
+
+      const isRiderPayer = rental.rentalType === "B2C";
+
+      const collection = await tx.collection.create({
+        data: {
+          purpose: "RENT",
+          payerType: isRiderPayer ? "RIDER" : "CLIENT",
+          clientId: isRiderPayer ? null : rental.clientId,
+          riderId: isRiderPayer ? rental.riderId : null,
+          rentalDueId: due.id,
+          amount,
+          paymentMethod: input.paymentMethod,
+          referenceNumber: input.referenceNumber ?? null,
+          receivedAt,
+          receivedById: actor.userId,
+          notes: input.notes ?? null,
+        },
+        select: collectionDetailSelect,
+      });
+
+      await recordLedgerEntry(
+        tx,
+        {
+          rentalId: rental.id,
+          entryType: "COLLECTION_RECEIVED",
+          direction: "CREDIT",
+          amount,
+          occurredAt: receivedAt,
+          description: input.notes
+            ? `Collection received: ${input.notes}`
+            : `Collection received for rental ${rental.rentalNumber}`,
+          sourceType: "Collection",
+          sourceId: collection.id,
+        },
+        actor.userId
+      );
+
+      await logAudit({
+        ...actor,
+        action: "COLLECTION_RECEIVED",
+        resource: "Collection",
+        resourceId: collection.id,
+        newData: {
+          rentalId: rental.id,
+          rentalNumber: rental.rentalNumber,
+          rentalDueId: due.id,
+          amount,
+          paymentMethod: input.paymentMethod,
+          referenceNumber: input.referenceNumber ?? null,
+        },
+        summary: `${actor.userName} recorded a collection of ${amount} for rental ${rental.rentalNumber}.`,
+        db: tx,
+        throwOnError: true,
+      });
+
+      return {
+        collection,
+        outstandingBefore: applied.outstandingBefore,
+        outstandingAfter: applied.outstandingAfter,
+      };
+    });
   } catch (err) {
     throw AppError.fromPrisma(err, "Collection could not be recorded") ?? err;
   }
-}
-
-export async function createCollectionWithinTransaction(
-  tx: Tx,
-  input: CreateCollectionInput,
-  actor: AuditActor
-) {
-  const due = await assertCollectibleDue(tx, input.rentalDueId);
-  const rental = due.rental;
-  const amount = new Prisma.Decimal(input.amount);
-  const receivedAt = input.receivedAt ?? new Date();
-
-  const applied = await applyCollectionToDue(tx, due, amount);
-
-  const isRiderPayer = rental.rentalType === "B2C";
-
-  const collection = await tx.collection.create({
-    data: {
-      purpose: "RENT",
-      payerType: isRiderPayer ? "RIDER" : "CLIENT",
-      clientId: isRiderPayer ? null : rental.clientId,
-      riderId: isRiderPayer ? rental.riderId : null,
-      rentalDueId: due.id,
-      amount,
-      paymentMethod: input.paymentMethod,
-      referenceNumber: input.referenceNumber ?? null,
-      receivedAt,
-      receivedById: actor.userId,
-      notes: input.notes ?? null,
-    },
-    select: collectionDetailSelect,
-  });
-
-  await createCollectionLedgerEntry(tx, {
-    rentalId: rental.id,
-    collectionId: collection.id,
-    amount,
-    occurredAt: receivedAt,
-    actor,
-    description: input.notes
-      ? `Collection received: ${input.notes}`
-      : `Collection received for rental ${rental.rentalNumber}`,
-  });
-
-  const summary = await getRentalFinancialSummary(tx, rental.id);
-
-  await logAudit({
-    ...actor,
-    action: "COLLECTION_RECEIVED",
-    resource: "Collection",
-    resourceId: collection.id,
-    newData: {
-      rentalId: rental.id,
-      rentalNumber: rental.rentalNumber,
-      rentalDueId: due.id,
-      amount,
-      paymentMethod: input.paymentMethod,
-      referenceNumber: input.referenceNumber ?? null,
-    },
-    summary: `${actor.userName} recorded a collection of ${amount} for rental ${rental.rentalNumber}.`,
-    db: tx,
-    throwOnError: true,
-  });
-
-  return {
-    collection,
-    summary,
-    outstandingBefore: applied?.outstandingBefore ?? null,
-    outstandingAfter: applied?.outstandingAfter ?? null,
-    duplicate: false,
-  };
 }
 
 export async function listCollections(query: ListCollectionsQuery) {
@@ -321,41 +283,6 @@ async function assertRentalExists(rentalId: string) {
     throw new AppError("Rental not found", 404);
   }
   return rental;
-}
-
-export async function listRentalCollections(
-  rentalId: string,
-  query: ListRentalCollectionsQuery
-) {
-  await assertRentalExists(rentalId);
-  const { page, limit } = query;
-
-  const where: Prisma.CollectionWhereInput = { rentalDue: { rentalId } };
-
-  const orderBy: Prisma.CollectionOrderByWithRelationInput = {
-    [query.sortBy]: query.sortOrder,
-  };
-
-  const [collections, total] = await Promise.all([
-    prisma.collection.findMany({
-      where,
-      select: collectionSelect,
-      orderBy,
-      skip: (page - 1) * limit,
-      take: limit,
-    }),
-    prisma.collection.count({ where }),
-  ]);
-
-  return {
-    collections,
-    pagination: {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
-    },
-  };
 }
 
 export async function listRentalDues(

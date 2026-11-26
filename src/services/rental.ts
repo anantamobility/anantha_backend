@@ -15,24 +15,12 @@ import {
 } from "./rental-dues.js";
 import { toDecimal } from "./rental-schedule.js";
 import type {
-  ActivateRentalInput,
-  AssignVehicleInput,
   CloseRentalInput,
   CreateRentalInput,
   ListRentalsQuery,
 } from "../validation/rental.js";
 
 type Tx = Prisma.TransactionClient;
-
-export const RENTAL_STATUS_TRANSITIONS = {
-  DRAFT: ["PENDING_APPROVAL", "ACTIVE", "CANCELLED"],
-  PENDING_APPROVAL: ["ACTIVE", "CANCELLED"],
-  ACTIVE: ["COMPLETED", "TERMINATED"],
-  ON_HOLD: ["ACTIVE", "TERMINATED"],
-  COMPLETED: [],
-  TERMINATED: [],
-  CANCELLED: [],
-} as const;
 
 const CLOSED_RENTAL_STATUSES = ["COMPLETED", "TERMINATED", "CANCELLED"];
 
@@ -547,124 +535,6 @@ export async function getRentalById(id: string) {
   }
 
   return { rental };
-}
-
-export async function assignVehicle(
-  id: string,
-  input: AssignVehicleInput,
-  actor: AuditActor
-) {
-  try {
-    return await prisma.$transaction(async (tx) => {
-      const rental = await tx.rental.findUnique({
-        where: { id },
-        select: {
-          id: true,
-          rentalNumber: true,
-          rentalType: true,
-          riderId: true,
-          hubId: true,
-          status: true,
-        },
-      });
-
-      if (!rental) {
-        throw new AppError("Rental not found", 404);
-      }
-
-      const assignment = await assignVehicleWithinTransaction(
-        tx,
-        {
-          rental,
-          vehicleId: input.vehicleId,
-          startDate: input.startDate,
-          reason: input.reason,
-        },
-        actor
-      );
-
-      return { assignment };
-    });
-  } catch (err) {
-    throw AppError.fromPrisma(err, "Vehicle could not be assigned") ?? err;
-  }
-}
-
-export async function activateRental(
-  id: string,
-  input: ActivateRentalInput,
-  actor: AuditActor
-) {
-  try {
-    return await prisma.$transaction(async (tx) => {
-      const rental = await tx.rental.findUnique({ where: { id } });
-      if (!rental) {
-        throw new AppError("Rental not found", 404);
-      }
-
-      const allowed = RENTAL_STATUS_TRANSITIONS[rental.status] as readonly string[];
-      if (!allowed.includes("ACTIVE")) {
-        throw new AppError(
-          `Rental cannot be activated from status ${rental.status}`,
-          409
-        );
-      }
-
-      const activeAssignments = await tx.vehicleDeployment.count({
-        where: { rentalId: id, status: "ACTIVE" },
-      });
-      if (activeAssignments === 0) {
-        throw new AppError(
-          "Rental must have an active vehicle assignment before activation",
-          409
-        );
-      }
-
-      const activatedAt = input.activatedAt ?? new Date();
-      if (activatedAt.getTime() < rental.startDate.getTime()) {
-        throw new AppError(
-          "activatedAt cannot be before the rental start date",
-          400
-        );
-      }
-
-      const updated = await tx.rental.updateMany({
-        where: { id, status: rental.status },
-        data: {
-          status: "ACTIVE",
-          activatedAt,
-        },
-      });
-
-      if (updated.count === 0) {
-        throw new AppError(
-          "Rental was modified concurrently; please retry",
-          409
-        );
-      }
-
-      await logAudit({
-        ...actor,
-        action: "ACTIVATE",
-        resource: "Rental",
-        resourceId: id,
-        oldData: { status: rental.status },
-        newData: { status: "ACTIVE", activatedAt },
-        summary: `${actor.userName} activated rental ${rental.rentalNumber}.`,
-        db: tx,
-        throwOnError: true,
-      });
-
-      const rentalWithDetail = await tx.rental.findUniqueOrThrow({
-        where: { id },
-        select: rentalDetailSelect,
-      });
-
-      return { rental: rentalWithDetail };
-    });
-  } catch (err) {
-    throw AppError.fromPrisma(err, "Rental could not be activated") ?? err;
-  }
 }
 
 export async function closeRental(

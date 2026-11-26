@@ -298,13 +298,7 @@ export async function deleteClient(id: string, actor: AuditActor) {
       const activeRentals = await tx.rental.count({
         where: {
           clientId: id,
-          status: {
-            in: [
-              RentalStatus.DRAFT,
-              RentalStatus.PENDING_APPROVAL,
-              RentalStatus.ACTIVE,
-            ],
-          },
+          status: RentalStatus.ACTIVE,
         },
       });
       if (activeRentals > 0) {

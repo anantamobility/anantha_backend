@@ -10,8 +10,6 @@ export const collectionPeriodSchema = z.enum([
   "MONTHLY",
 ]);
 export const rentalStatusSchema = z.enum([
-  "DRAFT",
-  "PENDING_APPROVAL",
   "ACTIVE",
   "COMPLETED",
   "TERMINATED",
@@ -175,22 +173,6 @@ export const listRentalsQuerySchema = paginationQuerySchema
     sortOrder: z.enum(["asc", "desc"]).default("desc"),
   });
 
-export const assignVehicleSchema = z
-  .object({
-    vehicleId: z.string().uuid("vehicleId must be a valid UUID"),
-    startDate: z.coerce.date().optional(),
-    reason: z.string().trim().min(1).max(500).optional(),
-  })
-  .strict();
-
-export const activateRentalSchema = z
-  .object({
-    activatedAt: z.coerce.date().optional(),
-    reason: z.string().trim().min(1).max(500).optional(),
-  })
-  .strict()
-  .default({});
-
 const refundSchema = z
   .object({
     amount: moneySchema(2, "amount", { positive: true }),
@@ -211,7 +193,5 @@ export const closeRentalSchema = z
 
 export type CreateRentalInput = z.infer<typeof createRentalSchema>;
 export type ListRentalsQuery = z.infer<typeof listRentalsQuerySchema>;
-export type AssignVehicleInput = z.infer<typeof assignVehicleSchema>;
-export type ActivateRentalInput = z.infer<typeof activateRentalSchema>;
 export type CloseRentalInput = z.infer<typeof closeRentalSchema>;
 export type CollectionPeriod = z.infer<typeof collectionPeriodSchema>;

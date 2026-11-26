@@ -65,13 +65,6 @@ export const listCollectionsQuerySchema = paginationQuerySchema
     sortOrder: z.enum(["asc", "desc"]).default("desc"),
   });
 
-export const listRentalCollectionsQuerySchema = paginationQuerySchema.extend({
-  sortBy: z
-    .enum(["receivedAt", "amount", "createdAt", "updatedAt"])
-    .default("receivedAt"),
-  sortOrder: z.enum(["asc", "desc"]).default("desc"),
-});
-
 export const listRentalDuesQuerySchema = paginationQuerySchema.extend({
   status: rentalDueStatusSchema.optional(),
   sortBy: z
@@ -93,8 +86,5 @@ export const generateDuesSchema = z
 
 export type CreateCollectionInput = z.infer<typeof createCollectionSchema>;
 export type ListCollectionsQuery = z.infer<typeof listCollectionsQuerySchema>;
-export type ListRentalCollectionsQuery = z.infer<
-  typeof listRentalCollectionsQuerySchema
->;
 export type ListRentalDuesQuery = z.infer<typeof listRentalDuesQuerySchema>;
 export type GenerateDuesInput = z.infer<typeof generateDuesSchema>;

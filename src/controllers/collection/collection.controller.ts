@@ -4,10 +4,7 @@ import { getAuditActor } from "../../utils/log.js";
 import * as collectionService from "../../services/collection.js";
 import type {
   CreateCollectionInput,
-  GenerateDuesInput,
   ListCollectionsQuery,
-  ListRentalCollectionsQuery,
-  ListRentalDuesQuery,
 } from "../../validation/collection.js";
 
 export const createCollection = async (
@@ -51,55 +48,6 @@ export const getCollectionById = async (
       req.params.id as string
     );
     return success(res, { collection });
-  } catch (err) {
-    next(err);
-  }
-};
-
-export const getRentalDues = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const result = await collectionService.listRentalDues(
-      req.params.id as string,
-      req.query as unknown as ListRentalDuesQuery
-    );
-    return success(res, result);
-  } catch (err) {
-    next(err);
-  }
-};
-
-export const generateRentalDues = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const result = await collectionService.generateDues(
-      req.params.id as string,
-      req.body as GenerateDuesInput,
-      getAuditActor(req)
-    );
-    return success(res, result, 201);
-  } catch (err) {
-    next(err);
-  }
-};
-
-export const getRentalCollections = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const result = await collectionService.listRentalCollections(
-      req.params.id as string,
-      req.query as unknown as ListRentalCollectionsQuery
-    );
-    return success(res, result);
   } catch (err) {
     next(err);
   }

@@ -41,14 +41,7 @@ export const hubReportQuerySchema = reportBaseSchema.extend({
 
 export const b2cReportQuerySchema = reportBaseSchema.extend({
   status: z
-    .enum([
-      "DRAFT",
-      "PENDING_APPROVAL",
-      "ACTIVE",
-      "COMPLETED",
-      "TERMINATED",
-      "CANCELLED",
-    ])
+    .enum(["ACTIVE", "COMPLETED", "TERMINATED", "CANCELLED"])
     .optional(),
 });
 

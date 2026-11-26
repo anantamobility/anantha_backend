@@ -4,30 +4,22 @@ import { authorize } from "../middleware/pbac.js";
 import { validate } from "../middleware/validate.js";
 import { idParamSchema } from "../validation/common.js";
 import {
-  activateRentalSchema,
-  assignVehicleSchema,
   closeRentalSchema,
   createRentalSchema,
   listRentalsQuerySchema,
 } from "../validation/rental.js";
 import {
   generateDuesSchema,
-  listRentalCollectionsQuerySchema,
   listRentalDuesQuerySchema,
 } from "../validation/collection.js";
 import {
-  activateRental,
-  assignVehicle,
   closeRental,
   createRental,
+  generateRentalDues,
   getRentalById,
+  getRentalDues,
   getRentals,
 } from "../controllers/rental/rental.js";
-import {
-  generateRentalDues,
-  getRentalCollections,
-  getRentalDues,
-} from "../controllers/collection/collection.controller.js";
 
 const r = Router();
 
@@ -68,32 +60,8 @@ r.get(
 //   validate(generateDuesSchema),
 //   generateRentalDues
 // );
-// r.get(
-//   "/:id/collections",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("collection", "read", { policy: false }),
-//   validate(listRentalCollectionsQuerySchema, "query"),
-//   getRentalCollections
-// );
 
 // Lifecycle
-// r.patch(
-//   "/:id/assign-vehicle",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("rental", "assign"),
-//   validate(assignVehicleSchema),
-//   assignVehicle
-// );
-// r.patch(
-//   "/:id/activate",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("rental", "activate"),
-//   validate(activateRentalSchema),
-//   activateRental
-// );
 // r.patch(
 //   "/:id/close",
 //   verifyToken,

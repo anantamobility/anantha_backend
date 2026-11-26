@@ -545,13 +545,7 @@ export async function deleteRider(id: string, actor: AuditActor) {
       const activeRentals = await tx.rental.count({
         where: {
           riderId: id,
-          status: {
-            in: [
-              RentalStatus.DRAFT,
-              RentalStatus.PENDING_APPROVAL,
-              RentalStatus.ACTIVE,
-            ],
-          },
+          status: RentalStatus.ACTIVE,
         },
       });
       if (activeRentals > 0) {

@@ -2,13 +2,16 @@ import type { NextFunction, Request, Response } from "express";
 import { success } from "../../utils/http.js";
 import { getAuditActor } from "../../utils/log.js";
 import * as rentalService from "../../services/rental.js";
+import * as collectionService from "../../services/collection.js";
 import type {
-  ActivateRentalInput,
-  AssignVehicleInput,
   CloseRentalInput,
   CreateRentalInput,
   ListRentalsQuery,
 } from "../../validation/rental.js";
+import type {
+  GenerateDuesInput,
+  ListRentalDuesQuery,
+} from "../../validation/collection.js";
 
 export const createRental = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -52,16 +55,15 @@ export const getRentalById = async (
   }
 };
 
-export const assignVehicle = async (
+export const getRentalDues = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    const result = await rentalService.assignVehicle(
+    const result = await collectionService.listRentalDues(
       req.params.id as string,
-      req.body as AssignVehicleInput,
-      getAuditActor(req)
+      req.query as unknown as ListRentalDuesQuery
     );
     return success(res, result);
   } catch (err) {
@@ -69,18 +71,18 @@ export const assignVehicle = async (
   }
 };
 
-export const activateRental = async (
+export const generateRentalDues = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    const result = await rentalService.activateRental(
+    const result = await collectionService.generateDues(
       req.params.id as string,
-      req.body as ActivateRentalInput,
+      req.body as GenerateDuesInput,
       getAuditActor(req)
     );
-    return success(res, result);
+    return success(res, result, 201);
   } catch (err) {
     next(err);
   }

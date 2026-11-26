@@ -61,10 +61,7 @@ enum RentalDueStatus {
 }
 
 enum RentalStatus {
-  DRAFT
-  PENDING_APPROVAL
   ACTIVE
-  ON_HOLD
   COMPLETED
   TERMINATED
   CANCELLED
@@ -697,7 +694,7 @@ model Rental {
   startDate               DateTime         @db.Timestamptz(3)
   endDate                 DateTime?        @db.Timestamptz(3)
   expectedEndDate         DateTime?        @db.Timestamptz(3)
-  status                  RentalStatus     @default(DRAFT)
+  status                  RentalStatus     @default(ACTIVE)
   statusChangedAt         DateTime?        @db.Timestamptz(3)
   // agreementRef            String?
   collectionPeriod        CollectionPeriod @default(MONTHLY)
