@@ -19,38 +19,11 @@ import {
 const r = Router();
 
 // Commented for route review + frontend integration.
-r.post(
-  "/generate",
-  verifyToken,
-  authorize("riderPayStatement", "generate", { policy: false }),
-  validate(generatePayStatementSchema),
-  applyIdempotency(),
-  generatePayStatement
-);
-// r.get(
-//   "/",
-//   verifyToken,
-//   authorize("riderPayStatement", "read", { policy: false }),
-//   validate(listPayStatementsQuerySchema, "query"),
-//   getPayStatements
-// );
-// r.get(
-//   "/:id",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("riderPayStatement", "read"),
-//   getPayStatementById
-// );
+r.post("/generate",verifyToken,authorize("riderPayStatement", "generate", { policy: false }),validate(generatePayStatementSchema),applyIdempotency(),generatePayStatement);
+r.get("/",verifyToken,authorize("riderPayStatement", "read", { policy: false }),validate(listPayStatementsQuerySchema, "query"),getPayStatements);
+r.get("/:id",verifyToken,validate(idParamSchema, "params"),authorize("riderPayStatement", "read"),getPayStatementById);
 
 //need deep review
-// r.post(
-//   "/:id/pay",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("riderPayStatement", "pay"),
-//   validate(payStatementPaymentSchema),
-//   applyIdempotency(),
-//   payStatement
-// );
+r.post("/:id/pay",verifyToken,validate(idParamSchema, "params"),authorize("riderPayStatement", "pay"),validate(payStatementPaymentSchema),applyIdempotency(),payStatement);
 
 export default r;

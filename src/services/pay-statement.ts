@@ -4,8 +4,8 @@ import prisma from "../database/prismaClient.js";
 import { AppError } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import {
-  addDaysUtc,
   deriveDueStatus,
+  periodStartFor,
   toDecimal,
 } from "./rental-schedule.js";
 import { assertB2CRider, recordLedgerEntry } from "./ledger.js";
@@ -75,24 +75,6 @@ function generatePayStatementNumber() {
   return `PS-${uuidv4().replace(/-/g, "").slice(0, 10).toUpperCase()}`;
 }
 
-function startOfDayUtc(date: Date) {
-  return new Date(
-    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
-  );
-}
-
-function resolveStatementPeriod(input: GeneratePayStatementInput) {
-  if (input.periodStart && input.periodEnd) {
-    return { periodStart: input.periodStart, periodEnd: input.periodEnd };
-  }
-
-  const base = startOfDayUtc(input.date ?? new Date());
-  const offset = input.cycle === "NEXT_DAY" ? 1 : 0;
-  const periodStart = addDaysUtc(base, offset);
-
-  return { periodStart, periodEnd: addDaysUtc(periodStart, 1) };
-}
-
 type PayStatementLineTypeValue =
   | "DELIVERY_PAY"
   | "RENT_DEDUCTION"
@@ -141,14 +123,15 @@ export async function generatePayStatement(
     return await prisma.$transaction(async (tx) => {
       const rider = await assertB2CRider(tx, input.riderId);
       await tx.$queryRaw`SELECT id FROM riders WHERE id = ${rider.id} FOR UPDATE`;
-      const { periodStart, periodEnd } = resolveStatementPeriod(input);
+      const periodStart = input.periodStart;
+      const periodEnd = periodStartFor(periodStart, input.cycle, 1);
 
       const existing = await tx.riderPayStatement.findFirst({
         where: {
           riderId: rider.id,
-          periodStart,
-          periodEnd,
           status: { notIn: ["REVERSED", "FAILED"] },
+          periodStart: { lt: periodEnd },
+          periodEnd: { gt: periodStart },
         },
         select: payStatementDetailSelect,
       });
@@ -156,32 +139,32 @@ export async function generatePayStatement(
       if (existing) {
         return { payStatement: existing, duplicate: true };
       }
-
-      const unsettledDebits = await tx.ledgerEntry.findMany({
-        where: {
-          riderId: rider.id,
-          payStatementId: null,
-          direction: "DEBIT",
-          occurredAt: { gte: periodStart, lt: periodEnd },
-        },
-        orderBy: [{ occurredAt: "asc" }, { id: "asc" }],
-        select: {
-          id: true,
-          entryType: true,
-          amount: true,
-          description: true,
-          rentalId: true,
-          occurredAt: true,
-        },
-      });
+      //debts this rider already carries that the new slip must absorb before paying out.
+      // shortcut: advances are not implemented, so no rider debit can be
+      // unclaimed. Restore this query, the debit lines, and the stamp below
+      // when ADVANCE ships.
+      // const unsettledDebits = await tx.ledgerEntry.findMany({
+      //   where: {
+      //     riderId: rider.id,
+      //     payStatementId: null,
+      //     direction: "DEBIT",
+      //     occurredAt: { gte: periodStart, lt: periodEnd },
+      //   },
+      //   orderBy: [{ occurredAt: "asc" }, { id: "asc" }],
+      //   select: {
+      //     id: true,
+      //     entryType: true,
+      //     amount: true,
+      //     description: true,
+      //     rentalId: true,
+      //     occurredAt: true,
+      //   },
+      // });
 
       // Earnings are AML's own number for an AML-managed rider, taken from the
       // client portal. They are not ledger entries; the ledger only tracks rent.
       const grossCredits = new Prisma.Decimal(input.grossCredits);
-      const existingDeductionTotal = unsettledDebits.reduce(
-        (total, entry) => total.add(toDecimal(entry.amount)),
-        new Prisma.Decimal(0)
-      );
+      const existingDeductionTotal = new Prisma.Decimal(0);
       const now = new Date();
 
       const payStatement = await tx.riderPayStatement.create({
@@ -221,33 +204,33 @@ export async function generatePayStatement(
         },
       });
 
-      for (const debit of unsettledDebits) {
-        await tx.riderPayStatementLine.create({
-          data: {
-            payStatementId: payStatement.id,
-            lineType: payStatementLineTypeForEntry(debit.entryType, "DEBIT"),
-            direction: "DEBIT",
-            amount: debit.amount,
-            description: debit.description,
-            rentalId: debit.rentalId,
-            ledgerEntryId: debit.id,
-            referenceType: "LedgerEntry",
-            referenceId: debit.id,
-            snapshot: {
-              occurredAt: debit.occurredAt.toISOString(),
-            } as Prisma.InputJsonValue,
-          },
-        });
-      }
+      // for (const debit of unsettledDebits) {
+      //   await tx.riderPayStatementLine.create({
+      //     data: {
+      //       payStatementId: payStatement.id,
+      //       lineType: payStatementLineTypeForEntry(debit.entryType, "DEBIT"),
+      //       direction: "DEBIT",
+      //       amount: debit.amount,
+      //       description: debit.description,
+      //       rentalId: debit.rentalId,
+      //       ledgerEntryId: debit.id,
+      //       referenceType: "LedgerEntry",
+      //       referenceId: debit.id,
+      //       snapshot: {
+      //         occurredAt: debit.occurredAt.toISOString(),
+      //       } as Prisma.InputJsonValue,
+      //     },
+      //   });
+      // }
 
-      await tx.ledgerEntry.updateMany({
-        where: {
-          id: {
-            in: unsettledDebits.map((entry) => entry.id),
-          },
-        },
-        data: { payStatementId: payStatement.id },
-      });
+      // await tx.ledgerEntry.updateMany({
+      //   where: {
+      //     id: {
+      //       in: unsettledDebits.map((entry) => entry.id),
+      //     },
+      //   },
+      //   data: { payStatementId: payStatement.id },
+      // });
 
       const dues = await tx.rentalDue.findMany({
         where: {
@@ -275,7 +258,7 @@ export async function generatePayStatement(
       });
 
       let rentDeduction = new Prisma.Decimal(0);
-      let remaining = grossCredits.sub(existingDeductionTotal);
+      let remaining = grossCredits.sub(existingDeductionTotal); //currently always =grosscredits
       if (remaining.lt(0)) remaining = new Prisma.Decimal(0);
       const rentAllocations: Array<{
         dueId: string;

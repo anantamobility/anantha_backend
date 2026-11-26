@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { paginationQuerySchema, searchQuerySchema } from "./common.js";
+import {
+  istDateSchema,
+  paginationQuerySchema,
+  searchQuerySchema,
+} from "./common.js";
 import { paymentMethodSchema } from "./collection.js";
 
 const decimalString = z
@@ -31,7 +35,9 @@ export const payStatementStatusSchema = z.enum([
   "REVERSED",
 ]);
 
-export const statementCycleSchema = z.enum(["SAME_DAY", "NEXT_DAY"]);
+// Only WEEKLY is live. Widen this enum when fortnightly/monthly payouts start;
+// the service already steps any CollectionPeriod with periodStartFor.
+export const payoutCycleSchema = z.enum(["WEEKLY"]);
 
 export const manualDeductionSchema = z
   .object({
@@ -62,10 +68,8 @@ export const manualDeductionSchema = z
 export const generatePayStatementSchema = z
   .object({
     riderId: z.string().uuid("riderId must be a valid UUID"),
-    date: z.coerce.date().optional(),
-    cycle: statementCycleSchema.optional(),
-    periodStart: z.coerce.date().optional(),
-    periodEnd: z.coerce.date().optional(),
+    periodStart: istDateSchema,
+    cycle: payoutCycleSchema.default("WEEKLY"),
     grossCredits: moneySchema(2, "grossCredits"),
     earningsReference: z
       .string()
@@ -77,42 +81,7 @@ export const generatePayStatementSchema = z
     manualDeductions: z.array(manualDeductionSchema).max(20).optional(),
     notes: z.string().trim().min(1).max(2000).nullable().optional(),
   })
-  .strict()
-  .superRefine((value, ctx) => {
-    const hasRange = value.periodStart !== undefined || value.periodEnd !== undefined;
-    if (hasRange && (!value.periodStart || !value.periodEnd)) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["periodStart"],
-        message: "periodStart and periodEnd must be supplied together",
-      });
-    }
-    if (hasRange && value.date) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["date"],
-        message: "date cannot be combined with periodStart/periodEnd",
-      });
-    }
-    if (!hasRange && !value.date) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["date"],
-        message: "either date or periodStart/periodEnd is required",
-      });
-    }
-    if (
-      value.periodStart &&
-      value.periodEnd &&
-      value.periodEnd.getTime() <= value.periodStart.getTime()
-    ) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["periodEnd"],
-        message: "periodEnd must be later than periodStart",
-      });
-    }
-  });
+  .strict();
 
 export const listPayStatementsQuerySchema = paginationQuerySchema
   .extend(searchQuerySchema.shape)
