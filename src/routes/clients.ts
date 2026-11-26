@@ -12,18 +12,24 @@ const r = Router();
 
 r.post("/", verifyToken, authorize("client", "create"), validate(createClientSchema), createClient);
 r.get("/", verifyToken, authorize("client", "read", { policy: false }), validate(listClientsQuerySchema, "query"), getClients);
+r.get("/:id", verifyToken, validate(idParamSchema, "params"), authorize("client", "read"), getClientById);
+r.patch("/:id", verifyToken, validate(idParamSchema, "params"), authorize("client", "update"), validate(updateClientSchema), updateClient);
+r.delete("/:id", verifyToken, validate(idParamSchema, "params"), authorize("client", "delete"), deleteClient);
+r.patch("/:id/status", verifyToken, validate(idParamSchema, "params"), authorize("client", "status:update"), validate(changeClientStatusSchema), changeClientStatus);
+r.post("/:id/contract", verifyToken, validate(idParamSchema, "params"), authorize("client", "update"), validate(createClientContractSchema), createClientContract);
+r.patch("/:id/contracts/:contractId", verifyToken, validate(clientContractParamsSchema, "params"), authorize("client", "update"), validate(updateClientContractSchema), updateClientContract);
+
+
+// Commented for route review + frontend integration.
+
 // r.get("/:id/financials", verifyToken, validate(idParamSchema, "params"), authorize("client", "read", { policy: false }), getClientFinancials);
 r.get("/:id/dues", verifyToken, validate(idParamSchema, "params"), authorize("rentalDue", "read", { policy: false }), validate(listClientDuesQuerySchema, "query"), getClientDues);
 r.get("/:id/collections", verifyToken, validate(idParamSchema, "params"), authorize("collection", "read", { policy: false }), validate(listClientCollectionsQuerySchema, "query"), getClientCollections);
 
-// need detail reveiw later.
-r.post("/:id/dues/generate", verifyToken, validate(idParamSchema, "params"), authorize("rentalDue", "generate", { policy: false }), validate(generateClientDuesSchema), generateClientDues);
+// used for bulk due generation.
+//r.post("/:id/dues/generate", verifyToken, validate(idParamSchema, "params"), authorize("rentalDue", "generate", { policy: false }), validate(generateClientDuesSchema), generateClientDues);
 
-r.patch("/:id/status", verifyToken, validate(idParamSchema, "params"), authorize("client", "status:update"), validate(changeClientStatusSchema), changeClientStatus);
-r.post("/:id/contracts", verifyToken, validate(idParamSchema, "params"), authorize("client", "update"), validate(createClientContractSchema), createClientContract);
-r.patch("/:id/contracts/:contractId", verifyToken, validate(clientContractParamsSchema, "params"), authorize("client", "update"), validate(updateClientContractSchema), updateClientContract);
-r.get("/:id", verifyToken, validate(idParamSchema, "params"), authorize("client", "read"), getClientById);
-r.patch("/:id", verifyToken, validate(idParamSchema, "params"), authorize("client", "update"), validate(updateClientSchema), updateClient);
-r.delete("/:id", verifyToken, validate(idParamSchema, "params"), authorize("client", "delete"), deleteClient);
+
+
 
 export default r;

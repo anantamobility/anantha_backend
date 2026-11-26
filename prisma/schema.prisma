@@ -46,10 +46,10 @@ enum BillingFrequency {
 }
 
 // Collection period is intentionally separate from BillingFrequency. A rental
-// may be billed daily but collected every 15 days, for example.
+// may be billed daily but collected every 14 days, for example.
 enum CollectionPeriod {
   WEEKLY
-  FORTNIGHTLY
+  FORTNIGHTLY //14 days
   MONTHLY
 }
 

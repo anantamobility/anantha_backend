@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseISTDateTime } from "../utils/parseIST.js";
 
 export const idParamSchema = z.object({
   id: z.string().uuid("id must be a valid UUID"),
@@ -37,6 +38,15 @@ export const addressSchema = z
   .strict()
   .nullable()
   .optional();
+
+// A date without an offset means an IST calendar day, so "2026-11-25" becomes
+// midnight IST instead of midnight UTC.
+export const istDateSchema = z
+  .string()
+  .refine((value) => !Number.isNaN(parseISTDateTime(value).getTime()), {
+    message: "invalid date",
+  })
+  .transform(parseISTDateTime);
 
 export const pastDateSchema = z.coerce
   .date()

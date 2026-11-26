@@ -11,11 +11,7 @@ import type {
   UpdateClientInput,
 } from "../../validation/client.js";
 
-export const createClient = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
+export const createClient = async (req: Request,res: Response,next: NextFunction) => {
   try {
     const client = await clientService.createClient(
       req.body as CreateClientInput,
@@ -27,11 +23,7 @@ export const createClient = async (
   }
 };
 
-export const getClients = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
+export const getClients = async (req: Request,res: Response,next: NextFunction) => {
   try {
     const result = await clientService.listClients(
       req.query as unknown as ListClientsQuery
@@ -42,11 +34,7 @@ export const getClients = async (
   }
 };
 
-export const getClientById = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
+export const getClientById = async (req: Request,res: Response,next: NextFunction) => {
   try {
     const client = await clientService.getClientById(req.params.id as string);
     return success(res, { client });
@@ -55,11 +43,7 @@ export const getClientById = async (
   }
 };
 
-export const updateClient = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
+export const updateClient = async (req: Request,res: Response,next: NextFunction) => {
   try {
     const client = await clientService.updateClient(
       req.params.id as string,
@@ -72,11 +56,7 @@ export const updateClient = async (
   }
 };
 
-export const changeClientStatus = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
+export const changeClientStatus = async (req: Request,res: Response,next: NextFunction) => {
   try {
     const result = await clientService.changeClientStatus(
       req.params.id as string,
@@ -89,11 +69,7 @@ export const changeClientStatus = async (
   }
 };
 
-export const deleteClient = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
+export const deleteClient = async (req: Request,res: Response,next: NextFunction) => {
   try {
     await clientService.deleteClient(
       req.params.id as string,
@@ -105,11 +81,7 @@ export const deleteClient = async (
   }
 };
 
-export const createClientContract = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
+export const createClientContract = async (req: Request,res: Response,next: NextFunction) => {
   try {
     const contract = await clientService.createClientContract(
       req.params.id as string,
@@ -122,11 +94,7 @@ export const createClientContract = async (
   }
 };
 
-export const updateClientContract = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
+export const updateClientContract = async (req: Request,res: Response,next: NextFunction) => {
   try {
     const contract = await clientService.updateClientContract(
       req.params.id as string,

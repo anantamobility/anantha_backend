@@ -46,33 +46,36 @@ r.get(
   getRentals
 );
 
+// Commented for route review + frontend integration.
+// Uncomment one route at a time after review.
+
 // Collection dues and rental collections
-r.get(
-  "/:id/dues",
-  verifyToken,
-  validate(idParamSchema, "params"),
-  authorize("rentalDue", "read", { policy: false }),
-  validate(listRentalDuesQuerySchema, "query"),
-  getRentalDues
-);
+// r.get(
+//   "/:id/dues",
+//   verifyToken,
+//   validate(idParamSchema, "params"),
+//   authorize("rentalDue", "read", { policy: false }),
+//   validate(listRentalDuesQuerySchema, "query"),
+//   getRentalDues
+// );
 
 //needs deep review later
-r.post(
-  "/:id/dues/generate",
-  verifyToken,
-  validate(idParamSchema, "params"),
-  authorize("rentalDue", "generate", { policy: false }),
-  validate(generateDuesSchema),
-  generateRentalDues
-);
-r.get(
-  "/:id/collections",
-  verifyToken,
-  validate(idParamSchema, "params"),
-  authorize("collection", "read", { policy: false }),
-  validate(listRentalCollectionsQuerySchema, "query"),
-  getRentalCollections
-);
+// r.post(
+//   "/:id/dues/generate",
+//   verifyToken,
+//   validate(idParamSchema, "params"),
+//   authorize("rentalDue", "generate", { policy: false }),
+//   validate(generateDuesSchema),
+//   generateRentalDues
+// );
+// r.get(
+//   "/:id/collections",
+//   verifyToken,
+//   validate(idParamSchema, "params"),
+//   authorize("collection", "read", { policy: false }),
+//   validate(listRentalCollectionsQuerySchema, "query"),
+//   getRentalCollections
+// );
 
 // Lifecycle
 // r.patch(
@@ -91,14 +94,14 @@ r.get(
 //   validate(activateRentalSchema),
 //   activateRental
 // );
-r.patch(
-  "/:id/close",
-  verifyToken,
-  validate(idParamSchema, "params"),
-  authorize("rental", "close"),
-  validate(closeRentalSchema),
-  closeRental
-);
+// r.patch(
+//   "/:id/close",
+//   verifyToken,
+//   validate(idParamSchema, "params"),
+//   authorize("rental", "close"),
+//   validate(closeRentalSchema),
+//   closeRental
+// );
 
 r.get(
   "/:id",

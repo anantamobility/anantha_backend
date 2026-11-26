@@ -227,11 +227,7 @@ export async function generateClientDues(
       const client = await assertClient(tx, clientId, {
         requireActive: true,
       });
-      const now = new Date();
-      const throughDate =
-        input.throughDate && input.throughDate.getTime() < now.getTime()
-          ? input.throughDate
-          : now;
+      const throughDate = input.throughDate ?? new Date();
 
       const rentals = await tx.rental.findMany({
         where: {

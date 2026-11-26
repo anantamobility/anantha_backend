@@ -34,7 +34,7 @@ export function periodStartFor(
 ): Date {
   if (period === "WEEKLY") return addDaysUtc(rentalStartDate, index * 7);
   if (period === "FORTNIGHTLY") {
-    return addDaysUtc(rentalStartDate, index * 15);
+    return addDaysUtc(rentalStartDate, index * 14);
   }
   return addMonthsUtc(rentalStartDate, index);
 }
@@ -56,7 +56,7 @@ export function buildDuePeriods(input: {
   includePartial?: boolean;
 }): DuePeriod[] {
   const { startDate, period, throughDate } = input;
-  const maxPeriods = input.maxPeriods ?? 1000;
+  const maxPeriods = input.maxPeriods ?? 100;
   const periods: DuePeriod[] = [];
 
   for (let index = 0; index < maxPeriods; index += 1) {
@@ -98,7 +98,7 @@ export type RentalRateFields = {
  *
  * Convention:
  * - WEEKLY uses weeklyRate for a full 7-day period.
- * - FORTNIGHTLY uses fortnightlyRate for a full 15-day period.
+ * - FORTNIGHTLY uses fortnightlyRate for a full 14-day period.
  * - MONTHLY uses monthlyRate for a full calendar-month period.
  * - Anything else falls back to dailyRate * number of days in the period.
  *
@@ -122,7 +122,7 @@ export function calculateDueAmount(input: {
   if (
     period === "FORTNIGHTLY" &&
     rates.fortnightlyRate != null &&
-    days === 15
+    days === 14
   ) {
     return toDecimal(rates.fortnightlyRate as string).toDecimalPlaces(2);
   }

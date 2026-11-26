@@ -399,11 +399,7 @@ export async function generateDues(
   input: GenerateDuesInput,
   actor: AuditActor
 ) {
-  const now = new Date();
-  const throughDate =
-    input.throughDate && input.throughDate.getTime() < now.getTime()
-      ? input.throughDate
-      : now;
+  const throughDate = input.throughDate ?? new Date();
 
   try {
     return await prisma.$transaction(async (tx) =>

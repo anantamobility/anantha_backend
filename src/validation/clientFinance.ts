@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { paginationQuerySchema } from "./common.js";
+import { istDateSchema, paginationQuerySchema } from "./common.js";
 import {
   paymentMethodSchema,
   rentalDueStatusSchema,
@@ -7,7 +7,11 @@ import {
 
 export const generateClientDuesSchema = z
   .object({
-    throughDate: z.coerce.date().optional(),
+    throughDate: istDateSchema
+      .optional()
+      .refine((value) => !value || value.getTime() <= Date.now(), {
+        message: "throughDate cannot be in the future",
+      }),
   })
   .strict()
   .default({});

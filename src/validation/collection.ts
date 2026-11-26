@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { paginationQuerySchema, searchQuerySchema } from "./common.js";
+import { istDateSchema, paginationQuerySchema, searchQuerySchema } from "./common.js";
 
 const decimalString = z
   .union([z.string(), z.number()])
@@ -82,7 +82,11 @@ export const listRentalDuesQuerySchema = paginationQuerySchema.extend({
 
 export const generateDuesSchema = z
   .object({
-    throughDate: z.coerce.date().optional(),
+    throughDate: istDateSchema
+      .optional()
+      .refine((value) => !value || value.getTime() <= Date.now(), {
+        message: "throughDate cannot be in the future",
+      }),
   })
   .strict()
   .default({});

@@ -15,29 +15,31 @@ import {
 
 const r = Router();
 
+// Commented for route review + frontend integration.
+// Uncomment one route at a time after review.
 //need another review with reomval of nested helpers
-r.post(
-  "/",
-  verifyToken,
-  authorize("collection", "create"),
-  validate(createCollectionSchema),
-  createCollection
-);
+// r.post(
+//   "/",
+//   verifyToken,
+//   authorize("collection", "create"),
+//   validate(createCollectionSchema),
+//   createCollection
+// );
 
-r.get(
-  "/",
-  verifyToken,
-  authorize("collection", "read", { policy: false }),
-  validate(listCollectionsQuerySchema, "query"),
-  getCollections
-);
+// r.get(
+//   "/",
+//   verifyToken,
+//   authorize("collection", "read", { policy: false }),
+//   validate(listCollectionsQuerySchema, "query"),
+//   getCollections
+// );
 
-r.get(
-  "/:id",
-  verifyToken,
-  validate(idParamSchema, "params"),
-  authorize("collection", "read"),
-  getCollectionById
-);
+// r.get(
+//   "/:id",
+//   verifyToken,
+//   validate(idParamSchema, "params"),
+//   authorize("collection", "read"),
+//   getCollectionById
+// );
 
 export default r;
