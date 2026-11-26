@@ -1,17 +1,7 @@
-import {
-  Prisma,
-  type LedgerDirection,
-  type LedgerEntryType,
-} from "../generated/prisma/client.js";
+import { Prisma, type LedgerDirection, type LedgerEntryType } from "../generated/prisma/client.js";
 import prisma from "../database/prismaClient.js";
 import { AppError } from "../utils/errors.js";
-import { logAudit, type AuditActor } from "../utils/log.js";
-import { toDecimal } from "./rental-schedule.js";
-import type {
-  DeliveryPayInput,
-  LedgerSummaryQuery,
-  ListLedgerQuery,
-} from "../validation/ledger.js";
+import type { ListLedgerQuery } from "../validation/ledger.js";
 
 type Tx = Prisma.TransactionClient;
 
@@ -143,50 +133,6 @@ export async function recordLedgerEntry(tx: Tx, input: RecordLedgerEntryInput, c
   });
 }
 
-export async function recordDeliveryPay(
-  input: DeliveryPayInput,
-  actor: AuditActor
-) {
-  try {
-    return await prisma.$transaction(async (tx) => {
-      const entry = await recordLedgerEntry(
-        tx,
-        {
-          riderId: input.riderId,
-          entryType: "DELIVERY_PAY",
-          direction: "CREDIT",
-          amount: toDecimal(input.amount),
-          occurredAt: input.occurredAt,
-          description: input.description ?? "Delivery pay",
-          sourceType: "DeliveryPay",
-          sourceId: input.reference ?? null,
-        },
-        actor.userId
-      );
-
-      await logAudit({
-        ...actor,
-        action: "DELIVERY_PAY",
-        resource: "LedgerEntry",
-        resourceId: entry.id,
-        newData: {
-          riderId: input.riderId,
-          amount: input.amount,
-          occurredAt: entry.occurredAt,
-          reference: input.reference ?? null,
-        },
-        summary: `${actor.userName} recorded delivery pay of ${input.amount} for rider ${entry.rider?.riderCode ?? input.riderId}.`,
-        db: tx,
-        throwOnError: true,
-      });
-
-      return { entry };
-    });
-  } catch (err) {
-    throw AppError.fromPrisma(err, "Delivery pay could not be recorded") ?? err;
-  }
-}
-
 export async function listLedgerEntries(query: ListLedgerQuery) {
   const { page, limit, search } = query;
   const where: Prisma.LedgerEntryWhereInput = {};
@@ -236,62 +182,4 @@ export async function listLedgerEntries(query: ListLedgerQuery) {
   };
 }
 
-export async function getRiderLedgerSummary(query: LedgerSummaryQuery) {
-  const rider = await prisma.rider.findUnique({
-    where: { id: query.riderId },
-    select: {
-      id: true,
-      riderCode: true,
-      fullName: true,
-      rentalType: true,
-      deletedAt: true,
-    },
-  });
 
-  if (!rider || rider.deletedAt) {
-    throw new AppError("Rider not found", 404);
-  }
-
-  const entries = await prisma.ledgerEntry.findMany({
-    where: { riderId: rider.id },
-    select: {
-      direction: true,
-      amount: true,
-      payStatementId: true,
-      entryType: true,
-    },
-  });
-
-  const totals = entries.reduce(
-    (acc, entry) => {
-      const amount = toDecimal(entry.amount);
-      if (entry.direction === "CREDIT") acc.totalCredits = acc.totalCredits.add(amount);
-      else acc.totalDebits = acc.totalDebits.add(amount);
-
-      if (entry.payStatementId === null) {
-        if (entry.direction === "CREDIT") {
-          acc.availableBalance = acc.availableBalance.add(amount);
-        } else {
-          acc.availableBalance = acc.availableBalance.sub(amount);
-        }
-        acc.unsettledEntryCount += 1;
-      } else if (entry.direction === "CREDIT") {
-        acc.payouts = acc.payouts.add(amount);
-      }
-
-      return acc;
-    },
-    {
-      totalCredits: new Prisma.Decimal(0),
-      totalDebits: new Prisma.Decimal(0),
-      payouts: new Prisma.Decimal(0),
-      availableBalance: new Prisma.Decimal(0),
-      unsettledEntryCount: 0,
-    }
-  );
-
-  return {
-    rider,
-    ...totals,
-  };
-}

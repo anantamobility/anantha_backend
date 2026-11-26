@@ -157,31 +157,6 @@ export async function generatePayStatement(
         return { payStatement: existing, duplicate: true };
       }
 
-      const credits = await tx.ledgerEntry.findMany({
-        where: {
-          riderId: rider.id,
-          payStatementId: null,
-          direction: "CREDIT",
-          occurredAt: { gte: periodStart, lt: periodEnd },
-        },
-        orderBy: [{ occurredAt: "asc" }, { id: "asc" }],
-        select: {
-          id: true,
-          entryType: true,
-          amount: true,
-          description: true,
-          rentalId: true,
-          occurredAt: true,
-        },
-      });
-
-      if (credits.length === 0) {
-        throw new AppError(
-          "No unsettled credit ledger entries were found for the pay statement period",
-          409
-        );
-      }
-
       const unsettledDebits = await tx.ledgerEntry.findMany({
         where: {
           riderId: rider.id,
@@ -200,10 +175,9 @@ export async function generatePayStatement(
         },
       });
 
-      const grossCredits = credits.reduce(
-        (total, credit) => total.add(toDecimal(credit.amount)),
-        new Prisma.Decimal(0)
-      );
+      // Earnings are AML's own number for an AML-managed rider, taken from the
+      // client portal. They are not ledger entries; the ledger only tracks rent.
+      const grossCredits = new Prisma.Decimal(input.grossCredits);
       const existingDeductionTotal = unsettledDebits.reduce(
         (total, entry) => total.add(toDecimal(entry.amount)),
         new Prisma.Decimal(0)
@@ -225,34 +199,27 @@ export async function generatePayStatement(
           calculationSnapshot: {
             periodStart: periodStart.toISOString(),
             periodEnd: periodEnd.toISOString(),
-            creditCount: credits.length,
+            grossCreditsSource: "PORTAL",
+            earningsReference: input.earningsReference ?? null,
             notes: input.notes ?? null,
           } as Prisma.InputJsonValue,
         },
         select: { id: true, statementNumber: true },
       });
 
-      for (const credit of credits) {
-        await tx.riderPayStatementLine.create({
-          data: {
-            payStatementId: payStatement.id,
-            lineType: payStatementLineTypeForEntry(
-              credit.entryType,
-              "CREDIT"
-            ),
-            direction: "CREDIT",
-            amount: credit.amount,
-            description: credit.description,
-            rentalId: credit.rentalId,
-            ledgerEntryId: credit.id,
-            referenceType: "LedgerEntry",
-            referenceId: credit.id,
-            snapshot: {
-              occurredAt: credit.occurredAt.toISOString(),
-            } as Prisma.InputJsonValue,
-          },
-        });
-      }
+      await tx.riderPayStatementLine.create({
+        data: {
+          payStatementId: payStatement.id,
+          lineType: "DELIVERY_PAY",
+          direction: "CREDIT",
+          amount: grossCredits,
+          description: input.earningsReference
+            ? `Earnings from AML portal (${input.earningsReference})`
+            : "Earnings from AML portal",
+          referenceType: "Portal",
+          referenceId: input.earningsReference ?? null,
+        },
+      });
 
       for (const debit of unsettledDebits) {
         await tx.riderPayStatementLine.create({
@@ -276,7 +243,7 @@ export async function generatePayStatement(
       await tx.ledgerEntry.updateMany({
         where: {
           id: {
-            in: [...credits, ...unsettledDebits].map((entry) => entry.id),
+            in: unsettledDebits.map((entry) => entry.id),
           },
         },
         data: { payStatementId: payStatement.id },
@@ -546,7 +513,7 @@ export async function generatePayStatement(
           calculationSnapshot: {
             periodStart: periodStart.toISOString(),
             periodEnd: periodEnd.toISOString(),
-            creditCount: credits.length,
+            grossCredits: grossCredits.toString(),
             existingDebitDeduction: existingDeductionTotal.toString(),
             rentDeduction: rentDeduction.toString(),
             manualDeductionTotal: manualDeductionTotal.toString(),

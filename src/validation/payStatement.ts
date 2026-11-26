@@ -66,6 +66,14 @@ export const generatePayStatementSchema = z
     cycle: statementCycleSchema.optional(),
     periodStart: z.coerce.date().optional(),
     periodEnd: z.coerce.date().optional(),
+    grossCredits: moneySchema(2, "grossCredits"),
+    earningsReference: z
+      .string()
+      .trim()
+      .min(1)
+      .max(200)
+      .nullable()
+      .optional(),
     manualDeductions: z.array(manualDeductionSchema).max(20).optional(),
     notes: z.string().trim().min(1).max(2000).nullable().optional(),
   })
