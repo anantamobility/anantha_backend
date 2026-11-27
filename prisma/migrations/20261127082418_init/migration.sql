@@ -23,7 +23,7 @@ CREATE TYPE "CollectionPeriod" AS ENUM ('WEEKLY', 'FORTNIGHTLY', 'MONTHLY');
 CREATE TYPE "RentalDueStatus" AS ENUM ('PENDING', 'PARTIALLY_PAID', 'PAID', 'OVERDUE');
 
 -- CreateEnum
-CREATE TYPE "RentalStatus" AS ENUM ('DRAFT', 'PENDING_APPROVAL', 'ACTIVE', 'ON_HOLD', 'COMPLETED', 'TERMINATED', 'CANCELLED');
+CREATE TYPE "RentalStatus" AS ENUM ('ACTIVE', 'COMPLETED', 'TERMINATED', 'CANCELLED');
 
 -- CreateEnum
 CREATE TYPE "AssignmentStatus" AS ENUM ('ACTIVE', 'COMPLETED', 'TRANSFERRED', 'CANCELLED');
@@ -372,7 +372,7 @@ CREATE TABLE "rentals" (
     "startDate" TIMESTAMPTZ(3) NOT NULL,
     "endDate" TIMESTAMPTZ(3),
     "expectedEndDate" TIMESTAMPTZ(3),
-    "status" "RentalStatus" NOT NULL DEFAULT 'DRAFT',
+    "status" "RentalStatus" NOT NULL DEFAULT 'ACTIVE',
     "statusChangedAt" TIMESTAMPTZ(3),
     "collectionPeriod" "CollectionPeriod" NOT NULL DEFAULT 'MONTHLY',
     "dailyRate" DECIMAL(14,4),
@@ -399,7 +399,8 @@ CREATE TABLE "vehicle_deployments" (
     "vehicleId" TEXT NOT NULL,
     "riderId" TEXT,
     "rentalId" TEXT,
-    "hubId" TEXT,
+    "outHubId" TEXT,
+    "inHubId" TEXT,
     "assignedById" TEXT,
     "startDate" TIMESTAMPTZ(3) NOT NULL,
     "endDate" TIMESTAMPTZ(3),
@@ -946,7 +947,10 @@ CREATE INDEX "vehicle_deployments_riderId_status_idx" ON "vehicle_deployments"("
 CREATE INDEX "vehicle_deployments_rentalId_status_idx" ON "vehicle_deployments"("rentalId", "status");
 
 -- CreateIndex
-CREATE INDEX "vehicle_deployments_hubId_idx" ON "vehicle_deployments"("hubId");
+CREATE INDEX "vehicle_deployments_outHubId_idx" ON "vehicle_deployments"("outHubId");
+
+-- CreateIndex
+CREATE INDEX "vehicle_deployments_inHubId_idx" ON "vehicle_deployments"("inHubId");
 
 -- CreateIndex
 CREATE INDEX "deposits_clientId_idx" ON "deposits"("clientId");
@@ -1216,7 +1220,10 @@ ALTER TABLE "vehicle_deployments" ADD CONSTRAINT "vehicle_deployments_riderId_fk
 ALTER TABLE "vehicle_deployments" ADD CONSTRAINT "vehicle_deployments_rentalId_fkey" FOREIGN KEY ("rentalId") REFERENCES "rentals"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "vehicle_deployments" ADD CONSTRAINT "vehicle_deployments_hubId_fkey" FOREIGN KEY ("hubId") REFERENCES "hubs"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "vehicle_deployments" ADD CONSTRAINT "vehicle_deployments_outHubId_fkey" FOREIGN KEY ("outHubId") REFERENCES "hubs"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "vehicle_deployments" ADD CONSTRAINT "vehicle_deployments_inHubId_fkey" FOREIGN KEY ("inHubId") REFERENCES "hubs"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "vehicle_deployments" ADD CONSTRAINT "vehicle_deployments_assignedById_fkey" FOREIGN KEY ("assignedById") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
