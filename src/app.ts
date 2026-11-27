@@ -18,6 +18,7 @@ import hubsRouter from './routes/hubs.js'
 import clientsRouter from './routes/clients.js'
 import ratecardsRouter from './routes/ratecards.js'
 import rentalsRouter from './routes/rentals.js'
+import deploymentsRouter from './routes/deployments.js'
 import collectionsRouter from './routes/collections.js'
 import ledgersRouter from './routes/ledgers.js'
 import payStatementsRouter from './routes/payStatements.js'
@@ -50,6 +51,7 @@ app.use("/hubs", hubsRouter)
 app.use("/clients", clientsRouter)
 app.use("/ratecards", ratecardsRouter)
 app.use("/rentals", rentalsRouter)
+app.use("/deployments", deploymentsRouter)
 app.use("/collections", collectionsRouter)
 app.use(ledgersRouter)
 app.use("/pay-statements", payStatementsRouter)

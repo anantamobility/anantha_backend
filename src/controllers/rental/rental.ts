@@ -2,7 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import { success } from "../../utils/http.js";
 import { getAuditActor } from "../../utils/log.js";
 import * as rentalService from "../../services/rental.js";
-import * as collectionService from "../../services/collection.js";
+import * as rentalDueService from "../../services/rental-dues.js";
 import type {
   CloseRentalInput,
   CreateRentalInput,
@@ -61,7 +61,7 @@ export const getRentalDues = async (
   next: NextFunction
 ) => {
   try {
-    const result = await collectionService.listRentalDues(
+    const result = await rentalDueService.listRentalDues(
       req.params.id as string,
       req.query as unknown as ListRentalDuesQuery
     );
@@ -77,7 +77,7 @@ export const generateRentalDues = async (
   next: NextFunction
 ) => {
   try {
-    const result = await collectionService.generateDues(
+    const result = await rentalDueService.generateDues(
       req.params.id as string,
       req.body as GenerateDuesInput,
       getAuditActor(req)

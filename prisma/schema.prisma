@@ -506,7 +506,8 @@ model Hub {
   riders            Rider[]
   rentals           Rental[]
   contracts         ClientContract[]
-  assignments       VehicleDeployment[]
+  deploymentsOut    VehicleDeployment[] @relation("DeploymentOutHub")
+  deploymentsIn     VehicleDeployment[] @relation("DeploymentInHub")
   inventoryBalances InventoryBalance[]
   movementsFrom     InventoryMovement[] @relation("MovementFromHub")
   movementsTo       InventoryMovement[] @relation("MovementToHub")
@@ -745,8 +746,10 @@ model VehicleDeployment {
   rider            Rider?              @relation(fields: [riderId], references: [id], onDelete: Restrict)
   rentalId         String?
   rental           Rental?             @relation(fields: [rentalId], references: [id], onDelete: Restrict)
-  hubId            String?
-  hub              Hub?                @relation(fields: [hubId], references: [id], onDelete: Restrict)
+  outHubId         String?
+  outHub           Hub?                @relation("DeploymentOutHub", fields: [outHubId], references: [id], onDelete: Restrict)
+  inHubId          String?
+  inHub            Hub?                @relation("DeploymentInHub", fields: [inHubId], references: [id], onDelete: Restrict)
   assignedById     String?
   assignedBy       User?               @relation("AssignmentCreatedBy", fields: [assignedById], references: [id], onDelete: Restrict)
   startDate        DateTime            @db.Timestamptz(3)
@@ -764,7 +767,8 @@ model VehicleDeployment {
   @@index([vehicleId, status])
   @@index([riderId, status])
   @@index([rentalId, status])
-  @@index([hubId])
+  @@index([outHubId])
+  @@index([inHubId])
   @@map("vehicle_deployments")
 }
 

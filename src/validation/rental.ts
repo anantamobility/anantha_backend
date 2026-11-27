@@ -184,7 +184,6 @@ const refundSchema = z
 export const closeRentalSchema = z
   .object({
     endDate: z.coerce.date().optional(),
-    vehicleReturnStatus: vehicleStatusOnReturnSchema.optional(),
     depositRefund: refundSchema.nullable().optional(),
     notes: z.string().trim().min(1).max(2000).optional(),
   })

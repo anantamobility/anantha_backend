@@ -102,6 +102,8 @@ export const rentalDetailSelect = {
       id: true,
       vehicleId: true,
       riderId: true,
+      outHubId: true,
+      inHubId: true,
       startDate: true,
       endDate: true,
       status: true,
@@ -115,7 +117,8 @@ const assignmentSelect = {
   vehicleId: true,
   riderId: true,
   rentalId: true,
-  hubId: true,
+  outHubId: true,
+  inHubId: true,
   assignedById: true,
   startDate: true,
   endDate: true,
@@ -316,7 +319,7 @@ async function assignVehicleWithinTransaction(
       vehicleId: vehicle.id,
       riderId: input.rental.riderId,
       rentalId: input.rental.id,
-      hubId: input.rental.hubId,
+      outHubId: input.rental.hubId,
       assignedById: actor.userId,
       startDate,
       status: "ACTIVE",
@@ -569,6 +572,13 @@ export async function closeRental(
         );
       }
 
+      const activeDeployments = await tx.vehicleDeployment.count({
+        where: { rentalId: rental.id, status: "ACTIVE" },
+      });
+      if (activeDeployments > 0) {
+        throw new AppError("Return the vehicle before closing the rental", 409);
+      }
+
       const endDate = input.endDate ?? new Date();
       if (endDate.getTime() < rental.startDate.getTime()) {
         throw new AppError(
@@ -599,94 +609,6 @@ export async function closeRental(
       const financialSummary = await getRentalFinancialSummary(tx, rental.id);
       const depositTotals = await getDepositBalanceByRental(tx, rental.id);
 
-      const activeAssignments = await tx.vehicleDeployment.findMany({
-        where: { rentalId: rental.id, status: "ACTIVE" },
-        select: {
-          id: true,
-          vehicleId: true,
-          vehicle: {
-            select: {
-              id: true,
-              registrationNumber: true,
-              status: true,
-              deletedAt: true,
-            },
-          },
-        },
-      });
-
-      const vehicleDispositions: Array<{
-        vehicleId: string;
-        registrationNumber: string;
-        previousStatus: string;
-        status: string;
-      }> = [];
-
-      for (const assignment of activeAssignments) {
-        const vehicle = assignment.vehicle;
-        if (!vehicle || vehicle.deletedAt) continue;
-
-        let returnStatus = input.vehicleReturnStatus;
-        if (!returnStatus) {
-          const openServices = await tx.service.count({
-            where: {
-              vehicleId: vehicle.id,
-              status: { notIn: ["COMPLETED", "CANCELLED"] },
-            },
-          });
-          returnStatus = openServices > 0 ? "IN_SERVICE" : "IDLE";
-        }
-
-        await tx.vehicleDeployment.update({
-          where: { id: assignment.id },
-          data: { status: "COMPLETED", endDate },
-        });
-
-        if (returnStatus !== vehicle.status) {
-          const updatedVehicle = await tx.vehicle.updateMany({
-            where: {
-              id: vehicle.id,
-              status: vehicle.status,
-              deletedAt: null,
-            },
-            data: {
-              status: returnStatus,
-              statusChangedAt: new Date(),
-            },
-          });
-
-          if (updatedVehicle.count === 0) {
-            throw new AppError(
-              "Vehicle status was modified concurrently; please retry",
-              409
-            );
-          }
-
-          await logAudit({
-            ...actor,
-            action: "UPDATE",
-            resource: "Vehicle",
-            resourceId: vehicle.id,
-            oldData: { status: vehicle.status },
-            newData: {
-              status: returnStatus,
-              rentalId: rental.id,
-              rentalStatus: "COMPLETED",
-            },
-            summary: `${actor.userName} moved vehicle ${vehicle.registrationNumber} from ${vehicle.status} to ${returnStatus} on rental closure.`,
-            db: tx,
-            throwOnError: true,
-          });
-        }
-
-        vehicleDispositions.push({
-          vehicleId: vehicle.id,
-          registrationNumber: vehicle.registrationNumber,
-          previousStatus: vehicle.status,
-          status: returnStatus,
-        });
-      }
-
       const closedAt = new Date();
       const statementSnapshot = {
         closedAt: closedAt.toISOString(),
@@ -695,7 +617,6 @@ export async function closeRental(
         confirmedCollections: financialSummary.confirmedCollections.toString(),
         outstanding: financialSummary.outstanding.toString(),
         depositBalance: depositTotals.balance.toString(),
-        vehicleDispositions,
       };
 
       const updatedRental = await tx.rental.update({
@@ -737,7 +658,6 @@ export async function closeRental(
           confirmedCollections: financialSummary.confirmedCollections,
           outstanding: financialSummary.outstanding,
           depositBalance: depositTotals.balance,
-          vehicleDispositions,
         },
       };
     });

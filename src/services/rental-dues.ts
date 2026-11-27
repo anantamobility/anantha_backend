@@ -1,4 +1,5 @@
 import { Prisma } from "../generated/prisma/client.js";
+import prisma from "../database/prismaClient.js";
 import { AppError } from "../utils/errors.js";
 import { logAudit, type AuditActor } from "../utils/log.js";
 import {
@@ -8,6 +9,10 @@ import {
   toDecimal,
 } from "./rental-schedule.js";
 import { recordLedgerEntry } from "./ledger.js";
+import type {
+  GenerateDuesInput,
+  ListRentalDuesQuery,
+} from "../validation/collection.js";
 
 type Tx = Prisma.TransactionClient;
 
@@ -204,6 +209,73 @@ export async function generateRentalDues(
     generated,
     dues,
   };
+}
+
+async function assertRentalExists(rentalId: string) {
+  const rental = await prisma.rental.findUnique({
+    where: { id: rentalId },
+    select: { id: true, rentalNumber: true, status: true },
+  });
+  if (!rental) {
+    throw new AppError("Rental not found", 404);
+  }
+  return rental;
+}
+
+export async function listRentalDues(
+  rentalId: string,
+  query: ListRentalDuesQuery
+) {
+  await assertRentalExists(rentalId);
+  const { page, limit } = query;
+
+  const where: Prisma.RentalDueWhereInput = { rentalId };
+  if (query.status) where.status = query.status;
+
+  const orderBy: Prisma.RentalDueOrderByWithRelationInput = {
+    [query.sortBy]: query.sortOrder,
+  };
+
+  const [dues, total] = await Promise.all([
+    prisma.rentalDue.findMany({
+      where,
+      select: rentalDueSelect,
+      orderBy,
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.rentalDue.count({ where }),
+  ]);
+
+  return {
+    dues,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+}
+
+export async function generateDues(
+  rentalId: string,
+  input: GenerateDuesInput,
+  actor: AuditActor
+) {
+  const throughDate = input.throughDate ?? new Date();
+
+  try {
+    return await prisma.$transaction(async (tx) =>
+      generateRentalDues(tx, {
+        rentalId,
+        throughDate,
+        actor,
+      })
+    );
+  } catch (err) {
+    throw AppError.fromPrisma(err, "Collection dues could not be generated") ?? err;
+  }
 }
 
 export async function getRentalFinancialSummary(tx: Tx, rentalId: string) {

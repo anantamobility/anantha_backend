@@ -39,37 +39,29 @@ r.get(
 );
 
 // Commented for route review + frontend integration.
-// Uncomment one route at a time after review.
 
-// Collection dues and rental collections
-// r.get(
-//   "/:id/dues",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("rentalDue", "read", { policy: false }),
-//   validate(listRentalDuesQuerySchema, "query"),
-//   getRentalDues
-// );
 
-//needs deep review later
-// r.post(
-//   "/:id/dues/generate",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("rentalDue", "generate", { policy: false }),
-//   validate(generateDuesSchema),
-//   generateRentalDues
-// );
+r.get("/:id/dues",verifyToken,validate(idParamSchema, "params"),authorize("rentalDue", "read", { policy: false }),validate(listRentalDuesQuerySchema, "query"),getRentalDues);
+
+// needs a deep review
+r.post(
+  "/:id/dues/generate",
+  verifyToken,
+  validate(idParamSchema, "params"),
+  authorize("rentalDue", "generate", { policy: false }),
+  validate(generateDuesSchema),
+  generateRentalDues
+);
 
 // Lifecycle
-// r.patch(
-//   "/:id/close",
-//   verifyToken,
-//   validate(idParamSchema, "params"),
-//   authorize("rental", "close"),
-//   validate(closeRentalSchema),
-//   closeRental
-// );
+r.patch(
+  "/:id/close",
+  verifyToken,
+  validate(idParamSchema, "params"),
+  authorize("rental", "close"),
+  validate(closeRentalSchema),
+  closeRental
+);
 
 r.get(
   "/:id",
